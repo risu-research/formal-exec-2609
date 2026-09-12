@@ -1,0 +1,25 @@
+name: verify
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Yosys
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y yosys
+          yosys -V
+      - name: Elaborate formal fixture
+        run: |
+          mkdir -p out
+          yosys -p 'read_verilog -formal smoke/design.v; prep -top top; write_json out/design.json'
+      - name: Validate formal-cell inventory
+        run: python3 smoke/check_json.py out/design.json
