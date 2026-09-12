@@ -1,0 +1,23 @@
+name: deps
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bundle:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download generic Python dependency
+        run: |
+          mkdir -p wheels
+          python3 -m pip download --only-binary=:all: z3-solver -d wheels
+          ls -l wheels
+      - name: Upload dependency bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-deps-linux-x64
+          path: wheels/
