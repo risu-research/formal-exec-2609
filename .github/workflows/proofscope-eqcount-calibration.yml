@@ -1,0 +1,72 @@
+name: proofscope-eqcount-calibration
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  equal-count-masked-failure:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install formal toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y yosys z3 python3 python3-pip
+          python3 -m pip install --break-system-packages z3-solver
+      - name: Extract both native revisions
+        run: |
+          mkdir -p out/eqcount
+          yosys -p 'read_verilog -formal smoke/fixtures/masked_eqcount_r0.v; prep -top masked_eqcount -flatten -nordff; dffunmap; write_json out/eqcount/r0.json; write_smt2 -wires out/eqcount/r0.smt2'
+          yosys -p 'read_verilog -formal smoke/fixtures/masked_eqcount_r1.v; prep -top masked_eqcount -flatten -nordff; dffunmap; write_json out/eqcount/r1.json; write_smt2 -wires out/eqcount/r1.smt2'
+      - name: Assert equal structural counts before semantic analysis
+        run: |
+          python3 - <<'PY'
+          import json
+          def counts(p):
+              d=json.load(open(p)); m=next(iter(d['modules'].values()))
+              return (sum(c['type']=='$assume' for c in m['cells'].values()),
+                      sum(c['type']=='$assert' for c in m['cells'].values()))
+          a=counts('out/eqcount/r0.json'); b=counts('out/eqcount/r1.json')
+          print('R0 assumes/asserts',a,'R1 assumes/asserts',b)
+          assert a==b==(1,1), (a,b)
+          open('out/eqcount/counts.txt','w').write(f'R0_ASSUMES={a[0]}\nR1_ASSUMES={b[0]}\nR0_ASSERTS={a[1]}\nR1_ASSERTS={b[1]}\n')
+          PY
+      - name: Prove both native revisions green
+        run: |
+          set -euo pipefail
+          yosys-smtbmc --presat -s z3 -t 8 out/eqcount/r0.smt2 | tee out/eqcount/r0.green.log
+          yosys-smtbmc --presat -s z3 -t 8 out/eqcount/r1.smt2 | tee out/eqcount/r1.green.log
+      - name: Classify semantic contraction and validate TNF
+        run: |
+          set -euo pipefail
+          python3 smoke/tnf_scope.py out/eqcount/r0.json out/eqcount/r1.json --expect CONTRACT | tee out/eqcount/scope.json
+          python3 smoke/validate_tnf_smt2.py out/eqcount/r0.json out/eqcount/r0.smt2 | tee out/eqcount/r0.tnf-theorem.json
+          python3 smoke/validate_tnf_smt2.py out/eqcount/r1.json out/eqcount/r1.smt2 | tee out/eqcount/r1.tnf-theorem.json
+      - name: Replay R1 under R0 environment and require property failure
+        run: |
+          set -euo pipefail
+          yosys -p 'read_verilog -D PROOFSCOPE_OLD_ENV -formal smoke/fixtures/masked_eqcount_r1.v; prep -top masked_eqcount -flatten -nordff; dffunmap; write_smt2 -wires out/eqcount/r1-old-env.smt2'
+          set +e
+          yosys-smtbmc --presat -s z3 -t 8 --dump-vcd out/eqcount/masked-failure.vcd out/eqcount/r1-old-env.smt2 > out/eqcount/r1-old-env.log 2>&1
+          rc=$?
+          set -e
+          echo "$rc" > out/eqcount/r1-old-env.exit
+          cat out/eqcount/r1-old-env.log
+          test "$rc" -ne 0
+          grep -q 'Assert failed' out/eqcount/r1-old-env.log
+          printf 'R0_NATIVE=GREEN\nR1_NATIVE=GREEN\nASSUMPTION_COUNT_EQUAL=1_TO_1\nASSERTION_COUNT_EQUAL=1_TO_1\nR0_TO_R1_SCOPE=CONTRACT\nR1_UNDER_R0_ENV=PROPERTY_FAILURE\nASSERTION_VACUITY=NOT_APPLICABLE_ALWAYS_ACTIVE\n' > out/eqcount/RESULT.txt
+      - name: Seal evidence
+        if: always()
+        run: |
+          find out/eqcount -type f -print0 | sort -z | xargs -0 sha256sum > out/eqcount/SHA256SUMS.txt || true
+          git rev-parse HEAD > out/eqcount/harness.commit.txt
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: proofscope-equal-count-calibration
+          path: out/eqcount/
