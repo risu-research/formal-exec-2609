@@ -25,8 +25,12 @@ jobs:
         continue-on-error: true
         run: |
           cd /tmp/upstream
+          git reset --hard
           git checkout 128cab89f5edaae4699184f50c1334598ebe904e
           make -C bench/formal clean >/dev/null 2>&1 || true
+          sed -i '/write_smt2/i dffunmap' bench/formal/pipemem.ys
+          printf 'compatibility_shim=dffunmap-before-write_smt2\n' > "$GITHUB_WORKSPACE/r0.meta"
+          git rev-parse HEAD >> "$GITHUB_WORKSPACE/r0.meta"
           set -o pipefail
           make -C bench/formal pipemem SOLVER='-s z3' 2>&1 | tee "$GITHUB_WORKSPACE/r0.log"
       - name: Probe R1
@@ -35,8 +39,12 @@ jobs:
         continue-on-error: true
         run: |
           cd /tmp/upstream
+          git reset --hard
           git checkout d511239e19be8fcc7f340a64554ea93699637e62
           make -C bench/formal clean >/dev/null 2>&1 || true
+          sed -i '/write_smt2/i dffunmap' bench/formal/pipemem.ys
+          printf 'compatibility_shim=dffunmap-before-write_smt2\n' > "$GITHUB_WORKSPACE/r1.meta"
+          git rev-parse HEAD >> "$GITHUB_WORKSPACE/r1.meta"
           set -o pipefail
           make -C bench/formal pipemem SOLVER='-s z3' 2>&1 | tee "$GITHUB_WORKSPACE/r1.log"
       - name: Upload probe logs
@@ -47,6 +55,8 @@ jobs:
           path: |
             r0.log
             r1.log
+            r0.meta
+            r1.meta
       - name: Enforce both probes
         if: always()
         run: |
