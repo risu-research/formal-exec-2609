@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Independent post-checker for ProofScope carrier VCD witnesses.
+"""Independent post-checker for carrier VCD witnesses.
 
 Reads the concrete traces produced by yosys-smtbmc and reconstructs only the
 small semantic vocabulary needed for the case-study claims.  It does not call
@@ -27,7 +27,6 @@ def parse_vcd(path):
         if line.startswith('$var'):
             p=line.split(); width=int(p[2]); code=p[3]; name=p[4]
             full='.'.join(scopes+[name])
-            # Prefer top-level pipemem signals over same-named child signals.
             if name in SIGNALS and len(scopes)==1:
                 code_to_name[code]=name; widths[name]=width
             continue
@@ -40,7 +39,6 @@ def parse_vcd(path):
         elif line and line[0] in '01xz' and line[1:] in code_to_name:
             vals[code_to_name[line[1:]]]=line[0]
     if now is not None: snaps.append((now,vals.copy()))
-    # SMTBMC uses 10ns full-step boundaries; retain those only.
     return [(t,v) for t,v in snaps if t % 10 == 0]
 
 
@@ -48,21 +46,16 @@ def intval(v,name):
     s=v[name]
     if any(c not in '01' for c in s): raise RuntimeError(f'{name} not concrete: {s}')
     return int(s,2)
-
 def bit(v,name): return bool(intval(v,name))
-
 def guard(v):
     return bit(v,'f_past_valid') and bit(v,'f_cyc') and not bit(v,'i_wb_stall') and bit(v,'i_pipe_stb')
-
 def old_addr(v):
     ia,wb=intval(v,'i_addr'),intval(v,'o_wb_addr')
     return ia==wb or ia==wb+1
-
 def new_addr(v):
     ia,wb=intval(v,'i_addr'),intval(v,'o_wb_addr')
     wa=ia >> 2
     return wa==wb or wa==wb+1
-
 def compact(t,v):
     return {
       'time_ns':t,'step':t//10,
@@ -71,7 +64,6 @@ def compact(t,v):
       'i_addr_hex':hex(intval(v,'i_addr')),'i_addr_word_hex':hex(intval(v,'i_addr')>>2),
       'o_wb_addr_hex':hex(intval(v,'o_wb_addr')),'i_lock':intval(v,'i_lock'),'i_reset':intval(v,'i_reset')
     }
-
 def cert(mode,path):
     s=parse_vcd(path)
     if mode in ('old-new','new-old'):
@@ -80,13 +72,12 @@ def cert(mode,path):
         if not hits: raise SystemExit(f'no {mode} distinguishing witness in {path}')
         t,v=hits[0]
         return {
-          'schema':'proofscope-carrier-witness-v1','mode':mode,
+          'schema':'formal-scope-carrier-witness-v1','mode':mode,
           'earliest_distinguishing_snapshot':compact(t,v),
           'guard':guard(v),'old_address_contract':old_addr(v),'new_address_contract':new_addr(v),
           'prior_distinguishing_snapshots':sum(1 for tt,vv in s if tt<t and want(vv)),
           'certificate':'PASS'
         }
-    # lock: current i_lock rises although prior cycle had f_cyc and !i_lock.
     hits=[]
     for i in range(1,len(s)):
         t,v=s[i]; pt,p=s[i-1]
@@ -95,7 +86,7 @@ def cert(mode,path):
     if not hits: raise SystemExit(f'no removed-lock witness in {path}')
     i,t,v,pt,p=hits[0]
     return {
-      'schema':'proofscope-carrier-witness-v1','mode':'lock',
+      'schema':'formal-scope-carrier-witness-v1','mode':'lock',
       'earliest_distinguishing_snapshot':compact(t,v),
       'previous_snapshot':compact(pt,p),
       'historical_lock_condition':True,
@@ -103,7 +94,6 @@ def cert(mode,path):
       'prior_distinguishing_snapshots':len([1 for j in range(1,i) if bit(s[j][1],'f_past_valid') and bit(s[j-1][1],'f_cyc') and not bit(s[j-1][1],'i_lock') and bit(s[j][1],'i_lock')]),
       'certificate':'PASS'
     }
-
 def main():
     ap=argparse.ArgumentParser(); ap.add_argument('mode',choices=['old-new','new-old','lock']); ap.add_argument('vcd')
     ns=ap.parse_args(); print(json.dumps(cert(ns.mode,ns.vcd),indent=2,sort_keys=True))

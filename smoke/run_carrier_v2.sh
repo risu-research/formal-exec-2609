@@ -19,7 +19,7 @@ case "$MODE" in
   *) echo "unknown mode $MODE" >&2; exit 2;;
 esac
 
-WORK="/tmp/proofscope-carrier-${MODE}-$$"
+WORK="/tmp/formal-scope-carrier-${MODE}-$$"
 git clone -q https://github.com/ZipCPU/zipcpu.git "$WORK" || exit 3
 cd "$WORK" || exit 3
 git checkout -q "$REV" || exit 3
@@ -70,7 +70,7 @@ python3 - <<'PY'
 from pathlib import Path
 p=Path('rtl/core/pipemem.v'); s=p.read_text()
 anchor="""\t\t\t`ASSUME(i_op[0] == o_wb_we);\n\t\tend\n"""
-inject="""\t\t\t`ASSUME(i_op[0] == o_wb_we);\n\t\tend\n\n\t// PROOFSCOPE_CARRIER_V2 foreign monitor: R1 address contract on R0 native proof world\n\talways @(posedge i_clk)\n\t\tif ((f_past_valid)&&(f_cyc)&&(!i_wb_stall)&&(i_pipe_stb))\n\t\t\tassert((i_addr[(AW+1):2] == o_wb_addr)\n\t\t\t\t||(i_addr[(AW+1):2] == o_wb_addr+1));\n"""
+inject="""\t\t\t`ASSUME(i_op[0] == o_wb_we);\n\t\tend\n\n\t// FORMAL_SCOPE_CARRIER_V2 foreign monitor: R1 address contract on R0 native proof world\n\talways @(posedge i_clk)\n\t\tif ((f_past_valid)&&(f_cyc)&&(!i_wb_stall)&&(i_pipe_stb))\n\t\t\tassert((i_addr[(AW+1):2] == o_wb_addr)\n\t\t\t\t||(i_addr[(AW+1):2] == o_wb_addr+1));\n"""
 if anchor not in s: raise SystemExit('old-new injection anchor not found')
 p.write_text(s.replace(anchor,inject,1))
 PY
@@ -79,7 +79,7 @@ python3 - <<'PY'
 from pathlib import Path
 p=Path('rtl/core/pipemem.v'); s=p.read_text()
 anchor="""\t\t\t`ASSUME(i_op[0] == o_wb_we);\n\t\tend\n"""
-inject="""\t\t\t`ASSUME(i_op[0] == o_wb_we);\n\t\tend\n\n\t// PROOFSCOPE_CARRIER_V2 foreign monitor: R0 address contract on R1 native proof world\n\talways @(posedge i_clk)\n\t\tif ((f_past_valid)&&(f_cyc)&&(!i_wb_stall)&&(i_pipe_stb))\n\t\t\tassert((i_addr == o_wb_addr)||(i_addr == o_wb_addr+1));\n"""
+inject="""\t\t\t`ASSUME(i_op[0] == o_wb_we);\n\t\tend\n\n\t// FORMAL_SCOPE_CARRIER_V2 foreign monitor: R0 address contract on R1 native proof world\n\talways @(posedge i_clk)\n\t\tif ((f_past_valid)&&(f_cyc)&&(!i_wb_stall)&&(i_pipe_stb))\n\t\t\tassert((i_addr == o_wb_addr)||(i_addr == o_wb_addr+1));\n"""
 if anchor not in s: raise SystemExit('new-old injection anchor not found')
 p.write_text(s.replace(anchor,inject,1))
 PY
@@ -88,7 +88,7 @@ python3 - <<'PY'
 from pathlib import Path
 p=Path('rtl/core/pipemem.v'); s=p.read_text()
 anchor="""//always @(posedge i_clk)\n//\tif ((f_past_valid)&&($past(f_cyc))&&(!$past(i_lock)))\n//\t\t`ASSUME(!i_lock);\n"""
-probe=anchor+"""\n\t// PROOFSCOPE_CARRIER_V2 realization probe: behavior forbidden by removed R0 lock contract\n\talways @(posedge i_clk)\n\t\tif ((f_past_valid)&&($past(f_cyc))&&(!$past(i_lock))&&(i_lock))\n\t\t\tcover(1'b1);\n"""
+probe=anchor+"""\n\t// FORMAL_SCOPE_CARRIER_V2 realization probe: behavior forbidden by removed R0 lock contract\n\talways @(posedge i_clk)\n\t\tif ((f_past_valid)&&($past(f_cyc))&&(!$past(i_lock))&&(i_lock))\n\t\t\tcover(1'b1);\n"""
 if anchor not in s: raise SystemExit('lock injection anchor not found')
 p.write_text(s.replace(anchor,probe,1))
 PY

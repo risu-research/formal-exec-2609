@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Emit concrete TNF semantic witnesses for directional ProofScope deltas.
+"""Emit concrete TNF semantic witnesses for directional formal-scope deltas.
 
 This is deliberately separate from temporal carrier realization.  It certifies a
 model of the symbolic scope difference itself and projects the model onto only
@@ -68,7 +68,7 @@ def main():
     ns=ap.parse_args(); old,new=IR(ns.old),IR(ns.new); A,B=old.assumptions(),new.assumptions()
     if old.unsupported or new.unsupported: raise RuntimeError(f'unsupported cells: {old.unsupported|new.unsupported}')
     out={
-      'schema':'proofscope-semantic-witness-v1',
+      'schema':'formal-scope-semantic-witness-v1',
       'old_sha256':old.sha256,'new_sha256':new.sha256,
       'old_only':direction(A,B,'old_and_not_new',ns.timeout_ms),
       'new_only':direction(B,A,'new_and_not_old',ns.timeout_ms),

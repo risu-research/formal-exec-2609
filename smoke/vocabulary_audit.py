@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Audit cross-revision external vocabulary before identity-aligned comparison.
 
-ProofScope never silently assumes that different interface schemas share a common
+The checker never silently assumes that different interface schemas share a common
 semantic universe.  Exact port identity permits the simple identity alignment on
 external signals.  Any mismatch is reported and can be configured to fail closed,
 requiring an explicit relational alignment instead.
@@ -24,7 +24,7 @@ def main():
     names=sorted(set(a)|set(b)); diffs=[]
     for n in names:
         if a.get(n)!=b.get(n): diffs.append({'port':n,'old':a.get(n),'new':b.get(n)})
-    out={'schema':'proofscope-vocabulary-audit-v1','old_module':on,'new_module':nn,'old_sha256':oh,'new_sha256':nh,
+    out={'schema':'formal-scope-vocabulary-audit-v1','old_module':on,'new_module':nn,'old_sha256':oh,'new_sha256':nh,
          'external_port_count_old':len(a),'external_port_count_new':len(b),'external_identity':not diffs,'differences':diffs,
          'alignment_contract':'IDENTITY_ON_EXTERNAL_PORTS' if not diffs else 'EXPLICIT_RELATIONAL_ALIGNMENT_REQUIRED',
          'internal_state_identity_claimed':False,

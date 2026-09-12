@@ -1,4 +1,4 @@
-name: proofscope
+name: semantic-kernel
 
 on:
   push:
@@ -83,5 +83,5 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: proofscope-semantic-kernel
+          name: formal-scope-semantic-kernel
           path: out/

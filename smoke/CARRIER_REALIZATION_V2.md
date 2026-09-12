@@ -1,4 +1,4 @@
-# ProofScope Carrier-Realization Gate V2
+# Formal Scope Carrier-Realization Gate V2
 
 Status: preregistered before observing V2 carrier outcomes.
 

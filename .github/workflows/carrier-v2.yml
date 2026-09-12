@@ -1,4 +1,4 @@
-name: proofscope-carrier-v2
+name: carrier-realization-v2
 
 on:
   push:
@@ -45,7 +45,7 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           labels={'old-new':'R0_WORLD_VS_R1_ADDRESS','new-old':'R1_WORLD_VS_R0_ADDRESS','lock':'R1_REMOVED_LOCK'}
-          lines=['schema=proofscope-carrier-v2']
+          lines=['schema=formal-scope-carrier-v2']
           for d,l in labels.items():
               p=Path('out')/d/'outcome.txt'
               lines.append(f'{l}={p.read_text().strip() if p.exists() else "MISSING"}')
@@ -61,7 +61,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: proofscope-carrier-v2
+          name: formal-scope-carrier-v2
           path: |
             out/
             scope-order-gate.log

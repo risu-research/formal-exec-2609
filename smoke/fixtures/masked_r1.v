@@ -6,10 +6,10 @@ module masked(
     initial bad = 1'b0;
 
     // R1 contains a real bug at opcode 3. Its native proof remains green only
-    // because the new environment excludes that opcode. PROOFSCOPE_OLD_ENV
+    // because the new environment excludes that opcode. FORMAL_SCOPE_OLD_ENV
     // removes only the new assumption for impact replay.
     always @(posedge clk) begin
-`ifndef PROOFSCOPE_OLD_ENV
+`ifndef FORMAL_SCOPE_OLD_ENV
         assume(opcode != 2'b11);
 `endif
         if (opcode == 2'b11)

@@ -1,4 +1,4 @@
-name: proofscope-eqcount-calibration
+name: equal-count-calibration
 
 on:
   push:
@@ -49,7 +49,7 @@ jobs:
       - name: Replay R1 under R0 environment and require property failure
         run: |
           set -euo pipefail
-          yosys -p 'read_verilog -D PROOFSCOPE_OLD_ENV -formal smoke/fixtures/masked_eqcount_r1.v; prep -top masked_eqcount -flatten -nordff; dffunmap; write_smt2 -wires out/eqcount/r1-old-env.smt2'
+          yosys -p 'read_verilog -D FORMAL_SCOPE_OLD_ENV -formal smoke/fixtures/masked_eqcount_r1.v; prep -top masked_eqcount -flatten -nordff; dffunmap; write_smt2 -wires out/eqcount/r1-old-env.smt2'
           set +e
           yosys-smtbmc --presat -s z3 -t 8 --dump-vcd out/eqcount/masked-failure.vcd out/eqcount/r1-old-env.smt2 > out/eqcount/r1-old-env.log 2>&1
           rc=$?
@@ -68,5 +68,5 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: proofscope-equal-count-calibration
+          name: formal-scope-equal-count-calibration
           path: out/eqcount/

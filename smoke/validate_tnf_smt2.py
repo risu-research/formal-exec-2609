@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Independent SMT2 theorem check for ProofScope TNF.
+"""Independent SMT2 theorem check for transition-normal-form semantics.
 
 For every clocked assumption identified in flattened JSON, prove:
   transition(s,n) -> (Yosys_u(n) == (D_EN(s) => D_CHECK(s)))
@@ -74,5 +74,5 @@ def validate(json_path,smt_path):
 def main():
     ap=argparse.ArgumentParser(); ap.add_argument('json'); ap.add_argument('smt2'); ns=ap.parse_args()
     module,total,r=validate(ns.json,ns.smt2)
-    print(json.dumps({'schema':'proofscope-smt2-tnf-validation-v2','module':module,'assumptions_total':total,'clocked_validated':len(r),'all_unsat':True,'results':r},indent=2))
+    print(json.dumps({'schema':'formal-scope-smt2-tnf-validation-v2','module':module,'assumptions_total':total,'clocked_validated':len(r),'all_unsat':True,'results':r},indent=2))
 if __name__=='__main__': main()

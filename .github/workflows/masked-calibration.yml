@@ -1,4 +1,4 @@
-name: proofscope-calibration
+name: masked-failure-calibration
 
 on:
   push:
@@ -35,7 +35,7 @@ jobs:
       - name: Replay R1 under old environment
         run: |
           set -euo pipefail
-          yosys -p 'read_verilog -D PROOFSCOPE_OLD_ENV -formal smoke/fixtures/masked_r1.v; prep -top masked -flatten -nordff; dffunmap; write_smt2 -wires out/calibration/r1-old-env.smt2'
+          yosys -p 'read_verilog -D FORMAL_SCOPE_OLD_ENV -formal smoke/fixtures/masked_r1.v; prep -top masked -flatten -nordff; dffunmap; write_smt2 -wires out/calibration/r1-old-env.smt2'
           set +e
           yosys-smtbmc --presat -s z3 -t 8 --dump-vcd out/calibration/masked-failure.vcd out/calibration/r1-old-env.smt2 > out/calibration/r1-old-env.log 2>&1
           rc=$?
@@ -54,5 +54,5 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: proofscope-masked-failure-calibration
+          name: formal-scope-masked-failure-calibration
           path: out/calibration/

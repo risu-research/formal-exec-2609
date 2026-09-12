@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""ProofScope transition-normal-form comparator for flattened Yosys JSON.
+"""Transition-normal-form comparator for flattened Yosys JSON.
 
 Scientific rules:
 - Classification is over whole assumption conjunctions, never line/pair matching.
@@ -19,16 +19,13 @@ def _pi(v):
     if isinstance(v, int): return v
     try: return int(v, 2)
     except Exception: return int(v)
-
 def _resize(x, w, signed=False):
     if z3.is_bool(x): x = z3.If(x, z3.BitVecVal(1,1), z3.BitVecVal(0,1))
     if x.size() == w: return x
     if x.size() < w: return z3.SignExt(w-x.size(), x) if signed else z3.ZeroExt(w-x.size(), x)
     return z3.Extract(w-1, 0, x)
-
 def _nz(x):
     return x if z3.is_bool(x) else x != z3.BitVecVal(0, x.size())
-
 def _stable_name(n):
     return n.replace('\\', '')
 
@@ -194,7 +191,7 @@ def analyze(old_path,new_path,timeout_ms=10000):
             ans.append({'index':b['index'],'isolated_sat':_check(s,timeout_ms)==z3.sat})
         return ans
     return {
-      'schema':'proofscope-tnf-v1',
+      'schema':'formal-scope-tnf-v1',
       'old':{'file':old_path,'sha256':old.sha256,'assumptions':len(A),'phases':dict(Counter(x['phase'] for x in A))},
       'new':{'file':new_path,'sha256':new.sha256,'assumptions':len(B),'phases':dict(Counter(x['phase'] for x in B))},
       'relation':rel,'old_only_sat':old_only,'new_only_sat':new_only,
@@ -203,7 +200,6 @@ def analyze(old_path,new_path,timeout_ms=10000):
       'unsupported':sorted(old.unsupported|new.unsupported),
       'method':{'pair_matching_used':False,'formal_clocked_normal_form':'D_EN => D_CHECK','generated_past_identity':'sha256(update-function)'},
     }
-
 def main():
     ap=argparse.ArgumentParser(); ap.add_argument('old'); ap.add_argument('new'); ap.add_argument('--expect'); ap.add_argument('--timeout-ms',type=int,default=10000)
     ns=ap.parse_args(); r=analyze(ns.old,ns.new,ns.timeout_ms); print(json.dumps(r,indent=2,sort_keys=True))
