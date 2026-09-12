@@ -1,0 +1,19 @@
+[tasks]
+p1
+p2
+
+[options]
+p1: mode bmc
+p1: depth 3
+p2: mode prove
+p2: depth 5
+
+[engines]
+smtbmc
+
+[script]
+read -formal design.v
+prep -top top
+
+[files]
+design.v
