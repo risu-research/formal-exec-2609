@@ -1,0 +1,58 @@
+name: proofscope-calibration
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  masked-failure-oracle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install formal toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y yosys z3 python3 python3-pip
+          python3 -m pip install --break-system-packages z3-solver
+      - name: Extract R0 and R1 formal artifacts
+        run: |
+          mkdir -p out/calibration
+          yosys -p 'read_verilog -formal smoke/fixtures/masked_r0.v; prep -top masked -flatten -nordff; dffunmap; write_json out/calibration/r0.json; write_smt2 -wires out/calibration/r0.smt2'
+          yosys -p 'read_verilog -formal smoke/fixtures/masked_r1.v; prep -top masked -flatten -nordff; dffunmap; write_json out/calibration/r1.json; write_smt2 -wires out/calibration/r1.smt2'
+      - name: Prove both native revisions green
+        run: |
+          set -euo pipefail
+          yosys-smtbmc --presat -s z3 -t 8 out/calibration/r0.smt2 | tee out/calibration/r0.green.log
+          yosys-smtbmc --presat -s z3 -t 8 out/calibration/r1.smt2 | tee out/calibration/r1.green.log
+      - name: Classify semantic scope and validate TNF
+        run: |
+          set -euo pipefail
+          python3 smoke/tnf_scope.py out/calibration/r0.json out/calibration/r1.json --expect CONTRACT | tee out/calibration/scope.json
+          python3 smoke/validate_tnf_smt2.py out/calibration/r1.json out/calibration/r1.smt2 | tee out/calibration/r1.tnf-theorem.json
+      - name: Replay R1 under old environment
+        run: |
+          set -euo pipefail
+          yosys -p 'read_verilog -D PROOFSCOPE_OLD_ENV -formal smoke/fixtures/masked_r1.v; prep -top masked -flatten -nordff; dffunmap; write_smt2 -wires out/calibration/r1-old-env.smt2'
+          set +e
+          yosys-smtbmc --presat -s z3 -t 8 --dump-vcd out/calibration/masked-failure.vcd out/calibration/r1-old-env.smt2 > out/calibration/r1-old-env.log 2>&1
+          rc=$?
+          set -e
+          echo "$rc" > out/calibration/r1-old-env.exit
+          cat out/calibration/r1-old-env.log
+          test "$rc" -ne 0
+          grep -q 'Assert failed' out/calibration/r1-old-env.log
+          printf 'R0_NATIVE=GREEN\nR1_NATIVE=GREEN\nR0_TO_R1_SCOPE=CONTRACT\nR1_UNDER_R0_ENV=PROPERTY_FAILURE\nASSERTION_VACUITY=NOT_APPLICABLE_ALWAYS_ACTIVE\n' > out/calibration/RESULT.txt
+      - name: Seal calibration evidence
+        if: always()
+        run: |
+          find out/calibration -type f -print0 | sort -z | xargs -0 sha256sum > out/calibration/SHA256SUMS.txt || true
+          git rev-parse HEAD > out/calibration/harness.commit.txt
+      - name: Upload calibration evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: proofscope-masked-failure-calibration
+          path: out/calibration/
