@@ -8,131 +8,80 @@ permissions:
   contents: read
 
 jobs:
-  semantic-closure:
+  semantic-kernel:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Install formal toolchain
         run: |
           sudo apt-get update
-          sudo apt-get install -y yosys z3 git make python3 python3-pip
+          sudo apt-get install -y yosys z3 git python3 python3-pip
           python3 -m pip install --break-system-packages z3-solver
-          yosys -V
-          z3 --version
+          yosys -V | tee tool-yosys.txt
+          z3 --version | tee tool-z3.txt
+      - name: Adversarial order calculus gate
+        run: |
+          PYTHONPATH=smoke python3 smoke/test_scope_logic.py | tee scope-order-gate.log
 
-      - name: Extract natural revision pair
+      - name: Extract natural revision pair and upstream provenance
         run: |
           set -euo pipefail
-          git clone https://github.com/ZipCPU/zipcpu.git /tmp/natural
+          git clone -q https://github.com/ZipCPU/zipcpu.git /tmp/natural
           mkdir -p out/natural
           cd /tmp/natural
-          git checkout 128cab89f5edaae4699184f50c1334598ebe904e
+          git show -s --format=fuller d511239e19be8fcc7f340a64554ea93699637e62 > "$GITHUB_WORKSPACE/out/natural/upstream-child-commit.txt"
+          git diff 128cab89f5edaae4699184f50c1334598ebe904e d511239e19be8fcc7f340a64554ea93699637e62 -- rtl/core/pipemem.v > "$GITHUB_WORKSPACE/out/natural/upstream-pipemem.diff"
+          git checkout -q 128cab89f5edaae4699184f50c1334598ebe904e
           yosys -p 'read_verilog -D PIPEMEM -formal rtl/core/pipemem.v; read_verilog -D PIPEMEM -formal rtl/ex/fwb_master.v; prep -top pipemem -flatten -nordff; dffunmap; write_json '"$GITHUB_WORKSPACE"'/out/natural/r0.json; write_smt2 -wires '"$GITHUB_WORKSPACE"'/out/natural/r0.smt2'
-          git reset --hard
-          git checkout d511239e19be8fcc7f340a64554ea93699637e62
+          git reset --hard -q
+          git checkout -q d511239e19be8fcc7f340a64554ea93699637e62
           yosys -p 'read_verilog -D PIPEMEM -formal rtl/core/pipemem.v; read_verilog -D PIPEMEM -formal rtl/ex/fwb_master.v; prep -top pipemem -flatten -nordff; dffunmap; write_json '"$GITHUB_WORKSPACE"'/out/natural/r1.json; write_smt2 -wires '"$GITHUB_WORKSPACE"'/out/natural/r1.smt2'
 
-      - name: Natural TNF classification and theorem checks
+      - name: Natural semantic closure
         run: |
           set -euo pipefail
+          python3 smoke/vocabulary_audit.py out/natural/r0.json out/natural/r1.json --require-external-identity | tee out/natural/vocabulary.json
           python3 smoke/tnf_scope.py out/natural/r0.json out/natural/r1.json --expect INCOMPARABLE | tee out/natural/tnf.json
+          PYTHONPATH=smoke python3 smoke/semantic_witness.py out/natural/r0.json out/natural/r1.json | tee out/natural/semantic-witness.json
           python3 smoke/validate_tnf_smt2.py out/natural/r0.json out/natural/r0.smt2 | tee out/natural/r0.tnf-theorem.json
           python3 smoke/validate_tnf_smt2.py out/natural/r1.json out/natural/r1.smt2 | tee out/natural/r1.tnf-theorem.json
 
-      - name: Build controlled contraction pair
+      - name: Build controlled contraction mirror
         run: |
           set -euo pipefail
-          git clone https://github.com/ZipCPU/zipcpu.git /tmp/mirror
+          git clone -q https://github.com/ZipCPU/zipcpu.git /tmp/mirror
           mkdir -p out/mirror
           cd /tmp/mirror
-          git checkout d511239e19be8fcc7f340a64554ea93699637e62
+          git checkout -q d511239e19be8fcc7f340a64554ea93699637e62
           yosys -p 'read_verilog -D PIPEMEM -formal rtl/core/pipemem.v; read_verilog -D PIPEMEM -formal rtl/ex/fwb_master.v; prep -top pipemem -flatten -nordff; dffunmap; write_json '"$GITHUB_WORKSPACE"'/out/mirror/base.json; write_smt2 -wires '"$GITHUB_WORKSPACE"'/out/mirror/base.smt2'
           python3 - <<'PY'
           from pathlib import Path
-          p=Path('rtl/core/pipemem.v')
-          s=p.read_text()
+          p=Path('rtl/core/pipemem.v'); s=p.read_text()
           old="""//always @(posedge i_clk)\n//\tif ((f_past_valid)&&($past(f_cyc))&&(!$past(i_lock)))\n//\t\t`ASSUME(!i_lock);\n"""
           new="""always @(posedge i_clk)\n\tif ((f_past_valid)&&($past(f_cyc))&&(!$past(i_lock)))\n\t\t`ASSUME(!i_lock);\n"""
           if old not in s: raise SystemExit('mirror anchor not found')
           p.write_text(s.replace(old,new,1))
           PY
           yosys -p 'read_verilog -D PIPEMEM -formal rtl/core/pipemem.v; read_verilog -D PIPEMEM -formal rtl/ex/fwb_master.v; prep -top pipemem -flatten -nordff; dffunmap; write_json '"$GITHUB_WORKSPACE"'/out/mirror/mutant.json; write_smt2 -wires '"$GITHUB_WORKSPACE"'/out/mirror/mutant.smt2'
-          cd "$GITHUB_WORKSPACE"
+
+      - name: Mirror semantic closure
+        run: |
+          set -euo pipefail
+          python3 smoke/vocabulary_audit.py out/mirror/base.json out/mirror/mutant.json --require-external-identity | tee out/mirror/vocabulary.json
           python3 smoke/tnf_scope.py out/mirror/base.json out/mirror/mutant.json --expect CONTRACT | tee out/mirror/tnf.json
+          PYTHONPATH=smoke python3 smoke/semantic_witness.py out/mirror/base.json out/mirror/mutant.json | tee out/mirror/semantic-witness.json
           python3 smoke/validate_tnf_smt2.py out/mirror/base.json out/mirror/base.smt2 | tee out/mirror/base.tnf-theorem.json
           python3 smoke/validate_tnf_smt2.py out/mirror/mutant.json out/mirror/mutant.smt2 | tee out/mirror/mutant.tnf-theorem.json
 
-      - name: Prove new address contract on old carrier
-        run: |
-          set -euo pipefail
-          git clone https://github.com/ZipCPU/zipcpu.git /tmp/carrier-old
-          cd /tmp/carrier-old
-          git checkout 128cab89f5edaae4699184f50c1334598ebe904e
-          python3 - <<'PY'
-          from pathlib import Path
-          p=Path('rtl/core/pipemem.v'); s=p.read_text()
-          anchor="""\t\t\t`ASSUME(i_op[0] == o_wb_we);\n\t\tend\n"""
-          inject="""\t\t\t`ASSUME(i_op[0] == o_wb_we);\n\t\tend\n\n\t// ProofScope foreign-contract monitor: new address semantics on old carrier\n\talways @(posedge i_clk)\n\t\tif ((f_past_valid)&&(f_cyc)&&(!i_wb_stall)&&(i_pipe_stb))\n\t\t\t`ASSERT((i_addr[(AW+1):2] == o_wb_addr)\n\t\t\t\t||(i_addr[(AW+1):2] == o_wb_addr+1));\n"""
-          if anchor not in s: raise SystemExit('old carrier anchor not found')
-          p.write_text(s.replace(anchor,inject,1))
-          PY
-          sed -i '/write_smt2/i dffunmap' bench/formal/pipemem.ys
-          set -o pipefail
-          make -C bench/formal clean >/dev/null 2>&1 || true
-          make -C bench/formal pipemem SOLVER='-s z3' 2>&1 | tee "$GITHUB_WORKSPACE/out/carrier-old.log"
-          printf 'carrier=old\nproperty=new-address-contract\nresult=PROVED_BY_BMC_AND_INDUCTION\n' > "$GITHUB_WORKSPACE/out/carrier-old.meta"
-
-      - name: Prove old address contract on new carrier
-        run: |
-          set -euo pipefail
-          git clone https://github.com/ZipCPU/zipcpu.git /tmp/carrier-new
-          cd /tmp/carrier-new
-          git checkout d511239e19be8fcc7f340a64554ea93699637e62
-          python3 - <<'PY'
-          from pathlib import Path
-          p=Path('rtl/core/pipemem.v'); s=p.read_text()
-          anchor="""\t\t\t`ASSUME(i_op[0] == o_wb_we);\n\t\tend\n"""
-          inject="""\t\t\t`ASSUME(i_op[0] == o_wb_we);\n\t\tend\n\n\t// ProofScope foreign-contract monitor: old address semantics on new carrier\n\talways @(posedge i_clk)\n\t\tif ((f_past_valid)&&(f_cyc)&&(!i_wb_stall)&&(i_pipe_stb))\n\t\t\t`ASSERT((i_addr == o_wb_addr)||(i_addr == o_wb_addr+1));\n"""
-          if anchor not in s: raise SystemExit('new carrier anchor not found')
-          p.write_text(s.replace(anchor,inject,1))
-          PY
-          sed -i '/write_smt2/i dffunmap' bench/formal/pipemem.ys
-          set -o pipefail
-          make -C bench/formal clean >/dev/null 2>&1 || true
-          make -C bench/formal pipemem SOLVER='-s z3' 2>&1 | tee "$GITHUB_WORKSPACE/out/carrier-new.log"
-          printf 'carrier=new\nproperty=old-address-contract\nresult=PROVED_BY_BMC_AND_INDUCTION\n' > "$GITHUB_WORKSPACE/out/carrier-new.meta"
-
-      - name: Realize removed lock contract on new carrier
-        run: |
-          set -euo pipefail
-          git clone https://github.com/ZipCPU/zipcpu.git /tmp/carrier-lock
-          cd /tmp/carrier-lock
-          git checkout d511239e19be8fcc7f340a64554ea93699637e62
-          python3 - <<'PY'
-          from pathlib import Path
-          p=Path('rtl/core/pipemem.v'); s=p.read_text()
-          anchor="""//always @(posedge i_clk)\n//\tif ((f_past_valid)&&($past(f_cyc))&&(!$past(i_lock)))\n//\t\t`ASSUME(!i_lock);\n"""
-          probe=anchor+"""\n\t// ProofScope realization probe for the removed historical lock contract\n\talways @(posedge i_clk)\n\t\tif ((f_past_valid)&&($past(f_cyc))&&(!$past(i_lock))&&(i_lock))\n\t\t\tcover(1'b1);\n"""
-          if anchor not in s: raise SystemExit('lock probe anchor not found')
-          p.write_text(s.replace(anchor,probe,1))
-          PY
-          sed -i '/write_smt2/i dffunmap' bench/formal/pipemem.ys
-          cd bench/formal
-          yosys -ql pipemem.yslog -s pipemem.ys
-          set -o pipefail
-          yosys-smtbmc --presat -s z3 -c -t 40 --dump-vcd "$GITHUB_WORKSPACE/out/lock-realized.vcd" pipemem.smt2 2>&1 | tee "$GITHUB_WORKSPACE/out/lock-realized.log"
-          grep -q 'Reached cover statement' "$GITHUB_WORKSPACE/out/lock-realized.log"
-          printf 'carrier=new\nproperty=removed-lock-contract-violation\nresult=REALIZED\n' > "$GITHUB_WORKSPACE/out/lock-realized.meta"
-
-      - name: Seal evidence manifest
+      - name: Seal semantic authority
         if: always()
         run: |
-          cd "$GITHUB_WORKSPACE"
-          find out -type f -print0 | sort -z | xargs -0 sha256sum > out/SHA256SUMS.txt
-
-      - name: Upload ProofScope closure evidence
+          cp tool-yosys.txt tool-z3.txt scope-order-gate.log out/ 2>/dev/null || true
+          git rev-parse HEAD > out/harness.commit.txt
+          find out -type f -print0 | sort -z | xargs -0 sha256sum > out/SHA256SUMS.txt || true
+      - name: Upload semantic closure evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: proofscope-semantic-closure
+          name: proofscope-semantic-kernel
           path: out/
