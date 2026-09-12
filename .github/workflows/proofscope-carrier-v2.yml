@@ -34,6 +34,12 @@ jobs:
         run: |
           bash smoke/run_carrier_v2.sh lock out/lock
           cat out/lock/outcome.txt
+      - name: Certify concrete distinguishing witnesses
+        run: |
+          set -euo pipefail
+          python3 smoke/certify_carrier_vcd.py old-new out/old-new/instrumented.bmc.vcd | tee out/old-new/witness.json
+          python3 smoke/certify_carrier_vcd.py new-old out/new-old/instrumented.bmc.vcd | tee out/new-old/witness.json
+          python3 smoke/certify_carrier_vcd.py lock out/lock/lock.cover.vcd | tee out/lock/witness.json
       - name: Summarize without collapsing uncertainty
         run: |
           python3 - <<'PY'
