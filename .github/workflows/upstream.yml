@@ -21,14 +21,34 @@ jobs:
         run: |
           git clone https://github.com/ZipCPU/zipcpu.git /tmp/upstream
       - name: Probe R0
+        id: r0
+        continue-on-error: true
         run: |
           cd /tmp/upstream
           git checkout 128cab89f5edaae4699184f50c1334598ebe904e
           make -C bench/formal clean >/dev/null 2>&1 || true
-          make -C bench/formal pipemem SOLVER='-s z3'
+          set -o pipefail
+          make -C bench/formal pipemem SOLVER='-s z3' 2>&1 | tee "$GITHUB_WORKSPACE/r0.log"
       - name: Probe R1
+        id: r1
+        if: always()
+        continue-on-error: true
         run: |
           cd /tmp/upstream
           git checkout d511239e19be8fcc7f340a64554ea93699637e62
           make -C bench/formal clean >/dev/null 2>&1 || true
-          make -C bench/formal pipemem SOLVER='-s z3'
+          set -o pipefail
+          make -C bench/formal pipemem SOLVER='-s z3' 2>&1 | tee "$GITHUB_WORKSPACE/r1.log"
+      - name: Upload probe logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: legacy-probe-logs
+          path: |
+            r0.log
+            r1.log
+      - name: Enforce both probes
+        if: always()
+        run: |
+          test "${{ steps.r0.outcome }}" = success
+          test "${{ steps.r1.outcome }}" = success
