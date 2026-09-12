@@ -1,0 +1,84 @@
+name: delta
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y yosys z3 git python3
+          yosys -V
+          z3 --version
+      - name: Checkout upstream
+        run: git clone https://github.com/ZipCPU/zipcpu.git /tmp/upstream
+      - name: Child delta trace
+        id: child
+        continue-on-error: true
+        run: |
+          cd /tmp/upstream
+          git reset --hard
+          git checkout d511239e19be8fcc7f340a64554ea93699637e62
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('rtl/core/pipemem.v')
+          s=p.read_text()
+          needle="""//always @(posedge i_clk)\n//\tif ((f_past_valid)&&($past(f_cyc))&&(!$past(i_lock)))\n//\t\t`ASSUME(!i_lock);\n"""
+          probe="""\n`ifdef FORMAL\nalways @(posedge i_clk)\n\tif ((f_past_valid)&&($past(f_cyc))&&(!$past(i_lock))&&(i_lock))\n\t\tcover(1'b1);\n`endif\n"""
+          if needle not in s:
+              raise SystemExit('child anchor not found')
+          p.write_text(s.replace(needle,needle+probe,1))
+          PY
+          sed -i '/write_smt2/i dffunmap' bench/formal/pipemem.ys
+          cd bench/formal
+          yosys -ql "$GITHUB_WORKSPACE/child.yslog" -s pipemem.ys
+          set -o pipefail
+          yosys-smtbmc --presat -s z3 -c -t 40 --dump-vcd "$GITHUB_WORKSPACE/child_delta.vcd" pipemem.smt2 2>&1 | tee "$GITHUB_WORKSPACE/child_delta.log"
+      - name: Parent exclusion check
+        id: parent
+        if: always()
+        continue-on-error: true
+        run: |
+          cd /tmp/upstream
+          git reset --hard
+          git checkout 128cab89f5edaae4699184f50c1334598ebe904e
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('rtl/core/pipemem.v')
+          s=p.read_text()
+          needle="""\talways @(posedge i_clk)\n\t\tif ((f_past_valid)&&($past(f_cyc))&&(!$past(i_lock)))\n\t\t\t`ASSUME(!i_lock);\n"""
+          probe="""\n`ifdef FORMAL\nalways @(posedge i_clk)\n\tif ((f_past_valid)&&($past(f_cyc))&&(!$past(i_lock))&&(i_lock))\n\t\tcover(1'b1);\n`endif\n"""
+          if needle not in s:
+              raise SystemExit('parent anchor not found')
+          p.write_text(s.replace(needle,needle+probe,1))
+          PY
+          sed -i '/write_smt2/i dffunmap' bench/formal/pipemem.ys
+          cd bench/formal
+          yosys -ql "$GITHUB_WORKSPACE/parent.yslog" -s pipemem.ys
+          set +e
+          yosys-smtbmc --presat -s z3 -c -t 40 --dump-vcd "$GITHUB_WORKSPACE/parent_delta.vcd" pipemem.smt2 2>&1 | tee "$GITHUB_WORKSPACE/parent_delta.log"
+          echo $? > "$GITHUB_WORKSPACE/parent_delta.exit"
+          exit 0
+      - name: Upload delta evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: historical-delta-probe
+          path: |
+            child_delta.log
+            child_delta.vcd
+            child.yslog
+            parent_delta.log
+            parent_delta.vcd
+            parent_delta.exit
+            parent.yslog
+      - name: Require child witness
+        if: always()
+        run: test "${{ steps.child.outcome }}" = success
