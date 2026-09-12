@@ -36,10 +36,12 @@ jobs:
           yosys -p 'read_verilog -D PIPEMEM -formal rtl/core/pipemem.v; read_verilog -D PIPEMEM -formal rtl/ex/fwb_master.v; prep -top pipemem -nordff; dffunmap; write_json '"$GITHUB_WORKSPACE"'/out/r1.json'
           cd "$GITHUB_WORKSPACE"
           python3 smoke/inventory_json.py out/r1.json | tee out/r1.inventory.json
-      - name: Upload inventories
+      - name: Upload elaborated generic artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: upstream-formal-inventory
+          name: upstream-formal-ir
           path: |
             out/r0.inventory.json
             out/r1.inventory.json
+            out/r0.json
+            out/r1.json
