@@ -1,0 +1,61 @@
+name: proofscope-carrier-v2
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  carrier-v2:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install formal toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y yosys z3 git make python3
+          yosys -V
+          z3 --version
+      - name: Adversarial semantic-order unit gate
+        run: |
+          python3 -m pip install --break-system-packages z3-solver
+          PYTHONPATH=smoke python3 smoke/test_scope_logic.py | tee scope-order-gate.log
+      - name: R0 native world vs R1 address contract
+        run: |
+          bash smoke/run_carrier_v2.sh old-new out/old-new
+          cat out/old-new/outcome.txt
+      - name: R1 native world vs R0 address contract
+        run: |
+          bash smoke/run_carrier_v2.sh new-old out/new-old
+          cat out/new-old/outcome.txt
+      - name: R1 realization of removed R0 lock contract
+        run: |
+          bash smoke/run_carrier_v2.sh lock out/lock
+          cat out/lock/outcome.txt
+      - name: Summarize without collapsing uncertainty
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          labels={'old-new':'R0_WORLD_VS_R1_ADDRESS','new-old':'R1_WORLD_VS_R0_ADDRESS','lock':'R1_REMOVED_LOCK'}
+          lines=['schema=proofscope-carrier-v2']
+          for d,l in labels.items():
+              p=Path('out')/d/'outcome.txt'
+              lines.append(f'{l}={p.read_text().strip() if p.exists() else "MISSING"}')
+          Path('out/SUMMARY.txt').write_text('\n'.join(lines)+'\n')
+          print(Path('out/SUMMARY.txt').read_text())
+          PY
+      - name: Seal evidence
+        if: always()
+        run: |
+          find out -type f -print0 | sort -z | xargs -0 sha256sum > out/SHA256SUMS.txt || true
+          git rev-parse HEAD > out/harness.commit.txt
+      - name: Upload V2 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: proofscope-carrier-v2
+          path: |
+            out/
+            scope-order-gate.log
