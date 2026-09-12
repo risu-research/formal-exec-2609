@@ -18,8 +18,14 @@ jobs:
           sudo apt-get install -y yosys make git
           git clone --depth 1 https://github.com/YosysHQ/sby.git /tmp/sby
           sudo make -C /tmp/sby install PREFIX=/usr/local
+          python3 -m pip install --upgrade pip
+          python3 -m pip install z3-solver
           yosys -V
           sby --version || true
+          python3 - <<'PY'
+          import z3
+          print(z3.get_version_string())
+          PY
       - name: Elaborate formal fixture
         run: |
           mkdir -p out
@@ -36,3 +42,16 @@ jobs:
           cat out/tasks.txt
           cat out/defaults.txt
           python3 -m json.tool out/taskinfo.json >/dev/null
+      - name: Generic SMT sanity
+        run: |
+          python3 - <<'PY'
+          import z3
+          x, y = z3.Bools('x y')
+          s = z3.Solver()
+          s.add(x, z3.Not(y))
+          assert s.check() == z3.sat
+          m = s.model()
+          assert z3.is_true(m.eval(x, model_completion=True))
+          assert z3.is_false(m.eval(y, model_completion=True))
+          print('SMT_OK')
+          PY
