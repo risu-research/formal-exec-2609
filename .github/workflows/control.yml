@@ -22,6 +22,11 @@ jobs:
           git clone https://github.com/ZipCPU/zipcpu.git /tmp/upstream
           cd /tmp/upstream
           git checkout d511239e19be8fcc7f340a64554ea93699637e62
+          mkdir -p "$GITHUB_WORKSPACE/ir"
+      - name: Extract base formal IR
+        run: |
+          cd /tmp/upstream
+          yosys -p 'read_verilog -D PIPEMEM -formal rtl/core/pipemem.v; read_verilog -D PIPEMEM -formal rtl/ex/fwb_master.v; prep -top pipemem -nordff; flatten; opt_clean; dffunmap; write_json '"$GITHUB_WORKSPACE"'/ir/base.json; write_smt2 -wires '"$GITHUB_WORKSPACE"'/ir/base.smt2'
       - name: Apply controlled formal mutation and probe
         run: |
           cd /tmp/upstream
@@ -38,6 +43,10 @@ jobs:
           PY
           sed -i '/write_smt2/i dffunmap' bench/formal/pipemem.ys
           printf 'base=d511239e19be8fcc7f340a64554ea93699637e62\nmutation=reactivate-historical-i_lock-assumption\n' > "$GITHUB_WORKSPACE/mutant.meta"
+      - name: Extract mutant formal IR
+        run: |
+          cd /tmp/upstream
+          yosys -p 'read_verilog -D PIPEMEM -formal rtl/core/pipemem.v; read_verilog -D PIPEMEM -formal rtl/ex/fwb_master.v; prep -top pipemem -nordff; flatten; opt_clean; dffunmap; write_json '"$GITHUB_WORKSPACE"'/ir/mutant.json; write_smt2 -wires '"$GITHUB_WORKSPACE"'/ir/mutant.smt2'
       - name: Mutant full formal target
         run: |
           cd /tmp/upstream
@@ -63,3 +72,7 @@ jobs:
             mutant_proof.log
             mutant_delta.log
             mutant_delta.exit
+            ir/base.json
+            ir/base.smt2
+            ir/mutant.json
+            ir/mutant.smt2
