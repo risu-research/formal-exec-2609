@@ -12,14 +12,27 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install Yosys
+      - name: Install formal toolchain
         run: |
           sudo apt-get update
-          sudo apt-get install -y yosys
+          sudo apt-get install -y yosys make git
+          git clone --depth 1 https://github.com/YosysHQ/sby.git /tmp/sby
+          sudo make -C /tmp/sby install PREFIX=/usr/local
           yosys -V
+          sby --version || true
       - name: Elaborate formal fixture
         run: |
           mkdir -p out
           yosys -p 'read_verilog -formal smoke/design.v; prep -top top; write_json out/design.json'
       - name: Validate formal-cell inventory
         run: python3 smoke/check_json.py out/design.json
+      - name: Resolve SBY task semantics
+        run: |
+          sby --dumptasks smoke/check.sby > out/tasks.txt
+          sby --dumpdefaults smoke/check.sby > out/defaults.txt
+          sby --dumptaskinfo smoke/check.sby > out/taskinfo.json
+          sby --dumpcfg smoke/check.sby > out/config.txt
+          test -s out/taskinfo.json
+          cat out/tasks.txt
+          cat out/defaults.txt
+          python3 -m json.tool out/taskinfo.json >/dev/null
