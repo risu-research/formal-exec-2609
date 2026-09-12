@@ -25,7 +25,7 @@ jobs:
           git reset --hard
           git checkout 128cab89f5edaae4699184f50c1334598ebe904e
           mkdir -p "$GITHUB_WORKSPACE/out"
-          yosys -p 'read_verilog -D PIPEMEM -formal rtl/core/pipemem.v; read_verilog -D PIPEMEM -formal rtl/ex/fwb_master.v; prep -top pipemem -nordff; dffunmap; write_json '"$GITHUB_WORKSPACE"'/out/r0.json'
+          yosys -p 'read_verilog -D PIPEMEM -formal rtl/core/pipemem.v; read_verilog -D PIPEMEM -formal rtl/ex/fwb_master.v; prep -top pipemem -nordff; dffunmap; write_json '"$GITHUB_WORKSPACE"'/out/r0.json; write_smt2 -wires '"$GITHUB_WORKSPACE"'/out/r0.smt2'
           cd "$GITHUB_WORKSPACE"
           python3 smoke/inventory_json.py out/r0.json | tee out/r0.inventory.json
       - name: Extract R1
@@ -33,7 +33,7 @@ jobs:
           cd /tmp/upstream
           git reset --hard
           git checkout d511239e19be8fcc7f340a64554ea93699637e62
-          yosys -p 'read_verilog -D PIPEMEM -formal rtl/core/pipemem.v; read_verilog -D PIPEMEM -formal rtl/ex/fwb_master.v; prep -top pipemem -nordff; dffunmap; write_json '"$GITHUB_WORKSPACE"'/out/r1.json'
+          yosys -p 'read_verilog -D PIPEMEM -formal rtl/core/pipemem.v; read_verilog -D PIPEMEM -formal rtl/ex/fwb_master.v; prep -top pipemem -nordff; dffunmap; write_json '"$GITHUB_WORKSPACE"'/out/r1.json; write_smt2 -wires '"$GITHUB_WORKSPACE"'/out/r1.smt2'
           cd "$GITHUB_WORKSPACE"
           python3 smoke/inventory_json.py out/r1.json | tee out/r1.inventory.json
       - name: Upload elaborated generic artifacts
@@ -45,3 +45,5 @@ jobs:
             out/r1.inventory.json
             out/r0.json
             out/r1.json
+            out/r0.smt2
+            out/r1.smt2
