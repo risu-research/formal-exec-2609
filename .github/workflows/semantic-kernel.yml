@@ -73,6 +73,16 @@ jobs:
           python3 smoke/validate_tnf_smt2.py out/mirror/base.json out/mirror/base.smt2 | tee out/mirror/base.tnf-theorem.json
           python3 smoke/validate_tnf_smt2.py out/mirror/mutant.json out/mirror/mutant.smt2 | tee out/mirror/mutant.tnf-theorem.json
 
+      - name: G3 independent metamorphic closure
+        run: |
+          set -euo pipefail
+          PYTHONPATH=smoke python3 smoke/g3_metamorphic.py \
+            --natural-old out/natural/r0.json \
+            --natural-new out/natural/r1.json \
+            --mirror-old out/mirror/base.json \
+            --mirror-new out/mirror/mutant.json \
+            --out out/g3-metamorphic.json | tee out/g3-metamorphic.log
+
       - name: Seal semantic authority
         if: always()
         run: |
