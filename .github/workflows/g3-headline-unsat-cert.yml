@@ -1,0 +1,112 @@
+name: g3-headline-unsat-cert
+
+on:
+  push:
+    paths:
+      - '.github/workflows/g3-headline-unsat-cert.yml'
+      - 'smoke/export_g3_headline_query.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  headline-unsat:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reconstruct hash-locked controlled mirror query
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y yosys git python3
+          git clone -q https://github.com/ZipCPU/zipcpu.git /tmp/g3-headline
+          mkdir -p out/query
+          cd /tmp/g3-headline
+          git checkout -q d511239e19be8fcc7f340a64554ea93699637e62
+          yosys -p 'read_verilog -D PIPEMEM -formal rtl/core/pipemem.v; read_verilog -D PIPEMEM -formal rtl/ex/fwb_master.v; prep -top pipemem -flatten -nordff; dffunmap; write_json '"$GITHUB_WORKSPACE"'/out/query/base.json'
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('rtl/core/pipemem.v'); s=p.read_text()
+          old="""//always @(posedge i_clk)\n//\tif ((f_past_valid)&&($past(f_cyc))&&(!$past(i_lock)))\n//\t\t`ASSUME(!i_lock);\n"""
+          new="""always @(posedge i_clk)\n\tif ((f_past_valid)&&($past(f_cyc))&&(!$past(i_lock)))\n\t\t`ASSUME(!i_lock);\n"""
+          if old not in s: raise SystemExit('controlled mirror anchor not found')
+          p.write_text(s.replace(old,new,1))
+          PY
+          yosys -p 'read_verilog -D PIPEMEM -formal rtl/core/pipemem.v; read_verilog -D PIPEMEM -formal rtl/ex/fwb_master.v; prep -top pipemem -flatten -nordff; dffunmap; write_json '"$GITHUB_WORKSPACE"'/out/query/mutant.json'
+          cd "$GITHUB_WORKSPACE"
+          python3 smoke/export_g3_headline_query.py out/query/base.json out/query/mutant.json out/query/headline-gain.smt2 | tee out/query/export.json
+          grep -q 'eee29444ffd94478a71d7a076e255d2d8066ec0a6790d75560bec6f5402592ba' out/query/export.json
+      - name: Install pinned CPC checker stack
+        run: |
+          set -euo pipefail
+          sudo apt-get install -y curl unzip build-essential cmake libgmp-dev
+          mkdir -p /tmp/g3-cpc out/signatures
+          curl -L --fail --retry 3 -o /tmp/g3-cpc/cvc5.zip https://github.com/cvc5/cvc5/releases/download/cvc5-1.3.4/cvc5-Linux-x86_64-static.zip
+          echo 'dcdbfada0ce493ee98259c0816e0daafc561c223aadb3af298c2968e73ea39c6  /tmp/g3-cpc/cvc5.zip' | sha256sum -c -
+          unzip -q /tmp/g3-cpc/cvc5.zip -d /tmp/g3-cpc/cvc5
+          CVC5=$(find /tmp/g3-cpc/cvc5 -type f -name cvc5 | head -n1); test -x "$CVC5"; echo "CVC5=$CVC5" >> "$GITHUB_ENV"
+          git clone -q --branch cvc5-1.3.4 --depth 1 https://github.com/cvc5/cvc5.git /tmp/g3-cpc/cvc5-src
+          cp -a /tmp/g3-cpc/cvc5-src/proofs/eo/cpc/. out/signatures/
+          git -C /tmp/g3-cpc/cvc5-src rev-parse HEAD | tee out/cvc5-source.commit.txt
+          find out/signatures -type f -print0 | sort -z | xargs -0 sha256sum > out/cpc-signatures.sha256
+          git clone -q https://github.com/cvc5/ethos.git /tmp/g3-cpc/ethos
+          git -C /tmp/g3-cpc/ethos checkout -q 221641668d75eaffd308e0511d63962cea937110
+          cmake -S /tmp/g3-cpc/ethos -B /tmp/g3-cpc/ethos/build -DCMAKE_BUILD_TYPE=Release
+          cmake --build /tmp/g3-cpc/ethos/build -j2
+          ETHOS=/tmp/g3-cpc/ethos/build/src/ethos; test -x "$ETHOS"; echo "ETHOS=$ETHOS" >> "$GITHUB_ENV"
+          "$CVC5" --version | tee out/cvc5.version.txt
+          git -C /tmp/g3-cpc/ethos rev-parse HEAD | tee out/ethos.commit.txt
+          sha256sum "$CVC5" "$ETHOS" > out/tool-binaries.sha256
+      - name: Produce and independently check exact headline proof
+        id: cert
+        run: |
+          set -euo pipefail
+          raw=out/query/headline-gain.cpc.raw
+          proof=out/query/headline-gain.cpc
+          set +e
+          timeout 600 "$CVC5" --produce-proofs --proof-mode=full-proof-strict --dump-proofs --proof-format-mode=cpc --proof-granularity=dsl-rewrite-strict --dag-thresh=0 out/query/headline-gain.smt2 > "$raw" 2> out/query/cvc5.err
+          rc=$?
+          set -e
+          test "$rc" -eq 0
+          test "$(head -n1 "$raw")" = unsat
+          { echo '(include "../signatures/Cpc.eo")'; echo '(include "../signatures/expert/CpcExpert.eo")'; tail -n +3 "$raw" | head -n -1; } > "$proof"
+          ! grep -Eiq 'WARNING|(^|[^[:alpha:]])(trust|trusted|admit|admitted)([^[:alpha:]]|$)' "$proof"
+          tail -n1 "$proof" | grep -Eq '^\(step [^ ]+ false :rule '
+          set +e
+          (cd out && timeout 600 "$ETHOS" query/headline-gain.cpc > query/ethos.txt 2>&1)
+          erc=$?
+          set -e
+          test "$erc" -eq 0
+          grep -qx 'correct' out/query/ethos.txt
+          python3 - "$proof" out/query/headline-gain.bad.cpc <<'PY'
+          from pathlib import Path
+          import sys
+          src,dst=map(Path,sys.argv[1:3]); lines=src.read_text().splitlines()
+          for i in range(len(lines)-1,-1,-1):
+              if lines[i].startswith('(step ') and ' false :rule ' in lines[i]:
+                  lines[i]=lines[i].replace(' false :rule ',' true :rule ',1); break
+          else: raise SystemExit('no terminal false proof step')
+          dst.write_text('\n'.join(lines)+'\n')
+          PY
+          set +e
+          (cd out && timeout 180 "$ETHOS" query/headline-gain.bad.cpc > query/bad-ethos.txt 2>&1)
+          brc=$?
+          set -e
+          if [[ $brc -eq 0 ]] && grep -qx 'correct' out/query/bad-ethos.txt; then
+            echo 'corrupted headline proof accepted' >&2; exit 1
+          fi
+          printf 'QUERY_SHA256=eee29444ffd94478a71d7a076e255d2d8066ec0a6790d75560bec6f5402592ba\nRESULT=UNSAT_CERTIFIED_CPC\nCORRUPTION=REJECTED\n' | tee out/query/RESULT.txt
+      - name: Seal headline evidence
+        if: always()
+        run: |
+          set -euo pipefail
+          git rev-parse HEAD > out/runner.commit.txt
+          find out -type f -print0 | sort -z | xargs -0 sha256sum > out/ALL_SHA256SUMS.txt || true
+      - name: Upload headline certificate
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: g3-headline-unsat-evidence
+          path: out/
