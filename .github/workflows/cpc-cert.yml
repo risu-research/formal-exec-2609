@@ -1,0 +1,127 @@
+name: cpc-cert
+
+on:
+  push:
+    paths:
+      - '.github/workflows/cpc-cert.yml'
+      - 'smoke/emit_solver_miters.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cpc-cert:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pinned CPC proof toolchain
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y curl unzip git build-essential cmake libgmp-dev yosys python3
+          mkdir -p /tmp/cpc-tools out/signatures/expert
+          curl -L --fail --retry 3 -o /tmp/cpc-tools/cvc5.zip https://github.com/cvc5/cvc5/releases/download/cvc5-1.3.4/cvc5-Linux-x86_64-static.zip
+          echo 'dcdbfada0ce493ee98259c0816e0daafc561c223aadb3af298c2968e73ea39c6  /tmp/cpc-tools/cvc5.zip' | sha256sum -c -
+          unzip -q /tmp/cpc-tools/cvc5.zip -d /tmp/cpc-tools/cvc5
+          CVC5=$(find /tmp/cpc-tools/cvc5 -type f -name cvc5 | head -n1); test -x "$CVC5"; echo "CVC5=$CVC5" >> "$GITHUB_ENV"
+          git clone -q --branch cvc5-1.3.4 --depth 1 https://github.com/cvc5/cvc5.git /tmp/cpc-tools/cvc5-src
+          cp /tmp/cpc-tools/cvc5-src/proofs/eo/cpc/Cpc.eo out/signatures/Cpc.eo
+          cp /tmp/cpc-tools/cvc5-src/proofs/eo/cpc/expert/CpcExpert.eo out/signatures/expert/CpcExpert.eo
+          git clone -q https://github.com/cvc5/ethos.git /tmp/cpc-tools/ethos
+          git -C /tmp/cpc-tools/ethos checkout -q 221641668d75eaffd308e0511d63962cea937110
+          cmake -S /tmp/cpc-tools/ethos -B /tmp/cpc-tools/ethos/build -DCMAKE_BUILD_TYPE=Release
+          cmake --build /tmp/cpc-tools/ethos/build -j2
+          ETHOS=/tmp/cpc-tools/ethos/build/src/ethos; test -x "$ETHOS"; echo "ETHOS=$ETHOS" >> "$GITHUB_ENV"
+          "$CVC5" --version | tee out/cvc5.version.txt
+          git -C /tmp/cpc-tools/ethos rev-parse HEAD | tee out/ethos.commit.txt
+          sha256sum "$CVC5" "$ETHOS" out/signatures/Cpc.eo out/signatures/expert/CpcExpert.eo > out/tool-signature.sha256
+      - name: CPC checker calibration and corruption rejection
+        run: |
+          set -euo pipefail
+          mkdir -p out/calibration
+          cat > out/calibration/u.smt2 <<'EOF'
+          (set-logic QF_BV)
+          (declare-fun x () (_ BitVec 8))
+          (assert (= x #x00))
+          (assert (= x #x01))
+          (check-sat)
+          EOF
+          "$CVC5" --produce-proofs --proof-mode=full-proof-strict --dump-proofs --proof-format-mode=cpc --proof-granularity=dsl-rewrite-strict --dag-thresh=0 out/calibration/u.smt2 > out/calibration/raw.txt
+          test "$(head -n1 out/calibration/raw.txt)" = unsat
+          { echo '(include "signatures/Cpc.eo")'; echo '(include "signatures/expert/CpcExpert.eo")'; tail -n +3 out/calibration/raw.txt | head -n -1; } > out/calibration/proof.cpc
+          ! grep -Eiq 'WARNING|(^|[^[:alpha:]])(trust|trusted|admit|admitted)([^[:alpha:]]|$)' out/calibration/proof.cpc
+          (cd out && "$ETHOS" calibration/proof.cpc > calibration/check.txt 2>&1)
+          head -n -1 out/calibration/proof.cpc > out/calibration/bad.cpc
+          if (cd out && "$ETHOS" calibration/bad.cpc > calibration/bad-check.txt 2>&1); then echo 'corrupted CPC proof accepted' >&2; exit 1; fi
+      - name: Build unchanged solver-facing miter corpus
+        run: |
+          set -euo pipefail
+          OLD=128cab89f5edaae4699184f50c1334598ebe904e
+          NEW=d511239e19be8fcc7f340a64554ea93699637e62
+          git clone -q https://github.com/ZipCPU/zipcpu.git /tmp/zipcpu-cpc
+          mkdir -p out/cases/{n0,n1,c0,c1}
+          cd /tmp/zipcpu-cpc
+          git checkout -q "$OLD"
+          yosys -p 'read_verilog -D PIPEMEM -formal rtl/core/pipemem.v; read_verilog -D PIPEMEM -formal rtl/ex/fwb_master.v; prep -top pipemem -flatten -nordff; dffunmap; write_json '"$GITHUB_WORKSPACE"'/out/cases/n0/a.json; write_smt2 -wires '"$GITHUB_WORKSPACE"'/out/cases/n0/a.smt2'
+          git reset --hard -q; git checkout -q "$NEW"
+          yosys -p 'read_verilog -D PIPEMEM -formal rtl/core/pipemem.v; read_verilog -D PIPEMEM -formal rtl/ex/fwb_master.v; prep -top pipemem -flatten -nordff; dffunmap; write_json '"$GITHUB_WORKSPACE"'/out/cases/n1/a.json; write_smt2 -wires '"$GITHUB_WORKSPACE"'/out/cases/n1/a.smt2'
+          cp "$GITHUB_WORKSPACE/out/cases/n1/a.json" "$GITHUB_WORKSPACE/out/cases/c0/a.json"; cp "$GITHUB_WORKSPACE/out/cases/n1/a.smt2" "$GITHUB_WORKSPACE/out/cases/c0/a.smt2"
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('rtl/core/pipemem.v');s=p.read_text();old="""//always @(posedge i_clk)\n//\tif ((f_past_valid)&&($past(f_cyc))&&(!$past(i_lock)))\n//\t\t`ASSUME(!i_lock);\n""";new="""always @(posedge i_clk)\n\tif ((f_past_valid)&&($past(f_cyc))&&(!$past(i_lock)))\n\t\t`ASSUME(!i_lock);\n"""
+          if old not in s: raise SystemExit('anchor not found')
+          p.write_text(s.replace(old,new,1))
+          PY
+          yosys -p 'read_verilog -D PIPEMEM -formal rtl/core/pipemem.v; read_verilog -D PIPEMEM -formal rtl/ex/fwb_master.v; prep -top pipemem -flatten -nordff; dffunmap; write_json '"$GITHUB_WORKSPACE"'/out/cases/c1/a.json; write_smt2 -wires '"$GITHUB_WORKSPACE"'/out/cases/c1/a.smt2'
+          cd "$GITHUB_WORKSPACE"
+          for c in n0 n1 c0 c1; do python3 smoke/emit_solver_miters.py out/cases/$c/a.json out/cases/$c/a.smt2 out/cases/$c/miters > out/cases/$c/emit.json; done
+      - name: Check every miter with CPC and Ethos
+        id: cert
+        run: |
+          set -euo pipefail
+          printf 'case\tmiter\tstatus\n' > out/SUMMARY.tsv
+          bad=0
+          for c in n0 n1 c0 c1; do
+            for p in out/cases/$c/miters/miter-*.smt2; do
+              stem=$(basename "$p" .smt2); raw=${p%.smt2}.cpc.raw; proof=${p%.smt2}.cpc; log=${p%.smt2}.ethos
+              status=UNSET
+              set +e; timeout 300 "$CVC5" --produce-proofs --proof-mode=full-proof-strict --dump-proofs --proof-format-mode=cpc --proof-granularity=dsl-rewrite-strict --dag-thresh=0 "$p" > "$raw" 2> "${p%.smt2}.cvc5.err"; rc=$?; set -e
+              if [[ $rc -ne 0 ]]; then status=CVC5_FAIL_$rc
+              elif [[ "$(head -n1 "$raw")" != unsat ]]; then status=NOT_UNSAT
+              else
+                { echo '(include "signatures/Cpc.eo")'; echo '(include "signatures/expert/CpcExpert.eo")'; tail -n +3 "$raw" | head -n -1; } > "$proof"
+                if grep -Eiq 'WARNING|(^|[^[:alpha:]])(trust|trusted|admit|admitted)([^[:alpha:]]|$)' "$proof"; then status=TRUST_STEP
+                else
+                  set +e; (cd out && timeout 300 "$ETHOS" "${proof#out/}" > "${log#out/}" 2>&1); erc=$?; set -e
+                  if [[ $erc -ne 0 ]]; then status=ETHOS_REJECT_$erc
+                  else
+                    head -n -1 "$proof" > "${p%.smt2}.bad.cpc"
+                    set +e; (cd out && timeout 120 "$ETHOS" "${p#out/cases/}" >/dev/null 2>&1); set -e
+                    set +e; (cd out && timeout 120 "$ETHOS" "${p%.smt2}.bad.cpc" > "${p%.smt2}.bad.ethos" 2>&1); brc=$?; set -e
+                    if [[ $brc -eq 0 ]]; then status=CORRUPTION_ACCEPTED; else status=UNSAT_CERTIFIED_CPC; fi
+                  fi
+                fi
+              fi
+              printf '%s\t%s\t%s\n' "$c" "$stem" "$status" >> out/SUMMARY.tsv
+              [[ $status == UNSAT_CERTIFIED_CPC ]] || bad=$((bad+1))
+            done
+          done
+          cat out/SUMMARY.tsv
+          echo "uncertified=$bad" >> "$GITHUB_OUTPUT"
+      - name: Seal CPC evidence
+        if: always()
+        run: |
+          set -euo pipefail
+          git rev-parse HEAD > out/runner.commit.txt
+          find out -type f -print0 | sort -z | xargs -0 sha256sum > out/ALL_SHA256SUMS.txt || true
+      - name: Upload CPC evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cpc-cert-evidence
+          path: out/
+      - name: Enforce complete CPC coverage
+        if: always()
+        run: test "${{ steps.cert.outputs.uncertified }}" = "0"
