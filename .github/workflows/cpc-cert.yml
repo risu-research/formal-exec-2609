@@ -50,7 +50,7 @@ jobs:
           EOF
           "$CVC5" --produce-proofs --proof-mode=full-proof-strict --dump-proofs --proof-format-mode=cpc --proof-granularity=dsl-rewrite-strict --dag-thresh=0 out/calibration/u.smt2 > out/calibration/raw.txt
           test "$(head -n1 out/calibration/raw.txt)" = unsat
-          { echo '(include "signatures/Cpc.eo")'; echo '(include "signatures/expert/CpcExpert.eo")'; tail -n +3 out/calibration/raw.txt | head -n -1; } > out/calibration/proof.cpc
+          { echo '(include "../signatures/Cpc.eo")'; echo '(include "../signatures/expert/CpcExpert.eo")'; tail -n +3 out/calibration/raw.txt | head -n -1; } > out/calibration/proof.cpc
           ! grep -Eiq 'WARNING|(^|[^[:alpha:]])(trust|trusted|admit|admitted)([^[:alpha:]]|$)' out/calibration/proof.cpc
           (cd out && "$ETHOS" calibration/proof.cpc > calibration/check.txt 2>&1)
           head -n -1 out/calibration/proof.cpc > out/calibration/bad.cpc
@@ -91,7 +91,7 @@ jobs:
               if [[ $rc -ne 0 ]]; then status=CVC5_FAIL_$rc
               elif [[ "$(head -n1 "$raw")" != unsat ]]; then status=NOT_UNSAT
               else
-                { echo '(include "signatures/Cpc.eo")'; echo '(include "signatures/expert/CpcExpert.eo")'; tail -n +3 "$raw" | head -n -1; } > "$proof"
+                { echo '(include "../../../signatures/Cpc.eo")'; echo '(include "../../../signatures/expert/CpcExpert.eo")'; tail -n +3 "$raw" | head -n -1; } > "$proof"
                 if grep -Eiq 'WARNING|(^|[^[:alpha:]])(trust|trusted|admit|admitted)([^[:alpha:]]|$)' "$proof"; then status=TRUST_STEP
                 else
                   set +e; (cd out && timeout 300 "$ETHOS" "${proof#out/}" > "${log#out/}" 2>&1); erc=$?; set -e
