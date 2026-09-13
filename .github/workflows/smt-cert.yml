@@ -1,0 +1,134 @@
+name: smt-cert
+
+on:
+  push:
+    paths:
+      - 'smoke/emit_solver_miters.py'
+      - '.github/workflows/smt-cert.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smt-cert:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pinned proof toolchain
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y curl unzip git build-essential pkg-config libgmp-dev yosys python3
+          mkdir -p /tmp/cert-tools out
+          curl -L --fail --retry 3 -o /tmp/cert-tools/cvc5.zip https://github.com/cvc5/cvc5/releases/download/cvc5-1.3.4/cvc5-Linux-x86_64-static.zip
+          echo 'dcdbfada0ce493ee98259c0816e0daafc561c223aadb3af298c2968e73ea39c6  /tmp/cert-tools/cvc5.zip' | sha256sum -c -
+          unzip -q /tmp/cert-tools/cvc5.zip -d /tmp/cert-tools/cvc5
+          CVC5=$(find /tmp/cert-tools/cvc5 -type f -name cvc5 | head -n1); test -x "$CVC5"
+          echo "CVC5=$CVC5" >> "$GITHUB_ENV"
+          git clone -q https://github.com/ufmg-smite/carcara.git /tmp/cert-tools/carcara
+          git -C /tmp/cert-tools/carcara checkout -q 126c53314131a694fea8ee9069981a5a639a04d0
+          cargo build --release --locked --manifest-path /tmp/cert-tools/carcara/Cargo.toml
+          CARCARA=/tmp/cert-tools/carcara/target/release/carcara; test -x "$CARCARA"
+          echo "CARCARA=$CARCARA" >> "$GITHUB_ENV"
+          "$CVC5" --version | tee out/cvc5.version.txt
+          "$CARCARA" --version 2>&1 | tee out/carcara.version.txt || true
+          git -C /tmp/cert-tools/carcara rev-parse HEAD | tee out/carcara.commit.txt
+      - name: Strict checker calibration
+        run: |
+          set -euo pipefail
+          mkdir -p out/calibration
+          cat > out/calibration/u.smt2 <<'EOF'
+          (set-logic QF_BV)
+          (declare-fun x () (_ BitVec 8))
+          (assert (= x #x00))
+          (assert (= x #x01))
+          (check-sat)
+          EOF
+          "$CVC5" --produce-proofs --proof-mode=full-proof-strict --dump-proofs --proof-format-mode=alethe --proof-granularity=theory-rewrite --dag-thresh=0 out/calibration/u.smt2 > out/calibration/raw.txt
+          test "$(head -n1 out/calibration/raw.txt)" = unsat
+          tail -n +3 out/calibration/raw.txt | head -n -1 > out/calibration/proof.alethe
+          ! grep -Eiq ':rule[[:space:]]+(hole|trust|trusted)|untranslated rewrite' out/calibration/proof.alethe
+          "$CARCARA" check out/calibration/proof.alethe out/calibration/u.smt2 > out/calibration/check.txt 2>&1
+          head -n -1 out/calibration/proof.alethe > out/calibration/bad.alethe
+          if "$CARCARA" check out/calibration/bad.alethe out/calibration/u.smt2 > out/calibration/bad-check.txt 2>&1; then
+            echo 'corrupted proof was accepted' >&2; exit 1
+          fi
+      - name: Build frozen solver-facing calibration artifacts
+        run: |
+          set -euo pipefail
+          OLD=128cab89f5edaae4699184f50c1334598ebe904e
+          NEW=d511239e19be8fcc7f340a64554ea93699637e62
+          git clone -q https://github.com/ZipCPU/zipcpu.git /tmp/zipcpu-cert
+          mkdir -p out/cases/{n0,n1,c0,c1}
+          cd /tmp/zipcpu-cert
+          git checkout -q "$OLD"
+          yosys -p 'read_verilog -D PIPEMEM -formal rtl/core/pipemem.v; read_verilog -D PIPEMEM -formal rtl/ex/fwb_master.v; prep -top pipemem -flatten -nordff; dffunmap; write_json '"$GITHUB_WORKSPACE"'/out/cases/n0/a.json; write_smt2 -wires '"$GITHUB_WORKSPACE"'/out/cases/n0/a.smt2'
+          git reset --hard -q; git checkout -q "$NEW"
+          yosys -p 'read_verilog -D PIPEMEM -formal rtl/core/pipemem.v; read_verilog -D PIPEMEM -formal rtl/ex/fwb_master.v; prep -top pipemem -flatten -nordff; dffunmap; write_json '"$GITHUB_WORKSPACE"'/out/cases/n1/a.json; write_smt2 -wires '"$GITHUB_WORKSPACE"'/out/cases/n1/a.smt2'
+          cp "$GITHUB_WORKSPACE/out/cases/n1/a.json" "$GITHUB_WORKSPACE/out/cases/c0/a.json"
+          cp "$GITHUB_WORKSPACE/out/cases/n1/a.smt2" "$GITHUB_WORKSPACE/out/cases/c0/a.smt2"
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('rtl/core/pipemem.v');s=p.read_text()
+          old="""//always @(posedge i_clk)\n//\tif ((f_past_valid)&&($past(f_cyc))&&(!$past(i_lock)))\n//\t\t`ASSUME(!i_lock);\n"""
+          new="""always @(posedge i_clk)\n\tif ((f_past_valid)&&($past(f_cyc))&&(!$past(i_lock)))\n\t\t`ASSUME(!i_lock);\n"""
+          if old not in s: raise SystemExit('anchor not found')
+          p.write_text(s.replace(old,new,1))
+          PY
+          yosys -p 'read_verilog -D PIPEMEM -formal rtl/core/pipemem.v; read_verilog -D PIPEMEM -formal rtl/ex/fwb_master.v; prep -top pipemem -flatten -nordff; dffunmap; write_json '"$GITHUB_WORKSPACE"'/out/cases/c1/a.json; write_smt2 -wires '"$GITHUB_WORKSPACE"'/out/cases/c1/a.smt2'
+          cd "$GITHUB_WORKSPACE"
+          for c in n0 n1 c0 c1; do python3 smoke/emit_solver_miters.py out/cases/$c/a.json out/cases/$c/a.smt2 out/cases/$c/miters > out/cases/$c/emit.json; done
+      - name: Strict Alethe certificate pass
+        id: cert
+        run: |
+          set -euo pipefail
+          printf 'case\tmiter\tstatus\n' > out/SUMMARY.tsv
+          bad=0
+          for c in n0 n1 c0 c1; do
+            for p in out/cases/$c/miters/miter-*.smt2; do
+              stem=$(basename "$p" .smt2); raw=${p%.smt2}.raw; proof=${p%.smt2}.alethe; log=${p%.smt2}.check
+              status=UNSET
+              set +e
+              timeout 300 "$CVC5" --produce-proofs --proof-mode=full-proof-strict --dump-proofs --proof-format-mode=alethe --proof-granularity=theory-rewrite --dag-thresh=0 "$p" > "$raw" 2> "${p%.smt2}.cvc5.err"
+              rc=$?
+              set -e
+              if [[ $rc -ne 0 ]]; then status=CVC5_FAIL_$rc
+              elif [[ "$(head -n1 "$raw")" != unsat ]]; then status=NOT_UNSAT
+              else
+                tail -n +3 "$raw" | head -n -1 > "$proof"
+                if grep -Eiq ':rule[[:space:]]+(hole|trust|trusted)|untranslated rewrite' "$proof"; then status=TRUST_STEP
+                else
+                  set +e; timeout 300 "$CARCARA" check "$proof" "$p" > "$log" 2>&1; crc=$?; set -e
+                  if [[ $crc -ne 0 ]]; then status=CARCARA_REJECT_$crc
+                  else
+                    head -n -1 "$proof" > "${p%.smt2}.bad.alethe"
+                    set +e; timeout 120 "$CARCARA" check "${p%.smt2}.bad.alethe" "$p" > "${p%.smt2}.bad.check" 2>&1; brc=$?; set -e
+                    if [[ $brc -eq 0 ]]; then status=CORRUPTION_ACCEPTED; else status=UNSAT_CERTIFIED; fi
+                  fi
+                fi
+              fi
+              printf '%s\t%s\t%s\n' "$c" "$stem" "$status" >> out/SUMMARY.tsv
+              [[ $status == UNSAT_CERTIFIED ]] || bad=$((bad+1))
+            done
+          done
+          cat out/SUMMARY.tsv
+          echo "uncertified=$bad" >> "$GITHUB_OUTPUT"
+      - name: Seal proof evidence
+        if: always()
+        run: |
+          set -euo pipefail
+          git rev-parse HEAD > out/runner.commit.txt
+          sha256sum "$CVC5" "$CARCARA" > out/tool-binaries.sha256 2>/dev/null || true
+          find out -type f -print0 | sort -z | xargs -0 sha256sum > out/ALL_SHA256SUMS.txt || true
+      - name: Upload proof evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smt-cert-evidence
+          path: out/
+      - name: Enforce complete strict coverage
+        if: always()
+        run: |
+          test "${{ steps.cert.outputs.uncertified }}" = "0"
