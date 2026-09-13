@@ -97,9 +97,9 @@ jobs:
                   set +e; (cd out && timeout 300 "$ETHOS" "${proof#out/}" > "${log#out/}" 2>&1); erc=$?; set -e
                   if [[ $erc -ne 0 ]]; then status=ETHOS_REJECT_$erc
                   else
-                    head -n -1 "$proof" > "${p%.smt2}.bad.cpc"
-                    set +e; (cd out && timeout 120 "$ETHOS" "${p#out/cases/}" >/dev/null 2>&1); set -e
-                    set +e; (cd out && timeout 120 "$ETHOS" "${p%.smt2}.bad.cpc" > "${p%.smt2}.bad.ethos" 2>&1); brc=$?; set -e
+                    badproof=${p%.smt2}.bad.cpc
+                    head -n -1 "$proof" > "$badproof"
+                    set +e; (cd out && timeout 120 "$ETHOS" "${badproof#out/}" > "${badproof#out/}.ethos" 2>&1); brc=$?; set -e
                     if [[ $brc -eq 0 ]]; then status=CORRUPTION_ACCEPTED; else status=UNSAT_CERTIFIED_CPC; fi
                   fi
                 fi
