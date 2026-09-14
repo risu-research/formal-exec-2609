@@ -27,7 +27,6 @@ def maxbit(o):
     for c in m.get("cells",{}).values():
         for bs in c.get("connections",{}).values(): xs += [x for x in bs if isinstance(x,int)]
     return max(xs,default=1)
-
 def cell_order(o):
     o=copy.deepcopy(o); m=module(o); m["cells"]=dict(reversed(list(m.get("cells",{}).items()))); return o
 def formal_order(o):
@@ -67,8 +66,15 @@ def double_negation(o):
             target=c; break
     if target is None: raise RuntimeError("no scalar assumption")
     orig=copy.deepcopy(target["connections"]["A"]); b1=maxbit(o)+1; b2=b1+1
-    cs["__g3_not1__"]={"type":"$logic_not","port_directions":{"A":"input","Y":"output"},"connections":{"A":orig,"Y":[b1]},"parameters":{},"attributes":{}}
-    cs["__g3_not2__"]={"type":"$logic_not","port_directions":{"A":"input","Y":"output"},"connections":{"A":[b1],"Y":[b2]},"parameters":{},"attributes":{}}
+    # Yosys validates $logic_not against the RTLIL cell contract.  Preserve
+    # one-bit Boolean semantics while making every inserted cell a valid RTLIL
+    # object: A_SIGNED=0, A_WIDTH=1, Y_WIDTH=1.  JSON parameters are the same
+    # fixed-width bit strings emitted by write_json.
+    p1={"A_SIGNED":"00000000000000000000000000000000",
+        "A_WIDTH":"00000000000000000000000000000001",
+        "Y_WIDTH":"00000000000000000000000000000001"}
+    cs["__g3_not1__"]={"type":"$logic_not","port_directions":{"A":"input","Y":"output"},"connections":{"A":orig,"Y":[b1]},"parameters":copy.deepcopy(p1),"attributes":{}}
+    cs["__g3_not2__"]={"type":"$logic_not","port_directions":{"A":"input","Y":"output"},"connections":{"A":[b1],"Y":[b2]},"parameters":copy.deepcopy(p1),"attributes":{}}
     target["connections"]["A"]=[b2]; return o
 def history_alias_rename(o):
     o=copy.deepcopy(o); m=module(o)
