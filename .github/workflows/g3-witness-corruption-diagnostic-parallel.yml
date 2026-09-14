@@ -1,0 +1,122 @@
+name: g3-witness-corruption-diagnostic-parallel
+on:
+  push:
+    paths:
+      - '.github/workflows/g3-witness-corruption-diagnostic-parallel.yml'
+      - 'smoke/g3_witness_corruption_diagnostic_shard.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  shard:
+    strategy:
+      fail-fast: false
+      max-parallel: 16
+      matrix:
+        shard: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install exact semantic runtime
+        run: |
+          set -euo pipefail
+          python3 -m pip install --break-system-packages z3-solver==5.1.0.0
+          python3 - <<'PY'
+          import z3
+          assert z3.get_version_string() == '5.1.0'
+          print(z3.get_version_string())
+          PY
+      - name: Download exact sealed Amendment-07 RED evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: g3-negative-control-evidence-parallel-v2
+          path: sealed
+          run-id: 34804261148
+          github-token: ${{ github.token }}
+      - name: Bind source RED provenance
+        run: |
+          set -euo pipefail
+          test "$(cat sealed/out/negative/runner.commit.txt)" = 'ccd83335a9b81bc447d9740129668619c4e77267'
+          test "$(cat sealed/out/negative/aggregate.rc.txt)" = '1'
+          test "$(cat sealed/shards/SHARD_RC_${{ matrix.shard }}.txt)" = '0'
+      - name: Exhaust shard witness one-bit sensitivity
+        run: |
+          set -euo pipefail
+          mkdir -p diagnostic
+          PYTHONPATH=smoke python3 smoke/g3_witness_corruption_diagnostic_shard.py \
+            --artifact-root sealed \
+            --shard '${{ matrix.shard }}' \
+            --out 'diagnostic/BIT_SENSITIVITY_${{ matrix.shard }}.json' \
+            | tee 'diagnostic/stdout_${{ matrix.shard }}.txt'
+          git rev-parse HEAD > 'diagnostic/runner_${{ matrix.shard }}.txt'
+          sha256sum smoke/g3_witness_corruption_diagnostic_shard.py > 'diagnostic/source_${{ matrix.shard }}.sha256'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: g3-witness-bit-sensitivity-shard-${{ matrix.shard }}
+          path: diagnostic/
+  aggregate:
+    needs: shard
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download all diagnostic shards
+        uses: actions/download-artifact@v4
+        with:
+          pattern: g3-witness-bit-sensitivity-shard-*
+          path: shards
+          merge-multiple: true
+      - name: Aggregate independently
+        run: |
+          set -euo pipefail
+          mkdir -p final
+          python3 - <<'PY'
+          import json,glob,hashlib
+          fs=sorted(glob.glob('shards/BIT_SENSITIVITY_*.json'))
+          if len(fs)!=16: raise SystemExit(f'shard count {len(fs)} != 16')
+          xs=[json.load(open(f)) for f in fs]
+          ids=sorted(x['shard'] for x in xs)
+          if ids!=list(range(16)): raise SystemExit('shard ids bad')
+          if any(x['authority']!='DIAGNOSTIC_ONLY_NON_AUTHORITY' for x in xs): raise SystemExit('authority drift')
+          if any(x['source_red_run']!=34804261148 for x in xs): raise SystemExit('source run drift')
+          records=[r for x in xs for r in x['records']]
+          keys=[(r['lane'],r['candidate_index']) for r in records]
+          if len(keys)!=len(set(keys)): raise SystemExit('duplicate candidates')
+          records.sort(key=lambda r:(r['lane'],r['candidate_index']))
+          by_lane={}
+          for lane in ('nc1','nc2'):
+            rr=[r for r in records if r['lane']==lane]
+            by_lane[lane]={
+              'sat_candidates':len(rr),
+              'stored_first_bit_rejected':sum(bool(r['stored_corruption_rejected']) for r in rr),
+              'stored_first_bit_not_rejected':sum(not bool(r['stored_corruption_rejected']) for r in rr),
+              'has_any_rejecting_single_bit':sum(bool(r['has_any_rejecting_single_bit']) for r in rr),
+              'has_no_rejecting_single_bit':sum(not bool(r['has_any_rejecting_single_bit']) for r in rr),
+              'first_candidate':rr[0] if rr else None,
+            }
+          out={
+            'schema':'g3-post-red-witness-bit-sensitivity-parallel-aggregate-v1',
+            'authority':'DIAGNOSTIC_ONLY_NON_AUTHORITY',
+            'source_red_run':34804261148,
+            'source_red_head':'ccd83335a9b81bc447d9740129668619c4e77267',
+            'source_red_artifact_digest':'sha256:adce6b557ecdd0d5d7e21a370cc0e1090c07e2dfbc312dcfca3f619d83576881',
+            'shards':16,
+            'total_sat_candidates':len(records),
+            'stored_first_bit_rejected_total':sum(bool(r['stored_corruption_rejected']) for r in records),
+            'stored_first_bit_not_rejected_total':sum(not bool(r['stored_corruption_rejected']) for r in records),
+            'has_any_rejecting_single_bit_total':sum(bool(r['has_any_rejecting_single_bit']) for r in records),
+            'has_no_rejecting_single_bit_total':sum(not bool(r['has_any_rejecting_single_bit']) for r in records),
+            'lane_summary':by_lane,
+            'records':records,
+          }
+          open('final/WITNESS_BIT_SENSITIVITY_PARALLEL.json','w').write(json.dumps(out,indent=2,sort_keys=True)+'\n')
+          print(json.dumps({k:out[k] for k in ('total_sat_candidates','stored_first_bit_rejected_total','stored_first_bit_not_rejected_total','has_any_rejecting_single_bit_total','has_no_rejecting_single_bit_total')},sort_keys=True))
+          PY
+          git rev-parse HEAD > final/runner.commit.txt
+          find final -type f -print0 | sort -z | xargs -0 sha256sum > final/ALL_SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: g3-witness-corruption-diagnostic-parallel
+          path: final/
