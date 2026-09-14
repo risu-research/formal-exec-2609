@@ -1,0 +1,61 @@
+name: g3-witness-corruption-diagnostic
+on:
+  push:
+    paths:
+      - '.github/workflows/g3-witness-corruption-diagnostic.yml'
+      - 'smoke/g3_witness_corruption_diagnostic.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install exact semantic runtime
+        run: |
+          set -euo pipefail
+          python3 -m pip install --break-system-packages z3-solver==5.1.0.0
+          python3 - <<'PY'
+          import z3
+          print(z3.get_version_string())
+          assert z3.get_version_string() == '5.1.0'
+          PY
+      - name: Download exact sealed Amendment-07 RED evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: g3-negative-control-evidence-parallel-v2
+          path: sealed
+          run-id: 34804261148
+          github-token: ${{ github.token }}
+      - name: Bind source RED provenance
+        run: |
+          set -euo pipefail
+          test "$(cat sealed/out/negative/runner.commit.txt)" = 'ccd83335a9b81bc447d9740129668619c4e77267'
+          test "$(cat sealed/out/negative/aggregate.rc.txt)" = '1'
+          for i in $(seq 0 15); do test "$(cat sealed/shards/SHARD_RC_${i}.txt)" = '0'; done
+          sha256sum smoke/g3_witness_corruption_diagnostic.py > diagnostic-source.sha256
+          git rev-parse HEAD > diagnostic-runner.commit.txt
+      - name: Exhaust every one-bit corruption of every sealed SAT witness
+        run: |
+          set -euo pipefail
+          mkdir -p diagnostic
+          PYTHONPATH=smoke python3 smoke/g3_witness_corruption_diagnostic.py \
+            --artifact-root sealed \
+            --out diagnostic/WITNESS_BIT_SENSITIVITY.json \
+            | tee diagnostic/diagnostic.stdout.txt
+      - name: Seal diagnostic only evidence
+        run: |
+          set -euo pipefail
+          cp diagnostic-source.sha256 diagnostic/
+          cp diagnostic-runner.commit.txt diagnostic/
+          printf '%s\n' 'SOURCE_RED_RUN=34804261148' > diagnostic/SOURCE_RED.txt
+          printf '%s\n' 'SOURCE_RED_ARTIFACT_DIGEST=sha256:adce6b557ecdd0d5d7e21a370cc0e1090c07e2dfbc312dcfca3f619d83576881' >> diagnostic/SOURCE_RED.txt
+          printf '%s\n' 'AUTHORITY=DIAGNOSTIC_ONLY_NON_AUTHORITY' >> diagnostic/SOURCE_RED.txt
+          find diagnostic -type f -print0 | sort -z | xargs -0 sha256sum > diagnostic/ALL_SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: g3-witness-corruption-diagnostic
+          path: diagnostic/
