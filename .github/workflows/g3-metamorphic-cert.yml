@@ -142,6 +142,38 @@ jobs:
           echo "count=$count" >> "$GITHUB_OUTPUT"; echo "uncertified=$bad" >> "$GITHUB_OUTPUT"
           cat out/METAMORPHIC_CERTIFICATES.tsv
 
+      - name: Pair-level frozen relation invariance diagnostics
+        run: |
+          set -euo pipefail
+          PYTHONPATH=smoke python3 - <<'PY'
+          import json
+          from pathlib import Path
+          from tnf_scope import analyze
+
+          pairs=[('natural','natural_old','natural_new','INCOMPARABLE'),('mirror','mirror_old','mirror_new','CONTRACT')]
+          families=[p.stem for p in sorted((Path('out/meta')/'natural_old').glob('*.json')) if p.name!='manifest.json']
+          rows=[]; bad=[]
+          def compact(r): return {'relation':r['relation'],'old_only_sat':r['old_only_sat'],'new_only_sat':r['new_only_sat']}
+          for pair,old_label,new_label,expected in pairs:
+              bo=Path('out/base')/(old_label+'.json'); bn=Path('out/base')/(new_label+'.json')
+              baseline=compact(analyze(str(bo),str(bn)))
+              if baseline['relation']!=expected: raise SystemExit(f'{pair}: frozen baseline drifted: {baseline}')
+              for fam in families:
+                  to=Path('out/meta')/old_label/(fam+'.json'); tn=Path('out/meta')/new_label/(fam+'.json')
+                  for side in ('old','new','both'):
+                      o=to if side in ('old','both') else bo
+                      n=tn if side in ('new','both') else bn
+                      observed=compact(analyze(str(o),str(n)))
+                      passed=observed==baseline
+                      row={'pair':pair,'family':fam,'side':side,'baseline':baseline,'observed':observed,'pass':passed}
+                      rows.append(row)
+                      if not passed: bad.append(row)
+          out=Path('out/PAIR_RELATION_INVARIANCE.json')
+          out.write_text(json.dumps({'schema':'g3-pair-relation-invariance-v1','count':len(rows),'failures':len(bad),'rows':rows},indent=2,sort_keys=True)+'\n')
+          if len(rows)!=60 or bad: raise SystemExit(f'pair relation invariance failed: count={len(rows)} failures={len(bad)}')
+          print('PAIR_RELATION_INVARIANCE_PASS count=60')
+          PY
+
       - name: Seal evidence
         if: always()
         run: |
@@ -162,3 +194,5 @@ jobs:
         run: |
           test "${{ steps.cert.outputs.count }}" = "80"
           test "${{ steps.cert.outputs.uncertified }}" = "0"
+          test "$(python3 -c 'import json;print(json.load(open("out/PAIR_RELATION_INVARIANCE.json"))["count"])' 2>/dev/null || true)" = "60"
+          test "$(python3 -c 'import json;print(json.load(open("out/PAIR_RELATION_INVARIANCE.json"))["failures"])' 2>/dev/null || true)" = "0"
