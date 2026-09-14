@@ -7,6 +7,7 @@ on:
       - 'smoke/g3_preserving_inputs.py'
       - 'smoke/g3_emit_semantic_xor.py'
       - 'smoke/g3_emit_aggregate_correspondence.py'
+      - 'smoke/g3_emit_aggregate_correspondence_v4.py'
       - 'smoke/tnf_scope.py'
       - 'smoke/validate_tnf_smt2.py'
   workflow_dispatch:
@@ -17,7 +18,7 @@ permissions:
 jobs:
   preserving-certificates:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
 
@@ -26,7 +27,7 @@ jobs:
           set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y curl unzip git build-essential cmake libgmp-dev yosys python3 python3-pip
-          python3 -m pip install --break-system-packages z3-solver
+          python3 -m pip install --break-system-packages z3-solver==5.1.0.0
           mkdir -p /tmp/g3-tools out/signatures
           curl -L --fail --retry 3 -o /tmp/g3-tools/cvc5.zip https://github.com/cvc5/cvc5/releases/download/cvc5-1.3.4/cvc5-Linux-x86_64-static.zip
           echo 'dcdbfada0ce493ee98259c0816e0daafc561c223aadb3af298c2968e73ea39c6  /tmp/g3-tools/cvc5.zip' | sha256sum -c -
@@ -43,8 +44,14 @@ jobs:
           ETHOS=/tmp/g3-tools/ethos/build/src/ethos; test -x "$ETHOS"; echo "ETHOS=$ETHOS" >> "$GITHUB_ENV"
           "$CVC5" --version | tee out/cvc5.version.txt
           yosys -V | tee out/yosys.version.txt
+          grep -q '^Yosys 0.33 ' out/yosys.version.txt
+          python3 - <<'PY' | tee out/z3.version.txt
+          import z3
+          print(z3.get_version_string())
+          assert z3.get_version_string() == '5.1.0.0'
+          PY
           git -C /tmp/g3-tools/ethos rev-parse HEAD | tee out/ethos.commit.txt
-          sha256sum "$CVC5" "$ETHOS" > out/tool-binaries.sha256
+          sha256sum "$CVC5" "$ETHOS" "$(command -v yosys)" > out/tool-binaries.sha256
 
       - name: Build frozen four-artifact calibration corpus
         run: |
@@ -79,22 +86,23 @@ jobs:
           done
           test "$(find out/meta -mindepth 2 -maxdepth 2 -name '*.json' ! -name manifest.json | wc -l)" -eq 40
 
-      - name: Emit semantic and solver-correspondence queries
+      - name: Emit preserving, undef-bridge, and solver-correspondence queries
         run: |
           set -euo pipefail
-          mkdir -p out/queries/preserving out/queries/correspondence out/solver
+          mkdir -p out/queries/preserving out/queries/undef_irrelevance out/queries/correspondence out/solver
           for j in out/meta/*/*.json; do
             [[ $(basename "$j") == manifest.json ]] && continue
             label=$(basename "$(dirname "$j")"); family=$(basename "$j" .json)
-            mkdir -p "out/queries/preserving/$label" "out/queries/correspondence/$label" "out/solver/$label"
+            mkdir -p "out/queries/preserving/$label" "out/queries/undef_irrelevance/$label" "out/queries/correspondence/$label" "out/solver/$label"
             PYTHONPATH=smoke python3 smoke/g3_emit_semantic_xor.py "out/base/$label.json" "$j" "out/queries/preserving/$label/$family.smt2" > "out/queries/preserving/$label/$family.json"
             yosys -q -p "read_json $j; write_smt2 -wires out/solver/$label/$family.smt2"
-            PYTHONPATH=smoke python3 smoke/g3_emit_aggregate_correspondence.py "$j" "out/solver/$label/$family.smt2" "out/queries/correspondence/$label/$family.smt2" > "out/queries/correspondence/$label/$family.json"
+            PYTHONPATH=smoke python3 smoke/g3_emit_aggregate_correspondence_v4.py "$j" "out/solver/$label/$family.smt2" "out/queries/correspondence/$label/$family.smt2" "out/queries/undef_irrelevance/$label/$family.smt2" > "out/queries/correspondence/$label/$family.json"
           done
           test "$(find out/queries/preserving -name '*.smt2' | wc -l)" -eq 40
+          test "$(find out/queries/undef_irrelevance -name '*.smt2' | wc -l)" -eq 40
           test "$(find out/queries/correspondence -name '*.smt2' | wc -l)" -eq 40
 
-      - name: CPC and Ethos certify all 80 preserving obligations
+      - name: CPC and Ethos certify all 120 preserving obligations
         id: cert
         run: |
           set -euo pipefail
@@ -110,7 +118,11 @@ jobs:
             rc=$?
             set -e
             if [[ $rc -ne 0 ]]; then status="CVC5_FAIL_$rc"
-            elif [[ "$(head -n1 "$raw")" != unsat ]]; then status="NOT_UNSAT_$(head -n1 "$raw" | tr -dc 'A-Za-z0-9_-')"
+            elif [[ "$(head -n1 "$raw")" != unsat ]]; then
+              first=$(head -n1 "$raw" | tr -dc 'A-Za-z0-9_-'); status="NOT_UNSAT_${first}"
+              set +e
+              timeout 120 "$CVC5" --produce-models --dump-models "$q" > "out/proofs/$id.model.txt" 2> "out/proofs/$id.model.err"
+              set -e
             else
               { echo '(include "../signatures/Cpc.eo")'; echo '(include "../signatures/expert/CpcExpert.eo")'; tail -n +3 "$raw" | head -n -1; } > "$proof"
               if grep -Eiq 'WARNING|(^|[^[:alpha:]])(trust|trusted|admit|admitted)([^[:alpha:]]|$)' "$proof"; then status=TRUST_STEP
@@ -138,6 +150,7 @@ jobs:
             count=$((count+1)); [[ $status == UNSAT_CERTIFIED_CPC ]] || bad=$((bad+1))
           }
           for q in out/queries/preserving/*/*.smt2; do certify semantic_equivalence "$q"; done
+          for q in out/queries/undef_irrelevance/*/*.smt2; do certify tnf_undef_irrelevance "$q"; done
           for q in out/queries/correspondence/*/*.smt2; do certify yosys_tnf_correspondence "$q"; done
           echo "count=$count" >> "$GITHUB_OUTPUT"; echo "uncertified=$bad" >> "$GITHUB_OUTPUT"
           cat out/METAMORPHIC_CERTIFICATES.tsv
@@ -179,7 +192,7 @@ jobs:
         run: |
           set -euo pipefail
           git rev-parse HEAD > out/runner.commit.txt
-          sha256sum .github/workflows/g3-metamorphic-cert.yml smoke/g3_preserving_inputs.py smoke/g3_emit_semantic_xor.py smoke/g3_emit_aggregate_correspondence.py smoke/tnf_scope.py smoke/validate_tnf_smt2.py > out/runner-sources.sha256
+          sha256sum .github/workflows/g3-metamorphic-cert.yml smoke/g3_preserving_inputs.py smoke/g3_emit_semantic_xor.py smoke/g3_emit_aggregate_correspondence_v4.py smoke/tnf_scope.py smoke/validate_tnf_smt2.py > out/runner-sources.sha256
           find out -type f -print0 | sort -z | xargs -0 sha256sum > out/ALL_SHA256SUMS.txt || true
 
       - name: Upload metamorphic certificate evidence
@@ -192,7 +205,7 @@ jobs:
       - name: Enforce complete preserving coverage
         if: always()
         run: |
-          test "${{ steps.cert.outputs.count }}" = "80"
+          test "${{ steps.cert.outputs.count }}" = "120"
           test "${{ steps.cert.outputs.uncertified }}" = "0"
           test "$(python3 -c 'import json;print(json.load(open("out/PAIR_RELATION_INVARIANCE.json"))["count"])' 2>/dev/null || true)" = "60"
           test "$(python3 -c 'import json;print(json.load(open("out/PAIR_RELATION_INVARIANCE.json"))["failures"])' 2>/dev/null || true)" = "0"
