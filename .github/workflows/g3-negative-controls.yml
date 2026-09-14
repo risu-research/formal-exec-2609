@@ -1,0 +1,173 @@
+name: g3-negative-controls
+on:
+  push:
+    paths:
+      - '.github/workflows/g3-negative-controls.yml'
+      - 'smoke/g3_negative_controls.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  negative-controls:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pinned toolchain
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y curl unzip git build-essential cmake libgmp-dev yosys python3 python3-pip
+          mkdir -p out/signatures out/negative
+          python3 -m pip install --break-system-packages z3-solver==5.1.0.0
+          python3 -m pip show z3-solver | tee out/z3-package.txt
+          grep -qx 'Version: 5.1.0.0' out/z3-package.txt
+          python3 - <<'PY' | tee out/z3.version.txt
+          import z3
+          print(z3.get_version_string()); assert z3.get_version_string()=='5.1.0'
+          PY
+          curl -L --fail --retry 3 -o /tmp/cvc5.zip https://github.com/cvc5/cvc5/releases/download/cvc5-1.3.4/cvc5-Linux-x86_64-static.zip
+          echo 'dcdbfada0ce493ee98259c0816e0daafc561c223aadb3af298c2968e73ea39c6  /tmp/cvc5.zip' | sha256sum -c -
+          unzip -q /tmp/cvc5.zip -d /tmp/cvc5
+          CVC5=$(find /tmp/cvc5 -type f -name cvc5 | head -n1); test -x "$CVC5"; echo "CVC5=$CVC5" >> "$GITHUB_ENV"
+          git clone -q --branch cvc5-1.3.4 --depth 1 https://github.com/cvc5/cvc5.git /tmp/cvc5-src
+          cp -a /tmp/cvc5-src/proofs/eo/cpc/. out/signatures/
+          git -C /tmp/cvc5-src rev-parse HEAD | tee out/cvc5-source.commit.txt
+          git clone -q https://github.com/cvc5/ethos.git /tmp/ethos
+          git -C /tmp/ethos checkout -q 221641668d75eaffd308e0511d63962cea937110
+          cmake -S /tmp/ethos -B /tmp/ethos/build -DCMAKE_BUILD_TYPE=Release >/dev/null
+          cmake --build /tmp/ethos/build -j2 >/dev/null
+          ETHOS=/tmp/ethos/build/src/ethos; test -x "$ETHOS"; echo "ETHOS=$ETHOS" >> "$GITHUB_ENV"
+          "$CVC5" --version | tee out/cvc5.version.txt
+          git -C /tmp/ethos rev-parse HEAD | tee out/ethos.commit.txt
+          yosys -V | tee out/yosys.version.txt
+          grep -q '^Yosys 0.33 ' out/yosys.version.txt
+          sha256sum "$CVC5" "$ETHOS" "$(command -v yosys)" > out/tool-binaries.sha256
+      - name: Build exact frozen corpus and source snapshots
+        run: |
+          set -euo pipefail
+          OLD=128cab89f5edaae4699184f50c1334598ebe904e
+          NEW=d511239e19be8fcc7f340a64554ea93699637e62
+          git clone -q https://github.com/ZipCPU/zipcpu.git /tmp/g3-neg
+          mkdir -p out/base out/sources
+          cd /tmp/g3-neg
+          git checkout -q "$OLD"
+          cp rtl/core/pipemem.v "$GITHUB_WORKSPACE/out/sources/r0-pipemem.v"
+          yosys -q -p 'read_verilog -D PIPEMEM -formal rtl/core/pipemem.v; read_verilog -D PIPEMEM -formal rtl/ex/fwb_master.v; prep -top pipemem -flatten -nordff; dffunmap; write_json '"$GITHUB_WORKSPACE"'/out/base/natural_old.json'
+          git reset --hard -q; git checkout -q "$NEW"
+          cp rtl/core/pipemem.v "$GITHUB_WORKSPACE/out/sources/r1-pipemem.v"
+          yosys -q -p 'read_verilog -D PIPEMEM -formal rtl/core/pipemem.v; read_verilog -D PIPEMEM -formal rtl/ex/fwb_master.v; prep -top pipemem -flatten -nordff; dffunmap; write_json '"$GITHUB_WORKSPACE"'/out/base/natural_new.json'
+          cp "$GITHUB_WORKSPACE/out/base/natural_new.json" "$GITHUB_WORKSPACE/out/base/mirror_old.json"
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('rtl/core/pipemem.v');s=p.read_text();a="""//always @(posedge i_clk)\n//\tif ((f_past_valid)&&($past(f_cyc))&&(!$past(i_lock)))\n//\t\t`ASSUME(!i_lock);\n""";b="""always @(posedge i_clk)\n\tif ((f_past_valid)&&($past(f_cyc))&&(!$past(i_lock)))\n\t\t`ASSUME(!i_lock);\n"""
+          if a not in s: raise SystemExit('mirror anchor missing')
+          p.write_text(s.replace(a,b,1))
+          PY
+          yosys -q -p 'read_verilog -D PIPEMEM -formal rtl/core/pipemem.v; read_verilog -D PIPEMEM -formal rtl/ex/fwb_master.v; prep -top pipemem -flatten -nordff; dffunmap; write_json '"$GITHUB_WORKSPACE"'/out/base/mirror_new.json'
+          cd "$GITHUB_WORKSPACE"
+          echo '7d9a87f8033b9d4b70148fc2bb3cfe916931eaa95e9e78f379d447123a53ae74  out/base/natural_old.json' > out/base/EXPECTED.sha256
+          echo '81a07443eeb1645218a60dc996ed0c69218c5c48fe1d6a9275d6f7ec0fcc8c05  out/base/natural_new.json' >> out/base/EXPECTED.sha256
+          echo '81a07443eeb1645218a60dc996ed0c69218c5c48fe1d6a9275d6f7ec0fcc8c05  out/base/mirror_old.json' >> out/base/EXPECTED.sha256
+          echo '1a110a336047e1983decb1af450a126b6904757b3cdacd79fbec419734eb2a51  out/base/mirror_new.json' >> out/base/EXPECTED.sha256
+          sha256sum -c out/base/EXPECTED.sha256
+      - name: Execute frozen NC1 through NC5
+        id: neg
+        run: |
+          set +e
+          PYTHONPATH=smoke python3 smoke/g3_negative_controls.py --base-dir out/base --old-source out/sources/r0-pipemem.v --new-source out/sources/r1-pipemem.v --out out/negative > out/negative/driver.stdout.txt 2> out/negative/driver.stderr.txt
+          rc=$?; echo "$rc" > out/negative/driver.rc.txt; echo "rc=$rc" >> "$GITHUB_OUTPUT"; exit 0
+      - name: Validate all emitted NC1 and NC2 mutant JSON
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import json,subprocess
+          from pathlib import Path
+          rows=[]
+          for lane in ('nc1','nc2'):
+            for p in sorted((Path('out/negative')/lane/'mutants').glob('*.json')):
+              q=subprocess.run(['yosys','-q','-p',f'read_json {p}; stat'],capture_output=True,text=True)
+              rows.append({'lane':lane,'path':str(p),'returncode':q.returncode,'valid':q.returncode==0,'stderr':q.stderr[-2000:]})
+          Path('out/negative/YOSYS_MUTANT_VALIDATION.json').write_text(json.dumps({'count':len(rows),'failures':sum(not x['valid'] for x in rows),'rows':rows},indent=2,sort_keys=True)+'\n')
+          PY
+      - name: Cross-check every semantic negative query with pinned cvc5
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import json,os,subprocess
+          from pathlib import Path
+          ep=Path('out/negative/QUERY_EXPECTATIONS.json');rows=[]
+          if ep.exists():
+            for x in json.loads(ep.read_text())['queries']:
+              q=subprocess.run([os.environ['CVC5'],x['path']],capture_output=True,text=True,timeout=120)
+              got=next((z.strip().upper() for z in q.stdout.splitlines() if z.strip()),'NO_OUTPUT')
+              rows.append({**x,'cvc5':got,'returncode':q.returncode,'match':q.returncode==0 and got==x['expected']})
+          Path('out/negative/CROSS_SOLVER.json').write_text(json.dumps({'count':len(rows),'failures':sum(not x['match'] for x in rows),'rows':rows},indent=2,sort_keys=True)+'\n')
+          PY
+      - name: Download exact positive certificate artifact for NC6
+        if: always()
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: g3-metamorphic-cert-evidence
+          path: out/positive
+          run-id: 34796525891
+          github-token: ${{ github.token }}
+      - name: Execute frozen NC6 proof corruption
+        if: always()
+        run: |
+          mkdir -p out/negative/nc6
+          python3 - <<'PY'
+          import csv,hashlib,json,os,subprocess
+          from pathlib import Path
+          out=Path('out/negative/nc6');mat=Path('out/positive/METAMORPHIC_CERTIFICATES.tsv')
+          rec={'schema':'g3-nc6-proof-corruption-v1','rejected':False}
+          try:
+            assert Path('out/positive/runner.commit.txt').read_text().strip()=='ec1213c9d954d4f4e40929096a6e16bcd1c75707'
+            rows=list(csv.DictReader(mat.open(),delimiter='\t'));assert len(rows)==120 and all(x['status']=='UNSAT_CERTIFIED_CPC' for x in rows)
+            x=sorted(rows,key=lambda r:(r['lane'],r['label'],r['family']))[0]
+            assert (x['lane'],x['label'],x['family'])==('semantic_equivalence','mirror_new','cell_order')
+            src=Path('out/positive/proofs')/(x['lane']+'__'+x['label']+'__'+x['family']+'.cpc');dst=Path('out/positive/proofs/nc6-corrupted.cpc');lines=src.read_text().splitlines()
+            for i in range(len(lines)-1,-1,-1):
+              if lines[i].startswith('(step ') and ' false :rule ' in lines[i]:lines[i]=lines[i].replace(' false :rule ',' true :rule ',1);break
+            else: raise RuntimeError('no terminal false goal')
+            dst.write_text('\n'.join(lines)+'\n');q=subprocess.run([os.environ['ETHOS'],'proofs/nc6-corrupted.cpc'],cwd='out/positive',capture_output=True,text=True,timeout=120);(out/'ethos.txt').write_text(q.stdout+q.stderr)
+            h=lambda p:hashlib.sha256(Path(p).read_bytes()).hexdigest();rec.update(selected=x,source_proof_sha256=h(src),corrupted_proof_sha256=h(dst),ethos_returncode=q.returncode,ethos_output=(q.stdout+q.stderr)[-4000:],rejected=not(q.returncode==0 and q.stdout.strip()=='correct'))
+          except Exception as e:rec['error']=repr(e)
+          (out/'NC6_RESULT.json').write_text(json.dumps(rec,indent=2,sort_keys=True)+'\n')
+          PY
+      - name: Evaluate complete frozen negative gate
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          def rd(p):
+            p=Path(p);return json.loads(p.read_text()) if p.exists() else None
+          pre=rd('out/negative/NEGATIVE_PRE_NC6_SUMMARY.json');cross=rd('out/negative/CROSS_SOLVER.json');yv=rd('out/negative/YOSYS_MUTANT_VALIDATION.json');n6=rd('out/negative/nc6/NC6_RESULT.json');rc=int(Path('out/negative/driver.rc.txt').read_text()) if Path('out/negative/driver.rc.txt').exists() else 999
+          checks={'driver_completed':rc==0,'nc1':bool(pre and pre['nc1']['pass']),'nc2':bool(pre and pre['nc2']['pass']),'nc3':bool(pre and pre['nc3']['pass']),'nc4':bool(pre and pre['nc4']['pass']),'nc5':bool(pre and pre['nc5']['pass']),'nc6':bool(n6 and n6['rejected']),'cross_solver_complete':bool(cross and cross['count']>0 and cross['failures']==0),'all_mutant_json_valid':bool(yv and yv['count']>0 and yv['failures']==0)}
+          final={'schema':'g3-negative-control-results-v1','checks':checks,'pass':all(checks.values()),'driver_rc':rc,'pre_summary':pre,'cross_solver_count':cross['count'] if cross else None,'mutant_validation_count':yv['count'] if yv else None,'nc6':n6}
+          Path('out/negative/NEGATIVE_CONTROL_RESULTS.json').write_text(json.dumps(final,indent=2,sort_keys=True)+'\n');print(json.dumps(final,sort_keys=True))
+          PY
+      - name: Seal evidence
+        if: always()
+        run: |
+          git rev-parse HEAD > out/negative/runner.commit.txt
+          sha256sum .github/workflows/g3-negative-controls.yml smoke/g3_negative_controls.py smoke/tnf_scope.py > out/negative/runner-sources.sha256
+          find out -type f -print0 | sort -z | xargs -0 sha256sum > out/negative/ALL_SHA256SUMS.txt || true
+      - name: Upload negative-control evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: g3-negative-control-evidence
+          path: out/
+      - name: Enforce complete frozen negative gate
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import json
+          x=json.load(open('out/negative/NEGATIVE_CONTROL_RESULTS.json'))
+          assert x['pass'] is True, x['checks']
+          print('G3_NEGATIVE_CONTROLS_PASS NC1..NC6')
+          PY
