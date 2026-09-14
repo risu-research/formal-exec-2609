@@ -22,7 +22,7 @@ def main():
  got={k:g.sh(base/(k+'.json')) for k in LABELS}
  if got!=EXP: raise RuntimeError('sealed corpus hash mismatch')
  sf=shards/f'SHARD_{a.shard:02d}.json';x=json.loads(sf.read_text())
- if x.get('schema')!='g3-negative-shard-v2' or x.get('shard')!=a.shard or x.get('error_count')!=0: raise RuntimeError('bad sealed shard')
+ if x.get('schema')!='g3-negative-shard-v2' or x.get('shard_index')!=a.shard or x.get('shard_count')!=16 or x.get('error_count')!=0: raise RuntimeError('bad sealed shard')
  records=[]
  for lane in ('nc1','nc2'):
   challenge=lane=='nc2'
