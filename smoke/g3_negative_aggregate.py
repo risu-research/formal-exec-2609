@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Fail-closed Amendment-06 aggregate gate for all frozen G3 negative candidates."""
 from __future__ import annotations
-import argparse, hashlib, json, os, subprocess
+import argparse, hashlib, json, subprocess
 from pathlib import Path
 import z3
 import g3_negative_controls_v2 as v2
@@ -10,11 +10,9 @@ g=v2.g
 EXP={
  'natural_old':'7d9a87f8033b9d4b70148fc2bb3cfe916931eaa95e9e78f379d447123a53ae74',
  'natural_new':'81a07443eeb1645218a60dc996ed0c69218c5c48fe1d6a9275d6f7ec0fcc8c05',
- 'mirror_old':'81a07443eeb1645218a60dc996ed0c69218c5c48fe1d6a9275d6f7ec419734eb2a51'.replace('ec419734','ec419734'),
+ 'mirror_old':'81a07443eeb1645218a60dc996ed0c69218c5c48fe1d6a9275d6f7ec0fcc8c05',
  'mirror_new':'1a110a336047e1983decb1af450a126b6904757b3cdacd79fbec419734eb2a51',
 }
-# Correct the deliberately explicit mirror_old literal without relying on aliasing.
-EXP['mirror_old']='81a07443eeb1645218a60dc996ed0c69218c5c48fe1d6a9275d6f7ec0fcc8c05'
 
 def wr(p,o):
  p=Path(p);p.parent.mkdir(parents=True,exist_ok=True);p.write_text(json.dumps(o,indent=2,sort_keys=True)+'\n')
@@ -49,9 +47,9 @@ def main():
  if len(exp['nc1'])!=102 or len(exp['nc2'])!=135:raise RuntimeError('candidate cardinality drift')
  files=sorted(shards.glob('SHARD_*.json'))
  if len(files)!=a.shard_count:raise RuntimeError(f'shard count {len(files)} != {a.shard_count}')
- allrec={'nc1':{},'nc2':{}};shard_manifest=[]
+ allrec={'nc1':{},'nc2':{}};shard_manifest=[];seen_shards=[]
  for f in files:
-  x=json.loads(f.read_text());si=x['shard_index']
+  x=json.loads(f.read_text());si=x['shard_index'];seen_shards.append(si)
   if x.get('schema')!='g3-negative-shard-v1' or x.get('shard_count')!=a.shard_count:raise RuntimeError('bad shard metadata '+str(f))
   if x.get('corpus_sha256')!=EXP:raise RuntimeError('shard corpus drift '+str(f))
   if x.get('lane_totals')!={'nc1':102,'nc2':135}:raise RuntimeError('shard lane total drift '+str(f))
@@ -62,11 +60,9 @@ def main():
     if idx%a.shard_count!=si:raise RuntimeError('wrong shard assignment')
     if idx in allrec[lane]:raise RuntimeError('duplicate candidate')
     allrec[lane][idx]=r
- if sorted(x['shard_index'] for x in [json.loads(f.read_text()) for f in files])!=list(range(a.shard_count)):
-  raise RuntimeError('shard index coverage failure')
+ if sorted(seen_shards)!=list(range(a.shard_count)):raise RuntimeError('shard index coverage failure')
 
- cross=[];yv=[];lane_results={}
- tmp=root/'recomputed.smt2'
+ cross=[];yv=[];lane_results={};tmp=root/'recomputed.smt2'
  for lane in ('nc1','nc2'):
   if sorted(allrec[lane])!=list(range(len(exp[lane]))):raise RuntimeError(lane+' candidate coverage failure')
   checked=[];challenge=(lane=='nc2')
