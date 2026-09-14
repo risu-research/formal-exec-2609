@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """Deterministically emit nontrivial G3 preserving metamorphic Yosys-JSON variants.
 
-Dictionary insertion order is deliberately preserved in the serialized variant:
-order-permutation families would be vacuous if a serializer silently sorted them
-back to baseline order.  Every frozen family must therefore change the serialized
-artifact hash before any semantic proof is attempted.
+Dictionary insertion order is deliberately preserved.  Nontriviality is checked
+against the baseline object serialized by the *same* serializer, so formatting
+alone can never make a no-op transform appear substantive.
 """
 from __future__ import annotations
 import argparse, copy, hashlib, json, re
@@ -12,10 +11,11 @@ from pathlib import Path
 
 
 def load(p): return json.loads(Path(p).read_text())
+def serialized(o): return json.dumps(o,sort_keys=False,separators=(",",":"))+"\n"
 def dump(p,o):
-    p=Path(p); p.parent.mkdir(parents=True,exist_ok=True)
-    p.write_text(json.dumps(o,sort_keys=False,separators=(",",":"))+"\n")
+    p=Path(p); p.parent.mkdir(parents=True,exist_ok=True); p.write_text(serialized(o))
 def sha(p): return hashlib.sha256(Path(p).read_bytes()).hexdigest()
+def text_sha(s): return hashlib.sha256(s.encode()).hexdigest()
 def module(o):
     ms=o.get("modules",{})
     if len(ms)!=1: raise RuntimeError("expected one flattened module")
@@ -115,13 +115,15 @@ TRANSFORMS=[
 
 def main():
     ap=argparse.ArgumentParser(); ap.add_argument("--input",required=True); ap.add_argument("--label",required=True); ap.add_argument("--out",required=True); ns=ap.parse_args()
-    base=load(ns.input); root=Path(ns.out)/ns.label; rec=[]; baseline_sha=sha(ns.input)
+    base=load(ns.input); root=Path(ns.out)/ns.label; rec=[]
+    baseline_file_sha=sha(ns.input); baseline_serialized=serialized(base); baseline_object_sha=text_sha(baseline_serialized)
     for name,fn in TRANSFORMS:
-        p=root/f"{name}.json"; dump(p,fn(base)); variant_sha=sha(p)
-        if variant_sha==baseline_sha:
-            raise RuntimeError(f'{name}: transform serialized to baseline-identical artifact')
-        rec.append({"family":name,"path":str(p),"sha256":variant_sha,"nontrivial_serialization":True})
-    manifest={"schema":"g3-preserving-inputs-v2","label":ns.label,"baseline":str(ns.input),"baseline_sha256":baseline_sha,"families":rec,"all_nontrivial":True}
+        obj=fn(base); variant_serialized=serialized(obj)
+        if variant_serialized==baseline_serialized:
+            raise RuntimeError(f'{name}: transformation is a same-serializer no-op')
+        p=root/f"{name}.json"; dump(p,obj); variant_sha=sha(p)
+        rec.append({"family":name,"path":str(p),"sha256":variant_sha,"nontrivial_same_serializer":True})
+    manifest={"schema":"g3-preserving-inputs-v3","label":ns.label,"baseline":str(ns.input),"baseline_file_sha256":baseline_file_sha,"baseline_same_serializer_sha256":baseline_object_sha,"families":rec,"all_nontrivial_same_serializer":True}
     mp=root/"manifest.json"; mp.write_text(json.dumps(manifest,indent=2,sort_keys=True)+"\n")
-    print(json.dumps({"label":ns.label,"count":len(rec),"all_nontrivial":True,"manifest_sha256":sha(mp)},sort_keys=True))
+    print(json.dumps({"label":ns.label,"count":len(rec),"all_nontrivial_same_serializer":True,"manifest_sha256":sha(mp)},sort_keys=True))
 if __name__=="__main__": main()
