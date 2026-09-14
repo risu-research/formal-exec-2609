@@ -2,12 +2,12 @@
 """DIAGNOSTIC ONLY: post-RED witness bit-sensitivity audit.
 
 This script changes no G3 obligation, pass/fail rule, mutation, candidate set,
-witness definition, or frozen result.  It consumes the sealed Amendment-07 RED
+witness definition, or frozen result. It consumes the sealed Amendment-07 RED
 artifact and asks, for each SAT candidate, which *single-bit* flips of the
 already-emitted canonical witness cause independent fixed-assignment replay to
 stop reproducing the semantic difference.
 
-The output is characterization evidence only.  It MUST NOT be used to relabel
+The output is characterization evidence only. It MUST NOT be used to relabel
 run 34804261148 as PASS.
 """
 from __future__ import annotations
@@ -21,11 +21,9 @@ LABELS = ('natural_old','natural_new','mirror_old','mirror_new')
 EXP = {
     'natural_old':'7d9a87f8033b9d4b70148fc2bb3cfe916931eaa95e9e78f379d447123a53ae74',
     'natural_new':'81a07443eeb1645218a60dc996ed0c69218c5c48fe1d6a9275d6f7ec0fcc8c05',
-    'mirror_old':'81a07443eeb1645218a60dc996ed0c69218c5c48fe1d6a9275d6f7ec419734eb2a51',
+    'mirror_old':'81a07443eeb1645218a60dc996ed0c69218c5c48fe1d6a9275d6f7ec0fcc8c05',
     'mirror_new':'1a110a336047e1983decb1af450a126b6904757b3cdacd79fbec419734eb2a51',
 }
-# Correct duplicated constant defensively below; this literal is never trusted.
-EXP['mirror_old'] = EXP['natural_new']
 
 def wr(p, o):
     p=Path(p); p.parent.mkdir(parents=True,exist_ok=True)
