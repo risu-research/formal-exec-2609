@@ -4,6 +4,10 @@
 Imports only the public TNF reference implementation, never the frozen production
 classifier.  It checks relation-level invariance under representation-preserving
 changes and requires meaning-changing controls to be detected.
+
+G3 diagnostic instrumentation note: TRACE lines are observational only. They do
+not change transforms, expected relations, comparison criteria, or pass/fail
+semantics; they exist so failed frozen obligations remain attributable in CI.
 """
 from __future__ import annotations
 import argparse, copy, json, re, tempfile
@@ -11,6 +15,7 @@ from pathlib import Path
 from tnf_scope import analyze
 
 
+def trace(msg): print(f"G3_META_TRACE {msg}", flush=True)
 def load(p): return json.loads(Path(p).read_text())
 def dump(p,o): Path(p).write_text(json.dumps(o,sort_keys=True,separators=(",",":")))
 def mod(o):
@@ -87,23 +92,29 @@ TRANSFORMS=[("cell_order",reorder_cells),("formal_order",reorder_formals),("net_
 def sig(r): return {"relation":r["relation"],"old_only_sat":r["old_only_sat"],"new_only_sat":r["new_only_sat"]}
 
 def pair(label,op,np,expect,td):
-    old,new=load(op),load(np); base=sig(analyze(op,np))
+    old,new=load(op),load(np); trace(f"pair={label} phase=baseline")
+    base=sig(analyze(op,np))
+    trace(f"pair={label} baseline={json.dumps(base,sort_keys=True)}")
     if base["relation"]!=expect: raise RuntimeError(f"{label}: expected {expect}, got {base}")
     rec=[]
     for name,fn in TRANSFORMS:
         for side in ("old","new","both"):
+            trace(f"pair={label} family={name} side={side} phase=begin")
             a=fn(old) if side in ("old","both") else copy.deepcopy(old)
             b=fn(new) if side in ("new","both") else copy.deepcopy(new)
             ap=td/f"{label}-{name}-{side}-0.json"; bp=td/f"{label}-{name}-{side}-1.json"; dump(ap,a); dump(bp,b)
             got=sig(analyze(str(ap),str(bp))); ok=got==base
+            trace(f"pair={label} family={name} side={side} observed={json.dumps(got,sort_keys=True)} pass={str(ok).lower()}")
             rec.append({"family":name,"side":side,"expected":base,"observed":got,"pass":ok})
             if not ok: raise RuntimeError(f"{label}/{name}/{side}: {got} != {base}")
     neg=[]
     for side in ("old","new"):
+        trace(f"pair={label} negative_side={side} phase=begin")
         a=semantic_change(old) if side=="old" else copy.deepcopy(old)
         b=semantic_change(new) if side=="new" else copy.deepcopy(new)
         ap=td/f"{label}-negative-{side}-0.json"; bp=td/f"{label}-negative-{side}-1.json"; dump(ap,a); dump(bp,b)
         got=sig(analyze(str(ap),str(bp))); detected=got!=base
+        trace(f"pair={label} negative_side={side} observed={json.dumps(got,sort_keys=True)} detected={str(detected).lower()}")
         neg.append({"side":side,"baseline":base,"observed":got,"detected":detected})
         if not detected: raise RuntimeError(f"{label}/negative/{side}: semantic change masked")
     return {"label":label,"baseline":base,"preserving":rec,"negative_controls":neg}
