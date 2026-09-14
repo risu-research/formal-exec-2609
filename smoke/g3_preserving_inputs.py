@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""Deterministically emit G3 preserving metamorphic Yosys-JSON variants."""
+"""Deterministically emit nontrivial G3 preserving metamorphic Yosys-JSON variants.
+
+Dictionary insertion order is deliberately preserved in the serialized variant:
+order-permutation families would be vacuous if a serializer silently sorted them
+back to baseline order.  Every frozen family must therefore change the serialized
+artifact hash before any semantic proof is attempted.
+"""
 from __future__ import annotations
 import argparse, copy, hashlib, json, re
 from pathlib import Path
@@ -8,7 +14,7 @@ from pathlib import Path
 def load(p): return json.loads(Path(p).read_text())
 def dump(p,o):
     p=Path(p); p.parent.mkdir(parents=True,exist_ok=True)
-    p.write_text(json.dumps(o,sort_keys=True,separators=(",",":"))+"\n")
+    p.write_text(json.dumps(o,sort_keys=False,separators=(",",":"))+"\n")
 def sha(p): return hashlib.sha256(Path(p).read_bytes()).hexdigest()
 def module(o):
     ms=o.get("modules",{})
@@ -95,8 +101,9 @@ def commutative_operands(o):
         if "A" not in q or "B" not in q: continue
         if len(q["A"])!=len(q["B"]): continue
         if str(p.get("A_SIGNED","0"))!=str(p.get("B_SIGNED","0")): continue
+        if q["A"]==q["B"]: continue
         q["A"],q["B"]=q["B"],q["A"]; changed+=1
-    if changed==0: raise RuntimeError("no applicable commutative operands")
+    if changed==0: raise RuntimeError("no nontrivial applicable commutative operands")
     return o
 
 TRANSFORMS=[
@@ -108,10 +115,13 @@ TRANSFORMS=[
 
 def main():
     ap=argparse.ArgumentParser(); ap.add_argument("--input",required=True); ap.add_argument("--label",required=True); ap.add_argument("--out",required=True); ns=ap.parse_args()
-    base=load(ns.input); root=Path(ns.out)/ns.label; rec=[]
+    base=load(ns.input); root=Path(ns.out)/ns.label; rec=[]; baseline_sha=sha(ns.input)
     for name,fn in TRANSFORMS:
-        p=root/f"{name}.json"; dump(p,fn(base)); rec.append({"family":name,"path":str(p),"sha256":sha(p)})
-    manifest={"schema":"g3-preserving-inputs-v1","label":ns.label,"baseline":str(ns.input),"baseline_sha256":sha(ns.input),"families":rec}
+        p=root/f"{name}.json"; dump(p,fn(base)); variant_sha=sha(p)
+        if variant_sha==baseline_sha:
+            raise RuntimeError(f'{name}: transform serialized to baseline-identical artifact')
+        rec.append({"family":name,"path":str(p),"sha256":variant_sha,"nontrivial_serialization":True})
+    manifest={"schema":"g3-preserving-inputs-v2","label":ns.label,"baseline":str(ns.input),"baseline_sha256":baseline_sha,"families":rec,"all_nontrivial":True}
     mp=root/"manifest.json"; mp.write_text(json.dumps(manifest,indent=2,sort_keys=True)+"\n")
-    print(json.dumps({"label":ns.label,"count":len(rec),"manifest_sha256":sha(mp)},sort_keys=True))
+    print(json.dumps({"label":ns.label,"count":len(rec),"all_nontrivial":True,"manifest_sha256":sha(mp)},sort_keys=True))
 if __name__=="__main__": main()
