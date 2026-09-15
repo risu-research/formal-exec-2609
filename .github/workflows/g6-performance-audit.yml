@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - 'smoke/g6_performance_audit.py'
+      - 'smoke/g6_r2_replay_reference_v1.json'
       - '.github/workflows/g6-performance-audit.yml'
   workflow_dispatch:
 
@@ -64,32 +65,23 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          test "$(sha256sum smoke/g6_r2_replay_reference_v1.json | awk '{print $1}')" = '42b527a9399ce5204020de168835e309bc8a849179054192aad04dd7e04f8549'
           /usr/bin/time -f '{"wall_s":%e,"maxrss_kib":%M}' -o g6p-perf/r2-resource.json \
             python3 smoke/g6_r2_blind_semantic_classification.py --r1 g6p-r1/g6-r1-inventory.json --cvc5 "$CVC5" --out g6p-r2
           sha256sum g6p-r2/g6-r2-results.json > g6p-perf/r2-rerun-raw.sha256
-          python3 - <<'PY'
-          import hashlib,json
-          p='g6p-r2/g6-r2-results.json'
-          o=json.load(open(p))
-          def c(x):
-              if isinstance(x,dict):
-                  return {k:('queries/'+v.split('queries/',1)[1] if k=='query' and isinstance(v,str) and 'queries/' in v else c(v)) for k,v in x.items()}
-              if isinstance(x,list): return [c(v) for v in x]
-              return x
-          b=(json.dumps(c(o),indent=2,sort_keys=True)+'\n').encode()
-          d=hashlib.sha256(b).hexdigest()
-          print('canonical R2',d)
-          open('g6p-perf/r2-canonical-observed.sha256','w').write(d+'\n')
-          assert d=='3004034fc58918e276ec7525ae40d24a685b19268de3bb61320df750d8f40fa9'
-          PY
 
-      - name: Benchmark complete emitted query set
+      - name: Verify exact replay identity and benchmark complete query set
         shell: bash
         run: |
           set -euo pipefail
-          python3 smoke/g6_performance_audit.py --r2 g6p-r2/g6-r2-results.json --query-root g6p-r2/queries --cvc5 "$CVC5" --out g6p-perf | tee g6p-perf/runner.log
+          python3 smoke/g6_performance_audit.py \
+            --r2 g6p-r2/g6-r2-results.json \
+            --query-root g6p-r2/queries \
+            --reference smoke/g6_r2_replay_reference_v1.json \
+            --cvc5 "$CVC5" \
+            --out g6p-perf | tee g6p-perf/runner.log
 
-      - name: Seal performance diagnostic evidence
+      - name: Seal performance evidence
         if: always()
         shell: bash
         run: |
@@ -98,8 +90,10 @@ jobs:
           printf '%s\n' '16f08c8d2bfd162602b8ada30115d303960f211b' > g6p-perf/performance-protocol-authority.txt
           printf '%s\n' '9a9dd1df27c43e2912399ff2147e8f5a03a41881' > g6p-perf/performance-amendment01-authority.txt
           printf '%s\n' '7b0bf8365c80df3c974e049a410cc660d73bcdc4' > g6p-perf/performance-amendment02-authority.txt
+          printf '%s\n' 'dbd92e4de5d89bcf7ab03a26de4bafd2bd116274' > g6p-perf/performance-amendment03-authority.txt
+          printf '%s\n' '42b527a9399ce5204020de168835e309bc8a849179054192aad04dd7e04f8549' > g6p-perf/replay-reference.sha256
+          printf '%s\n' '1d9a39581af5e5fec36e0011a302259c16971f008bc938f08f74bc7b7e6a98df' > g6p-perf/semantic-canonical-r2.sha256
           printf '%s\n' '00cc74ac08a15a785eaf7caa601181c16d8a2ee152b735b3e87ae9a3bb981af1' > g6p-perf/original-r2-raw.sha256
-          printf '%s\n' '3004034fc58918e276ec7525ae40d24a685b19268de3bb61320df750d8f40fa9' > g6p-perf/r2-canonical-authority.sha256
           "$CVC5" --version > g6p-perf/cvc5-version.txt 2>&1 || true
           python3 - <<'PY' > g6p-perf/z3-version.txt 2>&1 || true
           import z3; print(z3.get_version_string())
@@ -107,11 +101,11 @@ jobs:
           find g6p-perf -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > g6p-perf/SHA256SUMS.txt || true
           find g6p-r2 -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > g6p-r2/SHA256SUMS.txt || true
 
-      - name: Upload G6 performance diagnostic evidence
+      - name: Upload G6 performance evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: g6-performance-diagnostic-evidence
+          name: g6-performance-audit-evidence
           path: |
             g6p-perf/
             g6p-r2/
