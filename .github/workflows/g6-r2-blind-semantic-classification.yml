@@ -1,0 +1,105 @@
+name: g6-r2-blind-semantic-classification
+
+on:
+  push:
+    paths:
+      - 'smoke/g6_r2_blind_semantic_classification.py'
+      - '.github/workflows/g6-r2-blind-semantic-classification.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  semantic_classification:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout public runner
+        uses: actions/checkout@v4
+
+      - name: Install pinned solver stack
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y git python3 python3-pip unzip curl
+          python3 -m pip install --break-system-packages z3-solver
+          python3 - <<'PY'
+          import z3
+          print('z3', z3.get_version_string())
+          assert z3.get_version_string() == '5.1.0'
+          PY
+          mkdir -p /tmp/g6-tools
+          curl -L --fail --retry 3 -o /tmp/g6-tools/cvc5.zip https://github.com/cvc5/cvc5/releases/download/cvc5-1.3.4/cvc5-Linux-x86_64-static.zip
+          echo 'dcdbfada0ce493ee98259c0816e0daafc561c223aadb3af298c2968e73ea39c6  /tmp/g6-tools/cvc5.zip' | sha256sum -c -
+          unzip -q /tmp/g6-tools/cvc5.zip -d /tmp/g6-tools/cvc5
+          CVC5=$(find /tmp/g6-tools/cvc5 -type f -name cvc5 | head -1)
+          test -x "$CVC5"
+          echo "CVC5=$CVC5" >> "$GITHUB_ENV"
+          "$CVC5" --version
+
+      - name: Clone frozen history universes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git -c protocol.version=2 clone --filter=blob:limit=512k --no-checkout --single-branch https://github.com/ZipCPU/zipcpu.git zipcpu
+          git -c protocol.version=2 clone --filter=blob:limit=512k --no-checkout --single-branch https://github.com/SymbioticEDA/riscv-formal.git riscv-formal
+          git -c protocol.version=2 clone --filter=blob:limit=512k --no-checkout --single-branch https://github.com/lowRISC/opentitan.git opentitan
+
+      - name: Reconstruct exact frozen corpus
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf g6-r2-corpus g6-r2-r1
+          mkdir -p g6-r2-corpus g6-r2-r1
+          python3 smoke/g6_r0_blind_corpus_seal.py \
+            --zipcpu zipcpu --riscv-formal riscv-formal --opentitan opentitan --out g6-r2-corpus
+          test "$(sha256sum g6-r2-corpus/g6-r0-corpus-manifest.json | awk '{print $1}')" = '96217099573c869cfa2232bbb559a4f47d6561590bfe8faa459a6ed6b96a5aed'
+
+      - name: Reconstruct repaired R1 inventory exactly
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 smoke/g6_r1_exact_historical_inventory.py \
+            --manifest g6-r2-corpus/g6-r0-corpus-manifest.json \
+            --zipcpu zipcpu --riscv-formal riscv-formal --opentitan opentitan --out g6-r2-r1
+          test "$(sha256sum g6-r2-r1/g6-r1-inventory.json | awk '{print $1}')" = '2f5caabda7625524a790be6ec94d07e5fda02a9a5eaca9875fe8add858c88161'
+
+      - name: Execute frozen R2 classifier
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf g6-r2-evidence
+          mkdir -p g6-r2-evidence
+          python3 smoke/g6_r2_blind_semantic_classification.py \
+            --r1 g6-r2-r1/g6-r1-inventory.json \
+            --cvc5 "$CVC5" \
+            --out g6-r2-evidence | tee g6-r2-evidence/runner.log
+
+      - name: Seal R2 provenance
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p g6-r2-evidence
+          printf '%s\n' "$GITHUB_SHA" > g6-r2-evidence/public-runner-head.txt
+          printf '%s\n' '4c2f1637889f4049ddf69b5e4ca44b4cf5f7270f' > g6-r2-evidence/g6-corpus-authority.txt
+          printf '%s\n' 'f5892bf45dc0b2cbacb303b44a318ef05294a1da' > g6-r2-evidence/g6-r1-closure.txt
+          printf '%s\n' '50c7b30fa3a404176108fc5f155c09cc9851578b' > g6-r2-evidence/g6-r2-protocol.txt
+          printf '%s\n' '96217099573c869cfa2232bbb559a4f47d6561590bfe8faa459a6ed6b96a5aed' > g6-r2-evidence/corpus-manifest.sha256
+          printf '%s\n' '2f5caabda7625524a790be6ec94d07e5fda02a9a5eaca9875fe8add858c88161' > g6-r2-evidence/r1-inventory.sha256
+          sha256sum smoke/g6_r2_blind_semantic_classification.py > g6-r2-evidence/runner-source.sha256 || true
+          python3 - <<'PY' > g6-r2-evidence/z3-version.txt 2>&1 || true
+          import z3; print(z3.get_version_string())
+          PY
+          "$CVC5" --version > g6-r2-evidence/cvc5-version.txt 2>&1 || true
+          find g6-r2-evidence -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > g6-r2-evidence/SHA256SUMS.txt || true
+
+      - name: Upload G6 R2 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: g6-r2-blind-semantic-classification-evidence
+          path: g6-r2-evidence/
+          if-no-files-found: warn
+          retention-days: 90
