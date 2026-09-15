@@ -1,0 +1,3 @@
+G7 first verdict-bearing execution
+pre-result authority: 5667dc2945a0a994cab37bc7e432d4909d54bede
+implementation authority: fdf1fdfc739a7fdbc8af7e928b1477f70de4c9e5
