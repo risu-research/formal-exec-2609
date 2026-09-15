@@ -66,7 +66,22 @@ jobs:
           set -euo pipefail
           /usr/bin/time -f '{"wall_s":%e,"maxrss_kib":%M}' -o g6p-perf/r2-resource.json \
             python3 smoke/g6_r2_blind_semantic_classification.py --r1 g6p-r1/g6-r1-inventory.json --cvc5 "$CVC5" --out g6p-r2
-          test "$(sha256sum g6p-r2/g6-r2-results.json | awk '{print $1}')" = '00cc74ac08a15a785eaf7caa601181c16d8a2ee152b735b3e87ae9a3bb981af1'
+          sha256sum g6p-r2/g6-r2-results.json > g6p-perf/r2-rerun-raw.sha256
+          python3 - <<'PY'
+          import hashlib,json
+          p='g6p-r2/g6-r2-results.json'
+          o=json.load(open(p))
+          def c(x):
+              if isinstance(x,dict):
+                  return {k:('queries/'+v.split('queries/',1)[1] if k=='query' and isinstance(v,str) and 'queries/' in v else c(v)) for k,v in x.items()}
+              if isinstance(x,list): return [c(v) for v in x]
+              return x
+          b=(json.dumps(c(o),indent=2,sort_keys=True)+'\n').encode()
+          d=hashlib.sha256(b).hexdigest()
+          print('canonical R2',d)
+          assert d=='3004034fc58918e276ec7525ae40d24a685b19268de3bb61320df750d8f40fa9'
+          open('g6p-perf/r2-canonical.sha256','w').write(d+'\n')
+          PY
 
       - name: Benchmark complete emitted query set
         shell: bash
@@ -80,7 +95,9 @@ jobs:
           set -euo pipefail
           printf '%s\n' "$GITHUB_SHA" > g6p-perf/public-runner-head.txt
           printf '%s\n' '16f08c8d2bfd162602b8ada30115d303960f211b' > g6p-perf/performance-protocol-authority.txt
-          printf '%s\n' '00cc74ac08a15a785eaf7caa601181c16d8a2ee152b735b3e87ae9a3bb981af1' > g6p-perf/r2-results.sha256
+          printf '%s\n' '9a9dd1df27c43e2912399ff2147e8f5a03a41881' > g6p-perf/performance-amendment01-authority.txt
+          printf '%s\n' '00cc74ac08a15a785eaf7caa601181c16d8a2ee152b735b3e87ae9a3bb981af1' > g6p-perf/original-r2-raw.sha256
+          printf '%s\n' '3004034fc58918e276ec7525ae40d24a685b19268de3bb61320df750d8f40fa9' > g6p-perf/r2-canonical-authority.sha256
           "$CVC5" --version > g6p-perf/cvc5-version.txt
           python3 - <<'PY' > g6p-perf/z3-version.txt
           import z3; print(z3.get_version_string())
