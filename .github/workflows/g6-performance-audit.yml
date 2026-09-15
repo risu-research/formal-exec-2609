@@ -1,0 +1,96 @@
+name: g6-performance-audit
+
+on:
+  push:
+    paths:
+      - 'smoke/g6_performance_audit.py'
+      - '.github/workflows/g6-performance-audit.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  performance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout public runner
+        uses: actions/checkout@v4
+
+      - name: Install pinned solver stack
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y git python3 python3-pip unzip curl time
+          python3 -m pip install --break-system-packages z3-solver
+          python3 - <<'PY'
+          import z3; assert z3.get_version_string() == '5.1.0'; print(z3.get_version_string())
+          PY
+          mkdir -p /tmp/g6p-tools
+          curl -L --fail --retry 3 -o /tmp/g6p-tools/cvc5.zip https://github.com/cvc5/cvc5/releases/download/cvc5-1.3.4/cvc5-Linux-x86_64-static.zip
+          echo 'dcdbfada0ce493ee98259c0816e0daafc561c223aadb3af298c2968e73ea39c6  /tmp/g6p-tools/cvc5.zip' | sha256sum -c -
+          unzip -q /tmp/g6p-tools/cvc5.zip -d /tmp/g6p-tools/cvc5
+          CVC5=$(find /tmp/g6p-tools/cvc5 -type f -name cvc5 | head -1)
+          test -x "$CVC5"; echo "CVC5=$CVC5" >> "$GITHUB_ENV"
+
+      - name: Clone frozen history universes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git -c protocol.version=2 clone --filter=blob:limit=512k --no-checkout --single-branch https://github.com/ZipCPU/zipcpu.git zipcpu
+          git -c protocol.version=2 clone --filter=blob:limit=512k --no-checkout --single-branch https://github.com/SymbioticEDA/riscv-formal.git riscv-formal
+          git -c protocol.version=2 clone --filter=blob:limit=512k --no-checkout --single-branch https://github.com/lowRISC/opentitan.git opentitan
+
+      - name: Timed exact corpus reconstruction
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf g6p-corpus g6p-r1 g6p-r2 g6p-perf; mkdir -p g6p-corpus g6p-r1 g6p-r2 g6p-perf
+          /usr/bin/time -f '{"wall_s":%e,"maxrss_kib":%M}' -o g6p-perf/r0-resource.json \
+            python3 smoke/g6_r0_blind_corpus_seal.py --zipcpu zipcpu --riscv-formal riscv-formal --opentitan opentitan --out g6p-corpus
+          test "$(sha256sum g6p-corpus/g6-r0-corpus-manifest.json | awk '{print $1}')" = '96217099573c869cfa2232bbb559a4f47d6561590bfe8faa459a6ed6b96a5aed'
+
+      - name: Timed repaired R1 inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          /usr/bin/time -f '{"wall_s":%e,"maxrss_kib":%M}' -o g6p-perf/r1-resource.json \
+            python3 smoke/g6_r1_exact_historical_inventory.py --manifest g6p-corpus/g6-r0-corpus-manifest.json --zipcpu zipcpu --riscv-formal riscv-formal --opentitan opentitan --out g6p-r1
+          test "$(sha256sum g6p-r1/g6-r1-inventory.json | awk '{print $1}')" = '2f5caabda7625524a790be6ec94d07e5fda02a9a5eaca9875fe8add858c88161'
+
+      - name: Timed frozen R2 classification
+        shell: bash
+        run: |
+          set -euo pipefail
+          /usr/bin/time -f '{"wall_s":%e,"maxrss_kib":%M}' -o g6p-perf/r2-resource.json \
+            python3 smoke/g6_r2_blind_semantic_classification.py --r1 g6p-r1/g6-r1-inventory.json --cvc5 "$CVC5" --out g6p-r2
+          test "$(sha256sum g6p-r2/g6-r2-results.json | awk '{print $1}')" = '00cc74ac08a15a785eaf7caa601181c16d8a2ee152b735b3e87ae9a3bb981af1'
+
+      - name: Benchmark complete emitted query set
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 smoke/g6_performance_audit.py --r2 g6p-r2/g6-r2-results.json --query-root g6p-r2/queries --cvc5 "$CVC5" --out g6p-perf | tee g6p-perf/runner.log
+
+      - name: Seal performance evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s\n' "$GITHUB_SHA" > g6p-perf/public-runner-head.txt
+          printf '%s\n' '16f08c8d2bfd162602b8ada30115d303960f211b' > g6p-perf/performance-protocol-authority.txt
+          printf '%s\n' '00cc74ac08a15a785eaf7caa601181c16d8a2ee152b735b3e87ae9a3bb981af1' > g6p-perf/r2-results.sha256
+          "$CVC5" --version > g6p-perf/cvc5-version.txt
+          python3 - <<'PY' > g6p-perf/z3-version.txt
+          import z3; print(z3.get_version_string())
+          PY
+          find g6p-perf -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > g6p-perf/SHA256SUMS.txt
+
+      - name: Upload G6 performance evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: g6-performance-audit-evidence
+          path: g6p-perf/
+          if-no-files-found: error
+          retention-days: 90
