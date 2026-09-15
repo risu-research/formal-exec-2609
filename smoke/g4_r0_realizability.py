@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 import argparse
-import copy
 import hashlib
 import json
-import os
 from pathlib import Path
 import re
 import shutil
@@ -14,6 +12,9 @@ ZIPCPU_SHA = "d511239e19be8fcc7f340a64554ea93699637e62"
 SOURCE = Path("rtl/core/pipemem.v")
 YS = Path("bench/formal/pipemem.ys")
 MAKEFILE = Path("bench/formal/Makefile")
+COMPATIBILITY = ["flatten", "opt_clean", "dffunmap"]
+AMENDMENT_SHA = "8703d07bc5e6196daea1a9cecf28be7e892de49d"
+FAILED_R0_RUN = 34991978591
 
 
 def sha256_bytes(data: bytes) -> str:
@@ -159,7 +160,9 @@ def yosys_elaborate(repo: Path, variant_name: str, macros: list[str]):
     script_lines += [
         "read_verilog -D PIPEMEM -formal ../../rtl/ex/fwb_master.v",
         "prep -top pipemem -nordff",
-        "opt -share_all",
+        "flatten",
+        "opt_clean",
+        "dffunmap",
         f"write_json {json_out.name}",
         f"write_smt2 -wires {smt_out.name}",
     ]
@@ -170,6 +173,8 @@ def yosys_elaborate(repo: Path, variant_name: str, macros: list[str]):
         "exit_code": p.returncode,
         "log_sha256": sha256_file(bench / f"g4_{variant_name}.yslog") if (bench / f"g4_{variant_name}.yslog").exists() else None,
         "macros": ["PIPEMEM"] + macros,
+        "compatibility_transform": COMPATIBILITY,
+        "amendment_sha": AMENDMENT_SHA,
     }
     if p.returncode != 0 or not json_out.exists() or not smt_out.exists():
         result["error_tail"] = p.stdout[-4000:]
@@ -177,8 +182,7 @@ def yosys_elaborate(repo: Path, variant_name: str, macros: list[str]):
     net = json.loads(json_out.read_text())
     formal_counts = {"$assume": 0, "$assert": 0, "$cover": 0}
     total_cells = 0
-    modules = net.get("modules", {})
-    for mod in modules.values():
+    for mod in net.get("modules", {}).values():
         for cell in mod.get("cells", {}).values():
             total_cells += 1
             typ = cell.get("type")
@@ -255,10 +259,9 @@ def main():
     work.mkdir()
     variants = {}
     def V(name, source_variant, macros=None):
-        key = name
-        if key not in variants:
-            variants[key] = make_variant(root, work, name, source_variant, macros or [])
-        return variants[key]
+        if name not in variants:
+            variants[name] = make_variant(root, work, name, source_variant, macros or [])
+        return variants[name]
 
     base = V("base", "base")
     lock = V("lock", "lock")
@@ -291,7 +294,6 @@ def main():
         case_record("G4-N08", base, commute, {"negative":"boolean_or_commutation"}),
     ]
     cases.extend(structural_cases(root))
-    # A11 is intentionally private-authority provenance only.
     cases.append({"id":"G4-A11","r0_verdict":"PENDING_PRIVATE_PROVENANCE","kind":"prior_authority","note":"public runner does not read private authority; private closure must bind the frozen masked-failure evidence"})
 
     counts = {}
@@ -304,6 +306,9 @@ def main():
         "zipcpu_pipemem_ys_sha256":sha256_file(root / YS),
         "zipcpu_makefile_sha256":sha256_file(root / MAKEFILE),
         "yosys_version":yosys_version,
+        "compatibility_transform":COMPATIBILITY,
+        "prospective_amendment_sha":AMENDMENT_SHA,
+        "preserved_failed_r0_run":FAILED_R0_RUN,
         "cases":cases,
         "verdict_counts":counts,
         "public_gate_green": all(c["r0_verdict"] == "REALIZABLE" for c in cases if c["id"] != "G4-A11"),
