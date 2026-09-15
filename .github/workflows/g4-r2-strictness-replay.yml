@@ -1,3 +1,4 @@
+# Execution trigger only; scientific protocol is frozen at 70fb43ac62c2f9f92c8cc0e264f36367835d5b9e.
 name: g4-r2-strictness-replay
 
 on:
