@@ -1,0 +1,117 @@
+name: g3-cvc5-fixed-assignment-crosscheck
+on:
+  push:
+    paths:
+      - '.github/workflows/g3-cvc5-fixed-assignment-crosscheck.yml'
+      - 'smoke/g3_cvc5_fixed_assignment_crosscheck.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  shard:
+    strategy:
+      fail-fast: false
+      max-parallel: 16
+      matrix:
+        shard: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install exact cvc5
+        run: |
+          set -euo pipefail
+          mkdir -p tool
+          curl -L --fail --retry 3 -o /tmp/cvc5.zip https://github.com/cvc5/cvc5/releases/download/cvc5-1.3.4/cvc5-Linux-x86_64-static.zip
+          echo 'dcdbfada0ce493ee98259c0816e0daafc561c223aadb3af298c2968e73ea39c6  /tmp/cvc5.zip' | sha256sum -c -
+          unzip -q /tmp/cvc5.zip -d /tmp/cvc5
+          CVC5=$(find /tmp/cvc5 -type f -name cvc5 | head -n1)
+          test -x "$CVC5"
+          echo "CVC5=$CVC5" >> "$GITHUB_ENV"
+          "$CVC5" --version | tee tool/cvc5.version.txt
+          sha256sum "$CVC5" > tool/cvc5.binary.sha256
+      - name: Download exact sealed Amendment-07 RED evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: g3-negative-control-evidence-parallel-v2
+          path: sealed
+          run-id: 34804261148
+          github-token: ${{ github.token }}
+      - name: Download sealed independent exhaustive replay
+        uses: actions/download-artifact@v4
+        with:
+          name: g3-bitparallel-fixed-replay
+          path: bitparallel
+          run-id: 34931813214
+          github-token: ${{ github.token }}
+      - name: Bind exact source evidence
+        run: |
+          set -euo pipefail
+          test "$(cat sealed/out/negative/runner.commit.txt)" = 'ccd83335a9b81bc447d9740129668619c4e77267'
+          test "$(cat sealed/out/negative/aggregate.rc.txt)" = '1'
+          test "$(cat sealed/shards/SHARD_RC_${{ matrix.shard }}.txt)" = '0'
+          test "$(cat bitparallel/runner.commit.txt)" = 'd93a1bc6ba6e2e2c0f7836166e3f59d93e62071c'
+      - name: Cross-check canonical, stored, and critical complete assignments
+        run: |
+          set -euo pipefail
+          mkdir -p diagnostic
+          python3 smoke/g3_cvc5_fixed_assignment_crosscheck.py \
+            --sealed-root sealed \
+            --bitparallel bitparallel/BITPARALLEL_REPLAY.json \
+            --cvc5 "$CVC5" \
+            --shard '${{ matrix.shard }}' \
+            --out 'diagnostic/CVC5_FIXED_${{ matrix.shard }}.json' \
+            | tee 'diagnostic/stdout_${{ matrix.shard }}.txt'
+          cp tool/* diagnostic/
+          git rev-parse HEAD > 'diagnostic/runner_${{ matrix.shard }}.txt'
+          sha256sum smoke/g3_cvc5_fixed_assignment_crosscheck.py > 'diagnostic/source_${{ matrix.shard }}.sha256'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: g3-cvc5-fixed-assignment-shard-${{ matrix.shard }}
+          path: diagnostic/
+  aggregate:
+    needs: shard
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: g3-cvc5-fixed-assignment-shard-*
+          path: shards
+          merge-multiple: true
+      - name: Audit complete 237-candidate cvc5 population
+        run: |
+          set -euo pipefail
+          mkdir -p final
+          python3 - <<'PY'
+          import collections,glob,json
+          fs=sorted(glob.glob('shards/CVC5_FIXED_*.json'))
+          assert len(fs)==16, len(fs)
+          xs=[json.load(open(f)) for f in fs]
+          assert sorted(x['shard'] for x in xs)==list(range(16))
+          assert all(x['schema']=='g3-cvc5-fixed-assignment-crosscheck-shard-v1' for x in xs)
+          assert all(x['source_red_run']==34804261148 and x['source_red_head']=='ccd83335a9b81bc447d9740129668619c4e77267' for x in xs)
+          assert all(x['bitparallel_run']==34931813214 and x['bitparallel_head']=='d93a1bc6ba6e2e2c0f7836166e3f59d93e62071c' for x in xs)
+          assert all(x['all_pass'] for x in xs)
+          rows=[r for x in xs for r in x['rows']]
+          rows.sort(key=lambda r:(r['lane'],r['candidate_index']))
+          assert len(rows)==237
+          assert len({(r['lane'],r['candidate_index']) for r in rows})==237
+          assert collections.Counter(r['lane'] for r in rows)=={'nc1':102,'nc2':135}
+          assert all(r['canonical_result']=='sat' for r in rows)
+          assert all(r['critical_result']=='unsat' for r in rows)
+          assert sum(r['stored_result']=='unsat' for r in rows)==177
+          assert sum(r['stored_result']=='sat' for r in rows)==60
+          out={'schema':'g3-cvc5-fixed-assignment-crosscheck-aggregate-v1','authority':'DIAGNOSTIC_ONLY_NON_AUTHORITY','source_red_run':34804261148,'source_red_head':'ccd83335a9b81bc447d9740129668619c4e77267','bitparallel_run':34931813214,'bitparallel_head':'d93a1bc6ba6e2e2c0f7836166e3f59d93e62071c','shards':16,'candidates':237,'cvc5_queries':711,'canonical_sat':237,'stored_rejected':177,'stored_not_rejected':60,'critical_unsat':237,'all_pass':True,'rows':rows}
+          open('final/CVC5_FIXED_ASSIGNMENT_CROSSCHECK.json','w').write(json.dumps(out,indent=2,sort_keys=True)+'\n')
+          print(json.dumps({k:out[k] for k in ('candidates','cvc5_queries','canonical_sat','stored_rejected','stored_not_rejected','critical_unsat','all_pass')},sort_keys=True))
+          PY
+          git rev-parse HEAD > final/runner.commit.txt
+          sha256sum smoke/g3_cvc5_fixed_assignment_crosscheck.py .github/workflows/g3-cvc5-fixed-assignment-crosscheck.yml > final/SOURCE_SHA256SUMS.txt
+          find final -type f -print0 | sort -z | xargs -0 sha256sum > final/ALL_SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: g3-cvc5-fixed-assignment-crosscheck
+          path: final/
