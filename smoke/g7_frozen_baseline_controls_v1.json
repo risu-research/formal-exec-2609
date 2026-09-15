@@ -1,0 +1,64 @@
+{
+  "authorities": {
+    "b5_amendment": "8dc00414c0425546aaef78ed24c3a3cf14e4002b",
+    "evaluation_constitution": "7ec2f62f2c68ac54879f1e25ec014e89a95b6ba8",
+    "g4_final": "326aaf40203a3fcb6f3b891a488684ddf6ee9090",
+    "g5_final": "ba7c505dbbe96d16e4f5a35606adea52f2b4aa15"
+  },
+  "controls": [
+    {
+      "baseline_signal": "SOURCE_OR_FORMAL_CHANGE",
+      "full_relation": ["E_EQ", "G_EQ"],
+      "id": "CTRL-B1B4-EQ-01",
+      "source": "G4-A03"
+    },
+    {
+      "baseline_signal": "SOURCE_OR_FORMAL_CHANGE",
+      "full_relation": ["E_EQ", "G_EQ"],
+      "id": "CTRL-B1B4-EQ-02",
+      "source": "G4-A07"
+    },
+    {
+      "baseline_signal": "SOURCE_OR_FORMAL_CHANGE",
+      "full_relation": ["E_EQ", "G_EQ"],
+      "id": "CTRL-B1B4-EQ-03",
+      "source": "G4-N02"
+    },
+    {
+      "baseline_signal": "SOURCE_OR_FORMAL_CHANGE",
+      "full_relation": ["E_EQ", "G_EQ"],
+      "id": "CTRL-B1B4-EQ-04",
+      "source": "G4-N03"
+    },
+    {
+      "baseline_signal": "SOURCE_OR_FORMAL_CHANGE",
+      "full_relation": ["E_EQ", "G_EQ"],
+      "id": "CTRL-B1B4-EQ-05",
+      "source": "G4-N08"
+    },
+    {
+      "full_relation": ["E_CONTRACT", "G_WEAKEN"],
+      "id": "CTRL-B2-COUNT-01",
+      "new_total": 3,
+      "old_total": 3,
+      "source": "G5-P1-A11"
+    },
+    {
+      "full_relation": ["E_CONTRACT", "G_WEAKEN"],
+      "id": "CTRL-B2-COUNT-02",
+      "new_total": 6,
+      "old_total": 6,
+      "source": "G5-P2-A11"
+    },
+    {
+      "claim_scope": "SEMANTIC_DIFFERENCE_NOT_ADVERSE_PREVALENCE",
+      "full_relation": ["E_EXPAND"],
+      "id": "CTRL-B0-S1",
+      "new_status": "GREEN",
+      "old_status": "GREEN",
+      "source": "E5-ZipCPU-S1"
+    }
+  ],
+  "parent_g6_final": "26fd9ad7f81d6a0813e18c3ea0fcd0e69792c3c4",
+  "schema": "g7-frozen-baseline-controls-v1"
+}
