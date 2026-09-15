@@ -1,0 +1,81 @@
+name: g7-baseline-frontier
+
+on:
+  push:
+    paths:
+      - '.g7/run-v1.txt'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  baseline-frontier:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout frozen public runner
+        uses: actions/checkout@v4
+
+      - name: Enforce frozen implementation blobs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git hash-object smoke/g7_baseline_frontier.py)" = "7486ae6031d75f2bff1f648ae03f3e820443323f"
+          test "$(git hash-object smoke/g7_frozen_baseline_controls_v1.json)" = "bff3db4510a63465ab3447fec6c79ca84d38c2fd"
+
+      - name: Fetch exact sealed G6 input artifacts
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf g7-input g7-out
+          mkdir -p g7-input/r1 g7-input/r2 g7-out
+          curl -L --fail --retry 3 \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/artifacts/10419237251/zip" \
+            -o g7-input/r1.zip
+          curl -L --fail --retry 3 \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/artifacts/10419863035/zip" \
+            -o g7-input/r2.zip
+          echo '6e56f4bdadd4a712fc6b852984ae075860dd4253e2ed966175a384c1dc8de9e8  g7-input/r1.zip' | sha256sum -c -
+          echo '7d1a34e3af66f8b04eb848a0f94ef016e2be79e9c72b0142693425d8a23ba0ad  g7-input/r2.zip' | sha256sum -c -
+          unzip -q g7-input/r1.zip -d g7-input/r1
+          unzip -q g7-input/r2.zip -d g7-input/r2
+          echo '2f5caabda7625524a790be6ec94d07e5fda02a9a5eaca9875fe8add858c88161  g7-input/r1/g6-r1-inventory.json' | sha256sum -c -
+          echo '00cc74ac08a15a785eaf7caa601181c16d8a2ee152b735b3e87ae9a3bb981af1  g7-input/r2/g6-r2-results.json' | sha256sum -c -
+
+      - name: Execute frozen baseline frontier
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 smoke/g7_baseline_frontier.py \
+            --r1 g7-input/r1/g6-r1-inventory.json \
+            --r2 g7-input/r2/g6-r2-results.json \
+            --controls smoke/g7_frozen_baseline_controls_v1.json \
+            --out g7-out | tee g7-out/runner.log
+
+      - name: Seal G7 evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s\n' "$GITHUB_SHA" > g7-out/public-runner-head.txt
+          printf '%s\n' '5667dc2945a0a994cab37bc7e432d4909d54bede' > g7-out/g7-pre-result-authority.txt
+          printf '%s\n' '7486ae6031d75f2bff1f648ae03f3e820443323f' > g7-out/runner-git-blob.txt
+          printf '%s\n' 'bff3db4510a63465ab3447fec6c79ca84d38c2fd' > g7-out/control-fixture-git-blob.txt
+          printf '%s\n' '10419237251 sha256:6e56f4bdadd4a712fc6b852984ae075860dd4253e2ed966175a384c1dc8de9e8' > g7-out/r1-input-artifact.txt
+          printf '%s\n' '10419863035 sha256:7d1a34e3af66f8b04eb848a0f94ef016e2be79e9c72b0142693425d8a23ba0ad' > g7-out/r2-input-artifact.txt
+          find g7-out -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > g7-out/SHA256SUMS.txt
+
+      - name: Upload G7 baseline frontier evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: g7-baseline-frontier-evidence
+          path: g7-out/
+          if-no-files-found: error
+          retention-days: 90
