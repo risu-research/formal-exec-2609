@@ -1,0 +1,130 @@
+name: g3-authority-replay-crosscheck
+on:
+  push:
+    paths:
+      - '.github/workflows/g3-authority-replay-crosscheck.yml'
+      - 'smoke/g3_authority_replay_crosscheck_shard.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  shard:
+    strategy:
+      fail-fast: false
+      max-parallel: 16
+      matrix:
+        shard: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install exact authority semantic runtime
+        run: |
+          set -euo pipefail
+          python3 -m pip install --break-system-packages z3-solver==5.1.0.0
+          python3 - <<'PY'
+          import z3
+          assert z3.get_version_string() == '5.1.0'
+          print(z3.get_version_string())
+          PY
+      - name: Download exact sealed Amendment-07 RED evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: g3-negative-control-evidence-parallel-v2
+          path: sealed
+          run-id: 34804261148
+          github-token: ${{ github.token }}
+      - name: Download sealed independent exhaustive replay
+        uses: actions/download-artifact@v4
+        with:
+          name: g3-bitparallel-fixed-replay
+          path: bitparallel
+          run-id: 34931813214
+          github-token: ${{ github.token }}
+      - name: Bind both source artifacts exactly
+        run: |
+          set -euo pipefail
+          test "$(cat sealed/out/negative/runner.commit.txt)" = 'ccd83335a9b81bc447d9740129668619c4e77267'
+          test "$(cat sealed/out/negative/aggregate.rc.txt)" = '1'
+          test "$(cat sealed/shards/SHARD_RC_${{ matrix.shard }}.txt)" = '0'
+          test "$(cat bitparallel/runner.commit.txt)" = 'd93a1bc6ba6e2e2c0f7836166e3f59d93e62071c'
+          sha256sum bitparallel/BITPARALLEL_REPLAY.json
+      - name: Cross-check four authority replay points for every candidate in shard
+        run: |
+          set -euo pipefail
+          mkdir -p diagnostic
+          PYTHONPATH=smoke python3 smoke/g3_authority_replay_crosscheck_shard.py \
+            --sealed-root sealed \
+            --bitparallel bitparallel/BITPARALLEL_REPLAY.json \
+            --shard '${{ matrix.shard }}' \
+            --out 'diagnostic/AUTHORITY_CROSSCHECK_${{ matrix.shard }}.json' \
+            | tee 'diagnostic/stdout_${{ matrix.shard }}.txt'
+          git rev-parse HEAD > 'diagnostic/runner_${{ matrix.shard }}.txt'
+          sha256sum smoke/g3_authority_replay_crosscheck_shard.py > 'diagnostic/source_${{ matrix.shard }}.sha256'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: g3-authority-replay-crosscheck-shard-${{ matrix.shard }}
+          path: diagnostic/
+  aggregate:
+    needs: shard
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download all cross-check shards
+        uses: actions/download-artifact@v4
+        with:
+          pattern: g3-authority-replay-crosscheck-shard-*
+          path: shards
+          merge-multiple: true
+      - name: Audit complete 237-candidate cross-check population
+        run: |
+          set -euo pipefail
+          mkdir -p final
+          python3 - <<'PY'
+          import collections,glob,json
+          fs=sorted(glob.glob('shards/AUTHORITY_CROSSCHECK_*.json'))
+          assert len(fs)==16, len(fs)
+          xs=[json.load(open(f)) for f in fs]
+          assert sorted(x['shard'] for x in xs)==list(range(16))
+          assert all(x['schema']=='g3-authority-z3-replay-crosscheck-shard-v1' for x in xs)
+          assert all(x['source_red_run']==34804261148 for x in xs)
+          assert all(x['source_red_head']=='ccd83335a9b81bc447d9740129668619c4e77267' for x in xs)
+          assert all(x['bitparallel_run']==34931813214 for x in xs)
+          assert all(x['bitparallel_head']=='d93a1bc6ba6e2e2c0f7836166e3f59d93e62071c' for x in xs)
+          assert all(x['all_pass'] for x in xs)
+          rows=[r for x in xs for r in x['rows']]
+          rows.sort(key=lambda r:(r['lane'],r['candidate_index']))
+          assert len(rows)==237
+          keys=[(r['lane'],r['candidate_index']) for r in rows]
+          assert len(keys)==len(set(keys))==237
+          assert collections.Counter(r['lane'] for r in rows)=={'nc1':102,'nc2':135}
+          assert sum(x['replay_points'] for x in xs)==948
+          assert all(r['canonical_divergent'] for r in rows)
+          assert all(r['critical_rejected'] for r in rows)
+          assert all(r['noncritical_divergent'] for r in rows)
+          assert sum(r['stored_rejected'] for r in rows)==177
+          assert sum(not r['stored_rejected'] for r in rows)==60
+          out={
+            'schema':'g3-authority-z3-replay-crosscheck-aggregate-v1',
+            'authority':'DIAGNOSTIC_ONLY_NON_AUTHORITY',
+            'source_red_run':34804261148,
+            'source_red_head':'ccd83335a9b81bc447d9740129668619c4e77267',
+            'bitparallel_run':34931813214,
+            'bitparallel_head':'d93a1bc6ba6e2e2c0f7836166e3f59d93e62071c',
+            'shards':16,'candidates':237,'authority_replay_points':948,
+            'canonical_pass':237,'stored_rejected':177,'stored_not_rejected':60,
+            'critical_rejected':237,'noncritical_divergent':237,
+            'all_pass':True,'rows':rows,
+          }
+          open('final/AUTHORITY_Z3_CROSSCHECK.json','w').write(json.dumps(out,indent=2,sort_keys=True)+'\n')
+          print(json.dumps({k:out[k] for k in ('candidates','authority_replay_points','canonical_pass','stored_rejected','stored_not_rejected','critical_rejected','noncritical_divergent','all_pass')},sort_keys=True))
+          PY
+          git rev-parse HEAD > final/runner.commit.txt
+          sha256sum smoke/g3_authority_replay_crosscheck_shard.py .github/workflows/g3-authority-replay-crosscheck.yml > final/SOURCE_SHA256SUMS.txt
+          find final -type f -print0 | sort -z | xargs -0 sha256sum > final/ALL_SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: g3-authority-z3-replay-crosscheck
+          path: final/
