@@ -1,0 +1,60 @@
+name: g4-r0-realizability
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'smoke/g4_r0_realizability.py'
+      - '.github/workflows/g4-r0-realizability.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  real_rtl_r0:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout public runner
+        uses: actions/checkout@v4
+
+      - name: Install frozen execution dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y yosys git python3
+          yosys -V
+          python3 --version
+
+      - name: Checkout exact ZipCPU substrate
+        run: |
+          git clone --filter=blob:none --no-checkout https://github.com/ZipCPU/zipcpu.git zipcpu
+          cd zipcpu
+          git fetch --depth=1 origin d511239e19be8fcc7f340a64554ea93699637e62
+          git checkout --detach d511239e19be8fcc7f340a64554ea93699637e62
+          test "$(git rev-parse HEAD)" = "d511239e19be8fcc7f340a64554ea93699637e62"
+
+      - name: Execute frozen G4 R0 realizability gate
+        run: |
+          rm -rf g4-r0-evidence
+          python3 smoke/g4_r0_realizability.py --zipcpu zipcpu --out g4-r0-evidence
+
+      - name: Seal public evidence manifest
+        if: always()
+        run: |
+          mkdir -p g4-r0-evidence
+          printf '%s\n' "${GITHUB_SHA}" > g4-r0-evidence/public-runner-head.txt
+          printf '%s\n' "d511239e19be8fcc7f340a64554ea93699637e62" > g4-r0-evidence/zipcpu-head.txt
+          find g4-r0-evidence -type f -not -path '*/variants/*' -print0 | sort -z | xargs -0 sha256sum > g4-r0-evidence/SHA256SUMS.txt || true
+
+      - name: Upload G4 R0 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: g4-r0-realizability-evidence
+          path: |
+            g4-r0-evidence/g4-r0-result.json
+            g4-r0-evidence/SHA256SUMS.txt
+            g4-r0-evidence/public-runner-head.txt
+            g4-r0-evidence/zipcpu-head.txt
+          if-no-files-found: warn
+          retention-days: 90
