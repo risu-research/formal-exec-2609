@@ -37,7 +37,7 @@ def main():
    if k in ver:raise RuntimeError('duplicate verifier candidate')
    s=sm[k]
    if (r['artifact'],r['cell'],r['query_sha256'],r['v2_selected_bit'])!=(s['artifact'],s['cell'],s['query_sha256'],s['first_critical_bit']):raise RuntimeError('verifier identity mismatch')
-   if not(r['query_reconstructed'] and r['yosys_mutant_valid'] and r['unbound_result']=='sat' and r['canonical_result']=='sat' and r['v2_result']=='unsat' and r['noncritical_result']=='sat'):raise RuntimeError('verifier semantic/checker failure')
+   if not(r['stored_query_hash_verified'] and r['stored_query_z3_parsed'] and r['yosys_mutant_valid'] and r['unbound_result']=='sat' and r['canonical_result']=='sat' and r['v2_result']=='unsat' and r['noncritical_result']=='sat'):raise RuntimeError('verifier semantic/checker failure')
    ver[k]=r
  if len(ver)!=237 or cq!=1185 or ym!=237:raise RuntimeError(f'verifier population mismatch cvc5={cq} yosys={ym}')
  if set(sm)!=set(auth) or set(sm)!=set(ver):raise RuntimeError('cross-lane candidate population mismatch')

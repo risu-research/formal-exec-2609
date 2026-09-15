@@ -16,7 +16,7 @@ def main():
  cal=json.loads(Path(a.calibration).read_text())
  cal_ok=bool(cal.get('pass') and len(cal.get('rows',[]))==16 and all(r.get('pass') for r in cal['rows']) and all(not z.get('unsupported_reachable') for z in cal.get('reachable_audit',{}).values()))
  if not cal_ok:raise RuntimeError('Amendment07 calibration/support audit RED')
- n3=g.nc3(root);q3=Path(n3['query']['path']);got,rc,txt=cvc5(a.cvc5,q3);n3pass=bool(n3['validator_rejected_mutant'] and n3['replay']['divergent'] and n3['one_bit_corruption']['rejected'] and rc==0 and got==n3['semantic_result'])
+ n3=g.nc3(root);q3=Path(n3['query']['path']);got,rc,txt=cvc5(a.cvc5,q3);n3pass=bool(n3['validator_rejected_mutant'] and n3['replay']['divergent'] and n3['one_bit_corruption']['rejected'] and rc==0 and got.lower()==str(n3['semantic_result']).lower())
  if not n3pass:raise RuntimeError('NC3 RED '+txt)
  n4=g.nc4(root,Path(a.base_dir),a.old_source,a.new_source);n4pass=bool(n4['rejected'])
  if not n4pass:raise RuntimeError('NC4 RED')

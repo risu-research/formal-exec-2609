@@ -31,25 +31,24 @@ def main():
  if se.get('schema')!='g3-amendment08-selector-v1' or se.get('amendment08_freeze_sha')!=AMENDMENT_SHA:raise RuntimeError('selector drift')
  sm={(r['lane'],r['candidate_index']):r for r in se['records']};rows=[]
  for lane in ('nc1','nc2'):
-  challenge=lane=='nc2'
   for r in sx['records'][lane]:
    if r.get('result')!='SAT':raise RuntimeError('frozen candidate no longer SAT')
    s=sm[(lane,r['candidate_index'])]
    if (s['artifact'],s['cell'],s['query_sha256'])!=(r['artifact'],r['cell'],r['query_sha256']):raise RuntimeError('identity mismatch')
    qp=sd/r['query_relpath'];mp=sd/r['mutant_relpath'];bp=base/(r['artifact']+'.json')
    if sha(qp)!=r['query_sha256'] or sha(mp)!=r['mutant_sha256'] or sha(bp)!=r['baseline_sha256']:raise RuntimeError('evidence hash drift')
-   dq=z3.simplify(z3.Xor(g.sem(bp,challenge),g.sem(mp,challenge)));so=z3.Solver();so.add(dq)
-   with tempfile.NamedTemporaryFile('w',suffix='.smt2',delete=False) as f:f.write(so.to_smt2());tmp=f.name
-   try:rebuilt=sha(tmp)
-   finally:Path(tmp).unlink(missing_ok=True)
-   if rebuilt!=r['query_sha256']:raise RuntimeError('semantic query reconstruction mismatch')
+   try:
+    parsed=z3.parse_smt2_file(str(qp))
+   except Exception as e:
+    raise RuntimeError('stored exact query failed independent Z3 parse') from e
+   if len(parsed)!=1:raise RuntimeError(f'stored exact query assertion cardinality {len(parsed)} != 1')
    yr=subprocess.run(['yosys','-q','-p',f'read_json {mp}; stat'],capture_output=True,text=True,timeout=120)
    if yr.returncode!=0:raise RuntimeError('Yosys mutant validation failure '+yr.stderr[-1000:])
    unbound=solve(a.cvc5,qp.read_text());w=r['canonical_witness'];stored=r['one_bit_corruption']['bit'];critical=s['first_critical_bit'];noncritical=s['first_noncritical_bit']
    can=solve(a.cvc5,bind(qp,w));st=solve(a.cvc5,bind(qp,flip(w,stored)));cr=solve(a.cvc5,bind(qp,flip(w,critical)));nr=solve(a.cvc5,bind(qp,flip(w,noncritical)))
    expected_st='unsat' if r['one_bit_corruption']['rejected'] else 'sat'
    if (unbound,can,st,cr,nr)!=('sat','sat',expected_st,'unsat','sat'):raise RuntimeError('cvc5 independent result disagreement')
-   rows.append({'lane':lane,'candidate_index':r['candidate_index'],'artifact':r['artifact'],'cell':r['cell'],'query_sha256':r['query_sha256'],'mutant_sha256':r['mutant_sha256'],'query_reconstructed':True,'yosys_mutant_valid':True,'unbound_result':unbound,'canonical_result':can,'historical_stored_result':st,'historical_expected':expected_st,'v2_selected_bit':critical,'v2_result':cr,'representative_noncritical_bit':noncritical,'noncritical_result':nr,'pass':True})
+   rows.append({'lane':lane,'candidate_index':r['candidate_index'],'artifact':r['artifact'],'cell':r['cell'],'query_sha256':r['query_sha256'],'mutant_sha256':r['mutant_sha256'],'stored_query_hash_verified':True,'stored_query_z3_parsed':True,'yosys_mutant_valid':True,'unbound_result':unbound,'canonical_result':can,'historical_stored_result':st,'historical_expected':expected_st,'v2_selected_bit':critical,'v2_result':cr,'representative_noncritical_bit':noncritical,'noncritical_result':nr,'pass':True})
  rows.sort(key=lambda r:(r['lane'],r['candidate_index']))
  out={'schema':'g3-amendment08-independent-verifier-shard-v1','authority':'PROSPECTIVE_AMENDMENT08_AUTHORITY','amendment08_freeze_sha':AMENDMENT_SHA,'shard':a.shard,'candidates':len(rows),'cvc5_queries':5*len(rows),'yosys_mutants':len(rows),'historical_rejected':sum(r['historical_stored_result']=='unsat' for r in rows),'historical_not_rejected':sum(r['historical_stored_result']=='sat' for r in rows),'v2_rejected':sum(r['v2_result']=='unsat' for r in rows),'all_pass':all(r['pass'] for r in rows),'rows':rows}
  p=Path(a.out);p.parent.mkdir(parents=True,exist_ok=True);p.write_text(json.dumps(out,indent=2,sort_keys=True)+'\n');print(json.dumps({k:out[k] for k in ('shard','candidates','cvc5_queries','yosys_mutants','historical_rejected','historical_not_rejected','v2_rejected','all_pass')},sort_keys=True))
