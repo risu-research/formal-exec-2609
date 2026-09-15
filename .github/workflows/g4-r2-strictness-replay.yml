@@ -1,0 +1,82 @@
+name: g4-r2-strictness-replay
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'smoke/g4_r2_strictness_replay.py'
+      - '.github/workflows/g4-r2-strictness-replay.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  strictness_r2:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout public runner
+        uses: actions/checkout@v4
+
+      - name: Install execution dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y yosys git python3 python3-pip unzip curl
+          python3 -m pip install --break-system-packages z3-solver
+          yosys -V
+          python3 - <<'PY'
+          import z3
+          print(z3.get_version_string())
+          assert z3.get_version_string() == '5.1.0'
+          PY
+
+      - name: Install pinned cvc5
+        run: |
+          mkdir -p /tmp/g4-tools
+          curl -L --fail --retry 3 -o /tmp/g4-tools/cvc5.zip https://github.com/cvc5/cvc5/releases/download/cvc5-1.3.4/cvc5-Linux-x86_64-static.zip
+          echo 'dcdbfada0ce493ee98259c0816e0daafc561c223aadb3af298c2968e73ea39c6  /tmp/g4-tools/cvc5.zip' | sha256sum -c -
+          unzip -q /tmp/g4-tools/cvc5.zip -d /tmp/g4-tools/cvc5
+          CVC5=$(find /tmp/g4-tools/cvc5 -type f -name cvc5 | head -1)
+          test -x "$CVC5"
+          echo "CVC5=$CVC5" >> "$GITHUB_ENV"
+          "$CVC5" --version
+
+      - name: Checkout exact ZipCPU substrate
+        run: |
+          git clone --filter=blob:none --no-checkout https://github.com/ZipCPU/zipcpu.git zipcpu
+          cd zipcpu
+          git fetch --depth=1 origin d511239e19be8fcc7f340a64554ea93699637e62
+          git checkout --detach d511239e19be8fcc7f340a64554ea93699637e62
+          test "$(git rev-parse HEAD)" = "d511239e19be8fcc7f340a64554ea93699637e62"
+
+      - name: Reproduce frozen R0 variants
+        run: |
+          rm -rf g4-r2-work g4-r2-evidence
+          python3 smoke/g4_r0_realizability.py --zipcpu zipcpu --out g4-r2-work
+
+      - name: Execute frozen R2 gate
+        run: |
+          PYTHONPATH=smoke python3 smoke/g4_r2_strictness_replay.py \
+            --variants-root g4-r2-work/variants \
+            --r0-result g4-r2-work/g4-r0-result.json \
+            --cvc5 "$CVC5" \
+            --out g4-r2-evidence
+
+      - name: Seal R2 evidence
+        if: always()
+        run: |
+          mkdir -p g4-r2-evidence
+          printf '%s\n' "$GITHUB_SHA" > g4-r2-evidence/public-runner-head.txt
+          printf '%s\n' '70fb43ac62c2f9f92c8cc0e264f36367835d5b9e' > g4-r2-evidence/r2-protocol-head.txt
+          printf '%s\n' 'd511239e19be8fcc7f340a64554ea93699637e62' > g4-r2-evidence/zipcpu-head.txt
+          cp g4-r2-work/g4-r0-result.json g4-r2-evidence/r0-reproduction.json 2>/dev/null || true
+          find g4-r2-evidence -type f -print0 | sort -z | xargs -0 sha256sum > g4-r2-evidence/SHA256SUMS.txt || true
+
+      - name: Upload R2 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: g4-r2-strictness-replay-evidence
+          path: g4-r2-evidence/
+          if-no-files-found: warn
+          retention-days: 90
