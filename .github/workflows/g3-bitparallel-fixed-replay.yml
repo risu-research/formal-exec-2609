@@ -1,0 +1,62 @@
+name: g3-bitparallel-fixed-replay
+on:
+  push:
+    paths:
+      - '.github/workflows/g3-bitparallel-fixed-replay.yml'
+      - 'smoke/g3_bitparallel_smt_replay.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download exact sealed Amendment-07 RED evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: g3-negative-control-evidence-parallel-v2
+          path: sealed
+          run-id: 34804261148
+          github-token: ${{ github.token }}
+      - name: Bind source RED provenance
+        run: |
+          set -euo pipefail
+          test "$(cat sealed/out/negative/runner.commit.txt)" = 'ccd83335a9b81bc447d9740129668619c4e77267'
+          test "$(cat sealed/out/negative/aggregate.rc.txt)" = '1'
+          for i in $(seq 0 15); do test "$(cat sealed/shards/SHARD_RC_${i}.txt)" = '0'; done
+      - name: Exhaustively replay all 48,027 possible one-bit corruptions
+        run: |
+          set -euo pipefail
+          mkdir -p diagnostic
+          python3 smoke/g3_bitparallel_smt_replay.py --root sealed --out diagnostic/BITPARALLEL_REPLAY.json | tee diagnostic/stdout.txt
+          python3 - <<'PY'
+          import json
+          x=json.load(open('diagnostic/BITPARALLEL_REPLAY.json'))
+          assert x['total_candidates']==237
+          assert x['total_flips']==48027
+          assert x['stored_rejected']==177 and x['stored_not_rejected']==60
+          assert x['has_critical']==237 and x['no_critical']==0
+          assert x['critical_total']+x['divergent_total']==48027
+          assert x['lane']['nc1']['n']==102 and x['lane']['nc2']['n']==135
+          assert x['lane']['nc1']['stored_fail']==40 and x['lane']['nc2']['stored_fail']==20
+          # Exact frozen reporting instances must remain present and unaltered.
+          a=[r for r in x['records'] if r['lane']=='nc1' and r['candidate_index']==0][0]
+          b=[r for r in x['records'] if r['lane']=='nc2' and r['candidate_index']==0][0]
+          assert a['query_sha256']=='cf790e007a92e1ec082eb11c009c28cbfc9dffd4ba35ec24d7d0c0ab498bfe15'
+          assert a['stored_bit']=='INITSTATE' and a['stored_rejected'] is False
+          assert a['critical_count']==3
+          assert a['critical_single_bits']==['|f_past_valid[0]|','|i_pipe_stb[0]|','|i_reset[0]|']
+          assert b['query_sha256']=='46592bc84899e0e78bc60811e9934c18eb8bffc73dda01bd7fa0050cdd14f9e8'
+          assert b['stored_bit']=='INITSTATE' and b['stored_rejected'] is True
+          print('STRUCTURAL_AND_REPORTING_INSTANCE_AUDIT=PASS')
+          PY
+          git rev-parse HEAD > diagnostic/runner.commit.txt
+          sha256sum smoke/g3_bitparallel_smt_replay.py .github/workflows/g3-bitparallel-fixed-replay.yml > diagnostic/SOURCE_SHA256SUMS.txt
+          find diagnostic -type f -print0 | sort -z | xargs -0 sha256sum > diagnostic/ALL_SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: g3-bitparallel-fixed-replay
+          path: diagnostic/
