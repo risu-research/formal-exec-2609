@@ -10,7 +10,7 @@ R2_CANON_SHA="1d9a39581af5e5fec36e0011a302259c16971f008bc938f08f74bc7b7e6a98df"
 REPS=5
 ATOMS=[16,64,256,1024]
 HORIZONS=[1,4,16,64]
-TMP_RE=re.compile(r"/tmp/tmp[^\s/]*?\.smt2")
+TMP_RE=re.compile(r"/tmp/tmp[A-Za-z0-9_]+\.smt2")
 
 def sha_file(p):
     h=hashlib.sha256()
@@ -42,7 +42,7 @@ def canonicalize(x):
         out={}
         for k,v in x.items():
             if k=="query" and isinstance(v,str) and "queries/" in v:out[k]="queries/"+v.split("queries/",1)[1]
-            elif k=="stderr_tail" and isinstance(v,str):out[k]=TMP_RE.sub("/tmp/TEMP.smt2",v)
+            elif k=="stderr_tail" and isinstance(v,str):out[k]=TMP_RE.sub("/tmp/<ephemeral>.smt2",v)
             else:out[k]=canonicalize(v)
         return out
     if isinstance(x,list):return [canonicalize(v) for v in x]
@@ -62,6 +62,15 @@ def cvc5_run(binary,path):
     if p.returncode!=0:raise RuntimeError((p.stdout+p.stderr)[-2000:])
     return (p.stdout.strip().splitlines() or [""])[0].strip()
 
+def solver_rss(solver,path,cvc5,expected):
+    if solver=="z3":
+        code="import sys,z3;s=z3.Solver();s.from_string(open(sys.argv[1]).read());print(s.check())"
+        m=timed_cmd(["python3","-c",code,str(path)]);got=(m["stdout_tail"].strip().splitlines() or [""])[-1]
+    else:
+        m=timed_cmd([cvc5,str(path)]);got=(m["stdout_tail"].strip().splitlines() or [""])[0]
+    if got!=expected:raise RuntimeError(f"RSS probe result mismatch {solver} {path}: {got}/{expected}")
+    return m["maxrss_kib"]
+
 def bench_real_queries(refroot,cvc5):
     rows=[]
     for p in sorted(Path(refroot).rglob("*.smt2")):
@@ -73,12 +82,12 @@ def bench_real_queries(refroot,cvc5):
             if r!=zr:raise RuntimeError("z3 instability")
             t=time.perf_counter_ns();r=cvc5_run(cvc5,p);ct.append((time.perf_counter_ns()-t)/1e6)
             if r!=cr:raise RuntimeError("cvc5 instability")
-        rows.append({"query":rel,"sha256":sha_file(p),"result":zr,"bytes":p.stat().st_size,"declare_fun_count":text.count("(declare-fun"),"assert_count":text.count("(assert"),"fixed_binding_count":sum(1 for l in text.splitlines() if l.strip().startswith("(assert (= ")),"z3_ms":zt,"cvc5_ms":ct,"z3":stats(zt),"cvc5":stats(ct)})
+        rows.append({"query":rel,"sha256":sha_file(p),"result":zr,"bytes":p.stat().st_size,"declare_fun_count":text.count("(declare-fun"),"assert_count":text.count("(assert"),"fixed_binding_count":sum(1 for l in text.splitlines() if l.strip().startswith("(assert (= ")),"z3_ms":zt,"cvc5_ms":ct,"z3":stats(zt),"cvc5":stats(ct),"z3_maxrss_kib":solver_rss("z3",p,cvc5,zr),"cvc5_maxrss_kib":solver_rss("cvc5",p,cvc5,cr)})
     if len(rows)!=32:raise RuntimeError(f"real query count {len(rows)}")
     out={}
     for s in ("z3","cvc5"):
-        meds=[r[s]["p50"] for r in rows];calls=[v for r in rows for v in r[s+"_ms"]]
-        out[s]={"per_query_median_p50_ms":nr_pct(meds,.5),"per_query_median_p95_ms":nr_pct(meds,.95),"per_query_median_max_ms":max(meds),"all_calls":stats(calls)}
+        meds=[r[s]["p50"] for r in rows];calls=[v for r in rows for v in r[s+"_ms"]];rss=[r[s+"_maxrss_kib"] for r in rows]
+        out[s]={"per_query_median_p50_ms":nr_pct(meds,.5),"per_query_median_p95_ms":nr_pct(meds,.95),"per_query_median_max_ms":max(meds),"all_calls":stats(calls),"maxrss_kib":stats(rss)}
     return rows,out
 
 def skeleton(A,H):
@@ -108,7 +117,7 @@ def bench_ladder(outdir,cvc5):
                 if r!=meta["expected"]:raise RuntimeError("z3 ladder instability")
                 t=time.perf_counter_ns();r=cvc5_run(cvc5,p);ct.append((time.perf_counter_ns()-t)/1e6)
                 if r!=meta["expected"]:raise RuntimeError("cvc5 ladder instability")
-            rows.append({"atoms":A,"horizon":H,"family":fam,"direction":direction,"expected":meta["expected"],"unrolled_boolean_variables":meta["variables"],"assertion_count":1,"smt2_bytes":meta["bytes"],"sha256":sha_file(p),"z3_ms":zt,"cvc5_ms":ct,"z3":stats(zt),"cvc5":stats(ct)})
+            rows.append({"atoms":A,"horizon":H,"family":fam,"direction":direction,"expected":meta["expected"],"unrolled_boolean_variables":meta["variables"],"assertion_count":1,"smt2_bytes":meta["bytes"],"sha256":sha_file(p),"z3_ms":zt,"cvc5_ms":ct,"z3":stats(zt),"cvc5":stats(ct),"z3_maxrss_kib":solver_rss("z3",p,cvc5,meta["expected"]),"cvc5_maxrss_kib":solver_rss("cvc5",p,cvc5,meta["expected"])})
     return rows,qdir
 
 def slope(v1,t1,v2,t2):
@@ -150,17 +159,17 @@ def main():
     t3=[]
     for r in ladder:
         for s in ("z3","cvc5"):
-            over=sum(v>=1000 for v in r[s+"_ms"])
-            if over>=2:t3.append({"kind":"latency","solver":s,"point":{k:r[k] for k in ("atoms","horizon","family","direction")},"over_1000ms_reps":over})
+            over=sum(v>=1000 for v in r[s+"_ms"]);rss=r[s+"_maxrss_kib"]
+            if over>=2 or (rss is not None and rss>=524288):t3.append({"solver":s,"point":{k:r[k] for k in ("atoms","horizon","family","direction")},"over_1000ms_reps":over,"maxrss_kib":rss})
     t4=[]
     for r in real_rows:
         for s in ("z3","cvc5"):
             if r[s]["p50"]>=100 or r[s]["max"]>=1000:t4.append({"query":r["query"],"solver":s,"p50_ms":r[s]["p50"],"max_ms":r[s]["max"]})
-    rss=max(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss,resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss)
+    process_rss=max(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss,resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss)
     triggers={"T1_stages":t1,"T2_checks_fired":t2f,"T3":t3,"T4":t4,"any_trigger":bool(t1 or t2f or t3 or t4)}
-    result={"schema":"g8-scale-frontier-result-v1","versions":{"z3":z3.get_version_string(),"cvc5":"1.3.4 pinned workflow"},"network":{"clone_and_reference_fetch_ms":a.network_ms,"untimed_hydration_ms":a.hydration_ms,"excluded_from_T1":True},"real_pipeline":stage_summary,"real_queries":{"query_count":32,"summary":real_summary,"rows":real_rows},"controlled_ladder":{"points":16,"query_rows":len(ladder),"rows":ladder,"T2_checks":t2},"process_maxrss_kib_report_only":rss,"triggers":triggers}
+    result={"schema":"g8-scale-frontier-result-v1","versions":{"z3":z3.get_version_string(),"cvc5":"1.3.4 pinned workflow"},"network":{"clone_and_reference_fetch_ms":a.network_ms,"untimed_hydration_ms":a.hydration_ms,"excluded_from_T1":True},"real_pipeline":stage_summary,"real_queries":{"query_count":32,"summary":real_summary,"rows":real_rows},"controlled_ladder":{"points":16,"query_rows":len(ladder),"rows":ladder,"T2_checks":t2},"process_maxrss_kib_report_only":process_rss,"triggers":triggers}
     shutil.rmtree(work);shutil.rmtree(qdir)
     (out/"g8-scale-frontier.json").write_text(json.dumps(result,indent=2,sort_keys=True)+"\n")
-    summary={"stage_summary":{k:{"wall_ms":v["wall_ms"],"maxrss_kib":v["maxrss_kib"],"p95_share_of_core":v["p95_share_of_core"]} for k,v in stage_summary.items()},"real_query_summary":real_summary,"process_maxrss_kib_report_only":rss,"triggers":triggers}
+    summary={"stage_summary":{k:{"wall_ms":v["wall_ms"],"maxrss_kib":v["maxrss_kib"],"p95_share_of_core":v["p95_share_of_core"]} for k,v in stage_summary.items()},"real_query_summary":real_summary,"controlled_ladder_maxrss_kib":{"z3":max(r["z3_maxrss_kib"] for r in ladder),"cvc5":max(r["cvc5_maxrss_kib"] for r in ladder)},"process_maxrss_kib_report_only":process_rss,"triggers":triggers}
     (out/"summary.json").write_text(json.dumps(summary,indent=2,sort_keys=True)+"\n");print(json.dumps(summary,sort_keys=True))
 if __name__=="__main__":main()
