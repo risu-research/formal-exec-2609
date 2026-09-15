@@ -1,0 +1,164 @@
+name: g8-scale-frontier
+
+on:
+  push:
+    paths:
+      - '.g8/run-v1.txt'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  scale-frontier:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout frozen public runner
+        uses: actions/checkout@v4
+
+      - name: Enforce frozen source identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git hash-object smoke/g6_r0_blind_corpus_seal.py)" = "9bae882c5d334c54f2b7d84e24615d85b480a2c5"
+          test "$(git hash-object smoke/g6_r1_exact_historical_inventory.py)" = "9500e6e38711292a6b6c28d3bd389f70943e364c"
+          test "$(git hash-object smoke/g6_r2_blind_semantic_classification.py)" = "8f701c9f4af151c5de3c04e3405de3b745003c74"
+          test "$(git hash-object smoke/g8_scale_frontier.py)" = "3f7b47dacedbc2058b6af80eddaf1d1ce978ef3a"
+          python3 -m py_compile smoke/g8_scale_frontier.py
+
+      - name: Install pinned solver stack
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y git python3 python3-pip unzip curl time
+          python3 -m pip install --break-system-packages z3-solver
+          python3 - <<'PY'
+          import z3
+          assert z3.get_version_string() == '5.1.0', z3.get_version_string()
+          print(z3.get_version_string())
+          PY
+          mkdir -p /tmp/g8-tools
+          curl -L --fail --retry 3 -o /tmp/g8-tools/cvc5.zip https://github.com/cvc5/cvc5/releases/download/cvc5-1.3.4/cvc5-Linux-x86_64-static.zip
+          echo 'dcdbfada0ce493ee98259c0816e0daafc561c223aadb3af298c2968e73ea39c6  /tmp/g8-tools/cvc5.zip' | sha256sum -c -
+          unzip -q /tmp/g8-tools/cvc5.zip -d /tmp/g8-tools/cvc5
+          CVC5=$(find /tmp/g8-tools/cvc5 -type f -name cvc5 | head -1)
+          test -x "$CVC5"
+          echo "CVC5=$CVC5" >> "$GITHUB_ENV"
+
+      - name: N0 clone and fetch reference evidence
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf zipcpu riscv-formal opentitan g8-reference-r2 g8-meta g8-out
+          mkdir -p g8-reference-r2 g8-meta g8-out
+          START=$(python3 - <<'PY'
+          import time; print(time.time_ns())
+          PY
+          )
+          git -c protocol.version=2 clone --filter=blob:limit=512k --no-checkout --single-branch https://github.com/ZipCPU/zipcpu.git zipcpu
+          git -c protocol.version=2 clone --filter=blob:limit=512k --no-checkout --single-branch https://github.com/SymbioticEDA/riscv-formal.git riscv-formal
+          git -c protocol.version=2 clone --filter=blob:limit=512k --no-checkout --single-branch https://github.com/lowRISC/opentitan.git opentitan
+          curl -L --fail --retry 3 \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/artifacts/10419863035/zip" \
+            -o g8-meta/reference-r2.zip
+          echo '7d1a34e3af66f8b04eb848a0f94ef016e2be79e9c72b0142693425d8a23ba0ad  g8-meta/reference-r2.zip' | sha256sum -c -
+          unzip -q g8-meta/reference-r2.zip -d g8-reference-r2
+          echo '00cc74ac08a15a785eaf7caa601181c16d8a2ee152b735b3e87ae9a3bb981af1  g8-reference-r2/g6-r2-results.json' | sha256sum -c -
+          test "$(find g8-reference-r2/queries -type f -name '*.smt2' | wc -l)" -eq 32
+          END=$(python3 - <<'PY'
+          import time; print(time.time_ns())
+          PY
+          )
+          python3 - "$START" "$END" <<'PY' > g8-meta/network-ms.txt
+          import sys
+          print((int(sys.argv[2])-int(sys.argv[1]))/1e6)
+          PY
+
+      - name: Untimed hydration replay
+        shell: bash
+        run: |
+          set -euo pipefail
+          START=$(python3 - <<'PY'
+          import time; print(time.time_ns())
+          PY
+          )
+          rm -rf /tmp/g8-hydrate-p0 /tmp/g8-hydrate-p1 /tmp/g8-hydrate-p2
+          python3 smoke/g6_r0_blind_corpus_seal.py --zipcpu zipcpu --riscv-formal riscv-formal --opentitan opentitan --out /tmp/g8-hydrate-p0 >/dev/null
+          echo '96217099573c869cfa2232bbb559a4f47d6561590bfe8faa459a6ed6b96a5aed  /tmp/g8-hydrate-p0/g6-r0-corpus-manifest.json' | sha256sum -c -
+          python3 smoke/g6_r1_exact_historical_inventory.py --manifest /tmp/g8-hydrate-p0/g6-r0-corpus-manifest.json --zipcpu zipcpu --riscv-formal riscv-formal --opentitan opentitan --out /tmp/g8-hydrate-p1 >/dev/null
+          echo '2f5caabda7625524a790be6ec94d07e5fda02a9a5eaca9875fe8add858c88161  /tmp/g8-hydrate-p1/g6-r1-inventory.json' | sha256sum -c -
+          python3 smoke/g6_r2_blind_semantic_classification.py --r1 /tmp/g8-hydrate-p1/g6-r1-inventory.json --cvc5 "$CVC5" --out /tmp/g8-hydrate-p2 >/dev/null
+          python3 - <<'PY'
+          import hashlib,json,re
+          from pathlib import Path
+          p=Path('/tmp/g8-hydrate-p2/g6-r2-results.json');o=json.loads(p.read_text())
+          rx=re.compile(r'/tmp/tmp[A-Za-z0-9_]+\.smt2')
+          def c(x):
+              if isinstance(x,dict):
+                  out={}
+                  for k,v in x.items():
+                      if k=='query' and isinstance(v,str) and 'queries/' in v: out[k]='queries/'+v.split('queries/',1)[1]
+                      elif k=='stderr_tail' and isinstance(v,str): out[k]=rx.sub('/tmp/<ephemeral>.smt2',v)
+                      else: out[k]=c(v)
+                  return out
+              if isinstance(x,list): return [c(v) for v in x]
+              return x
+          d=hashlib.sha256((json.dumps(c(o),indent=2,sort_keys=True)+'\n').encode()).hexdigest()
+          assert d=='1d9a39581af5e5fec36e0011a302259c16971f008bc938f08f74bc7b7e6a98df',d
+          ref={str(q.relative_to('g8-reference-r2/queries')):hashlib.sha256(q.read_bytes()).hexdigest() for q in Path('g8-reference-r2/queries').rglob('*.smt2')}
+          got={str(q.relative_to('/tmp/g8-hydrate-p2/queries')):hashlib.sha256(q.read_bytes()).hexdigest() for q in Path('/tmp/g8-hydrate-p2/queries').rglob('*.smt2')}
+          assert got==ref
+          PY
+          END=$(python3 - <<'PY'
+          import time; print(time.time_ns())
+          PY
+          )
+          python3 - "$START" "$END" <<'PY' > g8-meta/hydration-ms.txt
+          import sys
+          print((int(sys.argv[2])-int(sys.argv[1]))/1e6)
+          PY
+          rm -rf /tmp/g8-hydrate-p0 /tmp/g8-hydrate-p1 /tmp/g8-hydrate-p2
+
+      - name: Execute frozen G8 scale frontier
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 smoke/g8_scale_frontier.py \
+            --zipcpu zipcpu \
+            --riscv-formal riscv-formal \
+            --opentitan opentitan \
+            --reference-r2 g8-reference-r2 \
+            --cvc5 "$CVC5" \
+            --network-ms "$(cat g8-meta/network-ms.txt)" \
+            --hydration-ms "$(cat g8-meta/hydration-ms.txt)" \
+            --out g8-out | tee g8-out/runner.log
+
+      - name: Seal G8 evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp g8-meta/network-ms.txt g8-out/network-ms.txt
+          cp g8-meta/hydration-ms.txt g8-out/hydration-ms.txt
+          printf '%s\n' "$GITHUB_SHA" > g8-out/public-runner-head.txt
+          printf '%s\n' '9b4015e08a59c1e310c437e2acc199efe89559bb' > g8-out/g8-pre-result-authority.txt
+          printf '%s\n' '3f7b47dacedbc2058b6af80eddaf1d1ce978ef3a' > g8-out/g8-runner-git-blob.txt
+          "$CVC5" --version > g8-out/cvc5-version.txt 2>&1
+          python3 - <<'PY' > g8-out/z3-version.txt
+          import z3; print(z3.get_version_string())
+          PY
+          find g8-out -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > g8-out/SHA256SUMS.txt
+
+      - name: Upload G8 scale frontier evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: g8-scale-frontier-evidence
+          path: g8-out/
+          if-no-files-found: error
+          retention-days: 90
