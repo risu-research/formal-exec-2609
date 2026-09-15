@@ -1,0 +1,107 @@
+# Post-first-result strengthening only. The scientific criteria were frozen at
+# a1a14b8808d22fa0c5b900b4650bf5664520daf3 before this C1 execution.
+name: g5-c1-source-correspondence
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'smoke/g5_c1_source_correspondence.py'
+      - '.github/workflows/g5-c1-source-correspondence.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  correspondence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout public runner
+        uses: actions/checkout@v4
+
+      - name: Verify no SMT dependency in shadow oracle
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          t=Path('smoke/g5_c1_source_correspondence.py').read_text()
+          assert 'import z3' not in t
+          assert 'import cvc5' not in t
+          assert 'g5_cross_project_external_validity' not in t
+          print('independence preflight PASS')
+          PY
+
+      - name: Checkout exact riscv-formal substrate
+        run: |
+          rm -rf riscv-formal && mkdir riscv-formal && cd riscv-formal
+          git init -q
+          git remote add origin https://github.com/YosysHQ/riscv-formal.git
+          git sparse-checkout init --no-cone
+          git sparse-checkout set cores/picorv32/honest.sv cores/picorv32/honest.sby cores/picorv32/complete.sby
+          git fetch -q --depth=1 --filter=blob:none origin c992aa61fdfe0846c5ed90324c596202a1c69b76
+          git checkout -q --detach FETCH_HEAD
+          test "$(git rev-parse HEAD)" = "c992aa61fdfe0846c5ed90324c596202a1c69b76"
+
+      - name: Checkout exact Picorv32 dependency
+        run: |
+          rm -rf picorv32 && mkdir picorv32 && cd picorv32
+          git init -q
+          git remote add origin https://github.com/YosysHQ/picorv32.git
+          git sparse-checkout init --no-cone
+          git sparse-checkout set picorv32.v
+          git fetch -q --depth=1 --filter=blob:none origin ef203c2b0a3fb793280f5114941416c425c5b461
+          git checkout -q --detach FETCH_HEAD
+          test "$(git rev-parse HEAD)" = "ef203c2b0a3fb793280f5114941416c425c5b461"
+
+      - name: Checkout exact OpenTitan substrate
+        run: |
+          rm -rf opentitan && mkdir opentitan && cd opentitan
+          git init -q
+          git remote add origin https://github.com/lowRISC/opentitan.git
+          git sparse-checkout init --no-cone
+          git sparse-checkout set \
+            hw/top_earlgrey/ip_autogen/rv_plic/fpv/vip/rv_plic_assert_fpv.sv \
+            hw/top_earlgrey/ip_autogen/rv_plic/rtl/rv_plic_gateway.sv \
+            hw/top_earlgrey/ip_autogen/rv_plic/rtl/rv_plic_reg_pkg.sv \
+            hw/top_earlgrey/ip_autogen/rv_plic/fpv/tb/rv_plic_bind_fpv.sv \
+            hw/ip/prim/rtl/prim_assert.sv
+          git fetch -q --depth=1 --filter=blob:none origin 2fd79ed9834f95f50daa84ffabcb1ff6fe1c874b
+          git checkout -q --detach FETCH_HEAD
+          test "$(git rev-parse HEAD)" = "2fd79ed9834f95f50daa84ffabcb1ff6fe1c874b"
+
+      - name: Execute independent source-correspondence oracle
+        run: |
+          rm -rf g5-c1-evidence && mkdir -p g5-c1-evidence
+          set +e
+          python3 smoke/g5_c1_source_correspondence.py \
+            --riscv-formal riscv-formal \
+            --picorv32 picorv32 \
+            --opentitan opentitan \
+            --out g5-c1-evidence 2>&1 | tee g5-c1-evidence/runner.log
+          RC=${PIPESTATUS[0]}
+          printf '%s\n' "$RC" > g5-c1-evidence/runner-returncode.txt
+          exit "$RC"
+
+      - name: Seal C1 evidence
+        if: always()
+        run: |
+          mkdir -p g5-c1-evidence
+          printf '%s\n' "$GITHUB_SHA" > g5-c1-evidence/public-runner-head.txt
+          printf '%s\n' '7431896cc5ccb8420f248d2d66409e408d4c16f1' > g5-c1-evidence/g5-pre-result-freeze-head.txt
+          printf '%s\n' 'a1a14b8808d22fa0c5b900b4650bf5664520daf3' > g5-c1-evidence/amendment01-head.txt
+          printf '%s\n' '34998042574' > g5-c1-evidence/first-g5-run.txt
+          printf '%s\n' '10407958171' > g5-c1-evidence/first-g5-artifact-id.txt
+          printf '%s\n' 'sha256:20966161c86a1a8c99f646a34ffad08ee06b69438ea6294243482f7e83123975' > g5-c1-evidence/first-g5-artifact-digest.txt
+          git -C riscv-formal rev-parse HEAD > g5-c1-evidence/riscv-formal-head.txt 2>/dev/null || true
+          git -C picorv32 rev-parse HEAD > g5-c1-evidence/picorv32-head.txt 2>/dev/null || true
+          git -C opentitan rev-parse HEAD > g5-c1-evidence/opentitan-head.txt 2>/dev/null || true
+          find g5-c1-evidence -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > g5-c1-evidence/SHA256SUMS.txt || true
+
+      - name: Upload C1 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: g5-c1-source-correspondence-evidence
+          path: g5-c1-evidence/
+          if-no-files-found: warn
+          retention-days: 90
