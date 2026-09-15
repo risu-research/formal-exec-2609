@@ -79,8 +79,8 @@ jobs:
           b=(json.dumps(c(o),indent=2,sort_keys=True)+'\n').encode()
           d=hashlib.sha256(b).hexdigest()
           print('canonical R2',d)
+          open('g6p-perf/r2-canonical-observed.sha256','w').write(d+'\n')
           assert d=='3004034fc58918e276ec7525ae40d24a685b19268de3bb61320df750d8f40fa9'
-          open('g6p-perf/r2-canonical.sha256','w').write(d+'\n')
           PY
 
       - name: Benchmark complete emitted query set
@@ -89,25 +89,31 @@ jobs:
           set -euo pipefail
           python3 smoke/g6_performance_audit.py --r2 g6p-r2/g6-r2-results.json --query-root g6p-r2/queries --cvc5 "$CVC5" --out g6p-perf | tee g6p-perf/runner.log
 
-      - name: Seal performance evidence
+      - name: Seal performance diagnostic evidence
+        if: always()
         shell: bash
         run: |
-          set -euo pipefail
+          mkdir -p g6p-perf
           printf '%s\n' "$GITHUB_SHA" > g6p-perf/public-runner-head.txt
           printf '%s\n' '16f08c8d2bfd162602b8ada30115d303960f211b' > g6p-perf/performance-protocol-authority.txt
           printf '%s\n' '9a9dd1df27c43e2912399ff2147e8f5a03a41881' > g6p-perf/performance-amendment01-authority.txt
+          printf '%s\n' '7b0bf8365c80df3c974e049a410cc660d73bcdc4' > g6p-perf/performance-amendment02-authority.txt
           printf '%s\n' '00cc74ac08a15a785eaf7caa601181c16d8a2ee152b735b3e87ae9a3bb981af1' > g6p-perf/original-r2-raw.sha256
           printf '%s\n' '3004034fc58918e276ec7525ae40d24a685b19268de3bb61320df750d8f40fa9' > g6p-perf/r2-canonical-authority.sha256
-          "$CVC5" --version > g6p-perf/cvc5-version.txt
-          python3 - <<'PY' > g6p-perf/z3-version.txt
+          "$CVC5" --version > g6p-perf/cvc5-version.txt 2>&1 || true
+          python3 - <<'PY' > g6p-perf/z3-version.txt 2>&1 || true
           import z3; print(z3.get_version_string())
           PY
-          find g6p-perf -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > g6p-perf/SHA256SUMS.txt
+          find g6p-perf -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > g6p-perf/SHA256SUMS.txt || true
+          find g6p-r2 -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > g6p-r2/SHA256SUMS.txt || true
 
-      - name: Upload G6 performance evidence
+      - name: Upload G6 performance diagnostic evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: g6-performance-audit-evidence
-          path: g6p-perf/
-          if-no-files-found: error
+          name: g6-performance-diagnostic-evidence
+          path: |
+            g6p-perf/
+            g6p-r2/
+          if-no-files-found: warn
           retention-days: 90
