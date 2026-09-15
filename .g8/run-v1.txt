@@ -1,0 +1,3 @@
+G8 first result-bearing scale execution
+pre-result authority: 9b4015e08a59c1e310c437e2acc199efe89559bb
+implementation authority: a3a3e2907bc8b840b295bf4c49eced243b1dc6cc
