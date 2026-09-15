@@ -1,0 +1,66 @@
+name: g4-r1-semantic-ground-truth
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'smoke/g4_r1_semantics.py'
+      - '.github/workflows/g4-r1-semantic-ground-truth.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  semantic_r1:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout public runner
+        uses: actions/checkout@v4
+
+      - name: Install frozen execution dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y yosys z3 git python3 python3-pip
+          python3 -m pip install --break-system-packages z3-solver
+          yosys -V
+          z3 --version
+
+      - name: Checkout exact ZipCPU substrate
+        run: |
+          git clone --filter=blob:none --no-checkout https://github.com/ZipCPU/zipcpu.git zipcpu
+          cd zipcpu
+          git fetch --depth=1 origin d511239e19be8fcc7f340a64554ea93699637e62
+          git checkout --detach d511239e19be8fcc7f340a64554ea93699637e62
+          test "$(git rev-parse HEAD)" = "d511239e19be8fcc7f340a64554ea93699637e62"
+
+      - name: Reproduce frozen R0 variants under Amendment 01
+        run: |
+          rm -rf g4-r1-work g4-r1-evidence
+          python3 smoke/g4_r0_realizability.py --zipcpu zipcpu --out g4-r1-work
+
+      - name: Execute frozen G4 R1 semantic ground-truth gate
+        run: |
+          PYTHONPATH=smoke python3 smoke/g4_r1_semantics.py \
+            --variants-root g4-r1-work/variants \
+            --r0-result g4-r1-work/g4-r0-result.json \
+            --out g4-r1-evidence
+
+      - name: Seal R1 evidence
+        if: always()
+        run: |
+          mkdir -p g4-r1-evidence
+          printf '%s\n' "${GITHUB_SHA}" > g4-r1-evidence/public-runner-head.txt
+          printf '%s\n' "d511239e19be8fcc7f340a64554ea93699637e62" > g4-r1-evidence/zipcpu-head.txt
+          printf '%s\n' "f95501f63ca3423e6dd315cbbf5452ef74e0c0cf" > g4-r1-evidence/r1-protocol-head.txt
+          cp g4-r1-work/g4-r0-result.json g4-r1-evidence/r0-reproduction.json 2>/dev/null || true
+          find g4-r1-evidence -type f -print0 | sort -z | xargs -0 sha256sum > g4-r1-evidence/SHA256SUMS.txt || true
+
+      - name: Upload G4 R1 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: g4-r1-semantic-ground-truth-evidence
+          path: g4-r1-evidence/
+          if-no-files-found: warn
+          retention-days: 90
