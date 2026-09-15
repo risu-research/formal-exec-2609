@@ -1,0 +1,354 @@
+name: g3-amendment08-v2-authority
+on:
+  push:
+    paths:
+      - '.github/workflows/g3-amendment08-v2-authority.yml'
+      - 'smoke/g3_v2_selector_seal.py'
+      - 'smoke/g3_v2_authority_subshard.py'
+      - 'smoke/g3_v2_verify_shard.py'
+      - 'smoke/g3_v2_controls.py'
+      - 'smoke/g3_v2_aggregate.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+
+env:
+  SOURCE_RUN: '34804261148'
+  SOURCE_HEAD: 'ccd83335a9b81bc447d9740129668619c4e77267'
+  SOURCE_AGG_ARTIFACT_ID: '10333122464'
+  SOURCE_AGG_DIGEST: 'sha256:adce6b557ecdd0d5d7e21a370cc0e1090c07e2dfbc312dcfca3f619d83576881'
+  AMENDMENT08_FREEZE_SHA: '33c53b01bd437eca666adaf8f812df33d65a2bdb'
+  POSITIVE_RUN: '34796525891'
+  POSITIVE_HEAD: 'ec1213c9d954d4f4e40929096a6e16bcd1c75707'
+  POSITIVE_ARTIFACT_ID: '10330037135'
+  POSITIVE_ARTIFACT_DIGEST: 'sha256:14dff22d531a6694d2e36a275b797834b6c1d927e5864fff5af40f499b17ce62'
+
+jobs:
+  selector:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify frozen V1 source provenance through GitHub API
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN" --jq .head_sha)" = "$SOURCE_HEAD"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$SOURCE_AGG_ARTIFACT_ID" --jq .digest)" = "$SOURCE_AGG_DIGEST"
+      - name: Download exact frozen calibrated base
+        uses: actions/download-artifact@v4
+        with:
+          name: g3-negative-calibrated-base-v2
+          path: sealed/input
+          run-id: 34804261148
+          github-token: ${{ github.token }}
+      - name: Download all 16 exact frozen V1 RED shards
+        uses: actions/download-artifact@v4
+        with:
+          pattern: g3-neg-v2-shard-*
+          path: sealed/shards
+          merge-multiple: true
+          run-id: 34804261148
+          github-token: ${{ github.token }}
+      - name: Recompute exhaustive 48,027-bit sensitivity map prospectively
+        run: |
+          set -euo pipefail
+          mkdir -p selector
+          python3 smoke/g3_bitparallel_smt_replay.py --root sealed --out selector/RAW_SENSITIVITY.json | tee selector/raw.stdout.txt
+          python3 smoke/g3_v2_selector_seal.py --sealed-root sealed --raw selector/RAW_SENSITIVITY.json --out selector/SELECTOR.json | tee selector/seal.stdout.txt
+      - name: Seal selector provenance
+        run: |
+          set -euo pipefail
+          git rev-parse HEAD > selector/runner.commit.txt
+          printf '%s\n' "$AMENDMENT08_FREEZE_SHA" > selector/amendment08.freeze.sha.txt
+          sha256sum smoke/g3_bitparallel_smt_replay.py smoke/g3_v2_selector_seal.py > selector/runner-sources.sha256
+          find selector -type f -print0 | sort -z | xargs -0 sha256sum > selector/ALL_SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: g3-amendment08-v2-selector
+          path: selector/
+
+  authority_replay:
+    needs: selector
+    strategy:
+      fail-fast: false
+      max-parallel: 32
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+        subshard: [0, 1, 2, 3]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install exact authority semantic runtime
+        run: |
+          set -euo pipefail
+          python3 -m pip install --break-system-packages z3-solver==5.1.0.0
+          python3 - <<'PY'
+          import z3
+          print(z3.get_version_string()); assert z3.get_version_string() == '5.1.0'
+          PY
+      - uses: actions/download-artifact@v4
+        with:
+          name: g3-amendment08-v2-selector
+          path: selector
+      - uses: actions/download-artifact@v4
+        with:
+          name: g3-negative-calibrated-base-v2
+          path: sealed/input
+          run-id: 34804261148
+          github-token: ${{ github.token }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: g3-neg-v2-shard-${{ matrix.shard }}
+          path: sealed/shards
+          run-id: 34804261148
+          github-token: ${{ github.token }}
+      - name: Exact original-authority replay cross-check
+        run: |
+          mkdir -p out
+          set +e
+          PYTHONPATH=smoke python3 smoke/g3_v2_authority_subshard.py \
+            --sealed-root sealed --selector selector/SELECTOR.json \
+            --shard '${{ matrix.shard }}' --subshard '${{ matrix.subshard }}' --subshard-count 4 \
+            --out 'out/AUTH_${{ matrix.shard }}_${{ matrix.subshard }}.json' \
+            > out/stdout.txt 2> out/stderr.txt
+          rc=$?
+          echo "$rc" > out/rc.txt
+          exit 0
+      - name: Seal partition provenance
+        if: always()
+        run: |
+          git rev-parse HEAD > out/runner.commit.txt
+          sha256sum smoke/g3_v2_authority_subshard.py smoke/g3_negative_controls_v3.py smoke/g3_negative_controls_v2.py smoke/g3_negative_controls.py smoke/tnf_scope.py > out/runner-sources.sha256
+      - name: Upload authority partition
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: g3-amendment08-v2-authority-${{ matrix.shard }}-${{ matrix.subshard }}
+          path: out/
+      - name: Enforce authority partition
+        if: always()
+        run: test "$(cat out/rc.txt)" = 0
+
+  independent_verify:
+    needs: selector
+    strategy:
+      fail-fast: false
+      max-parallel: 16
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pinned independent verifier toolchain
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y curl unzip yosys python3 python3-pip
+          python3 -m pip install --break-system-packages z3-solver==5.1.0.0
+          python3 - <<'PY'
+          import z3
+          print(z3.get_version_string()); assert z3.get_version_string() == '5.1.0'
+          PY
+          yosys -V | tee /tmp/yosys.version.txt
+          grep -q '^Yosys 0.33 ' /tmp/yosys.version.txt
+          curl -L --fail --retry 3 -o /tmp/cvc5.zip https://github.com/cvc5/cvc5/releases/download/cvc5-1.3.4/cvc5-Linux-x86_64-static.zip
+          echo 'dcdbfada0ce493ee98259c0816e0daafc561c223aadb3af298c2968e73ea39c6  /tmp/cvc5.zip' | sha256sum -c -
+          unzip -q /tmp/cvc5.zip -d /tmp/cvc5
+          CVC5=$(find /tmp/cvc5 -type f -name cvc5 | head -n1); test -x "$CVC5"; echo "CVC5=$CVC5" >> "$GITHUB_ENV"
+      - uses: actions/download-artifact@v4
+        with:
+          name: g3-amendment08-v2-selector
+          path: selector
+      - uses: actions/download-artifact@v4
+        with:
+          name: g3-negative-calibrated-base-v2
+          path: sealed/input
+          run-id: 34804261148
+          github-token: ${{ github.token }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: g3-neg-v2-shard-${{ matrix.shard }}
+          path: sealed/shards
+          run-id: 34804261148
+          github-token: ${{ github.token }}
+      - name: Reconstruct query, check cvc5 fixed assignments, validate Yosys mutant
+        run: |
+          mkdir -p out
+          set +e
+          PYTHONPATH=smoke python3 smoke/g3_v2_verify_shard.py \
+            --sealed-root sealed --selector selector/SELECTOR.json --cvc5 "$CVC5" \
+            --shard '${{ matrix.shard }}' --out 'out/VERIFY_${{ matrix.shard }}.json' \
+            > out/stdout.txt 2> out/stderr.txt
+          rc=$?
+          echo "$rc" > out/rc.txt
+          exit 0
+      - name: Seal verifier shard provenance
+        if: always()
+        run: |
+          git rev-parse HEAD > out/runner.commit.txt
+          cat /tmp/yosys.version.txt > out/yosys.version.txt
+          "$CVC5" --version > out/cvc5.version.txt
+          sha256sum smoke/g3_v2_verify_shard.py smoke/g3_negative_controls_v3.py smoke/g3_negative_controls_v2.py smoke/g3_negative_controls.py smoke/tnf_scope.py > out/runner-sources.sha256
+      - name: Upload verifier shard
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: g3-amendment08-v2-verify-${{ matrix.shard }}
+          path: out/
+      - name: Enforce verifier shard
+        if: always()
+        run: test "$(cat out/rc.txt)" = 0
+
+  controls:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install exact controls/checker toolchain
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y curl unzip git build-essential cmake libgmp-dev yosys python3 python3-pip
+          python3 -m pip install --break-system-packages z3-solver==5.1.0.0
+          python3 - <<'PY'
+          import z3
+          print(z3.get_version_string()); assert z3.get_version_string() == '5.1.0'
+          PY
+          yosys -V | tee /tmp/yosys.version.txt
+          grep -q '^Yosys 0.33 ' /tmp/yosys.version.txt
+          curl -L --fail --retry 3 -o /tmp/cvc5.zip https://github.com/cvc5/cvc5/releases/download/cvc5-1.3.4/cvc5-Linux-x86_64-static.zip
+          echo 'dcdbfada0ce493ee98259c0816e0daafc561c223aadb3af298c2968e73ea39c6  /tmp/cvc5.zip' | sha256sum -c -
+          unzip -q /tmp/cvc5.zip -d /tmp/cvc5
+          CVC5=$(find /tmp/cvc5 -type f -name cvc5 | head -n1); test -x "$CVC5"; echo "CVC5=$CVC5" >> "$GITHUB_ENV"
+          git clone -q https://github.com/cvc5/ethos.git /tmp/ethos
+          git -C /tmp/ethos checkout -q 221641668d75eaffd308e0511d63962cea937110
+          cmake -S /tmp/ethos -B /tmp/ethos/build -DCMAKE_BUILD_TYPE=Release >/dev/null
+          cmake --build /tmp/ethos/build -j2 >/dev/null
+          ETHOS=/tmp/ethos/build/src/ethos; test -x "$ETHOS"; echo "ETHOS=$ETHOS" >> "$GITHUB_ENV"
+      - name: Verify exact positive proof artifact provenance
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$POSITIVE_RUN" --jq .head_sha)" = "$POSITIVE_HEAD"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$POSITIVE_ARTIFACT_ID" --jq .digest)" = "$POSITIVE_ARTIFACT_DIGEST"
+      - uses: actions/download-artifact@v4
+        with:
+          name: g3-negative-calibrated-base-v2
+          path: sealed/input
+          run-id: 34804261148
+          github-token: ${{ github.token }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: g3-metamorphic-cert-evidence
+          path: positive
+          run-id: 34796525891
+          github-token: ${{ github.token }}
+      - name: Rerun Amendment07 calibration and reachable support audit
+        run: |
+          mkdir -p controls/calibration
+          PYTHONPATH=smoke python3 smoke/g3_reduce_or_calibration.py --base-dir sealed/input/frozen/base --out controls/calibration
+      - name: Rerun unchanged NC3 NC4 NC6 controls
+        run: |
+          mkdir -p controls/results
+          set +e
+          PYTHONPATH=smoke python3 smoke/g3_v2_controls.py \
+            --base-dir sealed/input/frozen/base \
+            --old-source sealed/input/frozen/sources/r0-pipemem.v \
+            --new-source sealed/input/frozen/sources/r1-pipemem.v \
+            --calibration controls/calibration/REDUCE_OR_CALIBRATION.json \
+            --positive positive --cvc5 "$CVC5" --ethos "$ETHOS" --out controls/results \
+            > controls/stdout.txt 2> controls/stderr.txt
+          rc=$?
+          echo "$rc" > controls/rc.txt
+          exit 0
+      - name: Seal controls provenance
+        if: always()
+        run: |
+          git rev-parse HEAD > controls/runner.commit.txt
+          printf '%s\n' "$AMENDMENT08_FREEZE_SHA" > controls/amendment08.freeze.sha.txt
+          sha256sum smoke/g3_v2_controls.py smoke/g3_reduce_or_calibration.py smoke/g3_negative_controls_v3.py smoke/g3_negative_controls_v2.py smoke/g3_negative_controls.py smoke/tnf_scope.py > controls/runner-sources.sha256
+          find controls -type f -print0 | sort -z | xargs -0 sha256sum > controls/ALL_SHA256SUMS.txt || true
+      - name: Upload controls evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: g3-amendment08-v2-controls
+          path: controls/
+      - name: Enforce controls
+        if: always()
+        run: test "$(cat controls/rc.txt)" = 0
+
+  aggregate:
+    needs: [selector, authority_replay, independent_verify, controls]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download prospective selector
+        uses: actions/download-artifact@v4
+        with:
+          name: g3-amendment08-v2-selector
+          path: selector
+      - name: Download all 64 authority replay partitions
+        uses: actions/download-artifact@v4
+        with:
+          pattern: g3-amendment08-v2-authority-*
+          path: authority
+          merge-multiple: true
+      - name: Download all 16 independent verifier shards
+        uses: actions/download-artifact@v4
+        with:
+          pattern: g3-amendment08-v2-verify-*
+          path: verify
+          merge-multiple: true
+      - name: Download rerun controls
+        uses: actions/download-artifact@v4
+        with:
+          name: g3-amendment08-v2-controls
+          path: controls
+      - name: Aggregate all Amendment08 V2 obligations fail-closed
+        run: |
+          mkdir -p final
+          set +e
+          python3 smoke/g3_v2_aggregate.py \
+            --selector selector/SELECTOR.json --authority-dir authority --verify-dir verify \
+            --controls controls/results/CONTROLS.json --out final/G3_AMENDMENT08_V2_FINAL.json \
+            > final/aggregate.stdout.txt 2> final/aggregate.stderr.txt
+          rc=$?
+          echo "$rc" > final/aggregate.rc.txt
+          exit 0
+      - name: Seal final prospective V2 authority evidence
+        if: always()
+        run: |
+          git rev-parse HEAD > final/runner.commit.txt
+          printf '%s\n' "$AMENDMENT08_FREEZE_SHA" > final/amendment08.freeze.sha.txt
+          sha256sum .github/workflows/g3-amendment08-v2-authority.yml smoke/g3_v2_selector_seal.py smoke/g3_v2_authority_subshard.py smoke/g3_v2_verify_shard.py smoke/g3_v2_controls.py smoke/g3_v2_aggregate.py smoke/g3_bitparallel_smt_replay.py > final/runner-sources.sha256
+          find selector authority verify controls final -type f -print0 | sort -z | xargs -0 sha256sum > final/ALL_SHA256SUMS.txt || true
+      - name: Upload final Amendment08 V2 authority evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: g3-amendment08-v2-final-evidence
+          path: |
+            final/
+            selector/
+            authority/
+            verify/
+            controls/
+      - name: Enforce prospective V2 authority result
+        if: always()
+        run: |
+          test "$(cat final/aggregate.rc.txt)" = 0
+          python3 - <<'PY'
+          import json
+          x=json.load(open('final/G3_AMENDMENT08_V2_FINAL.json'))
+          assert x['pass'] is True
+          print('G3_AMENDMENT08_V2_AUTHORITY_GREEN')
+          PY
