@@ -6,8 +6,17 @@ import sys
 from pathlib import Path
 
 import z3
+import g3_negative_controls_v3 as amendment07
+import g3_reduce_or_calibration as reduce_or_cal
 
-from tnf_scope import IR, _check, _nz, _relation
+# Reuse the exact G3 Amendment-07 IR overlay rather than broadening tnf_scope.py.
+g = amendment07.g
+IR = g.IR
+_nz = g._nz
+_relation = g._relation
+
+AMENDMENT02_SHA = "ac5f4ca374c0c8d9b1189b73e8f159b2857d98d3"
+PRESERVED_R1_RED = 34993075282
 
 EXPECTED = {
     "G4-A01": ("E_CONTRACT", "G_EQ"),
@@ -77,8 +86,7 @@ def compare_formal(old_path: Path, new_path: Path, cell_type: str, timeout_ms: i
     A, B = formal_obligations(old, cell_type), formal_obligations(new, cell_type)
     if old.unsupported or new.unsupported:
         raise RuntimeError(f"unsupported cells: {sorted(old.unsupported | new.unsupported)}")
-    F0, F1 = conjunction(A), conjunction(B)
-    rel, old_only, new_only = _relation(F0, F1, timeout_ms)
+    rel, old_only, new_only = _relation(conjunction(A), conjunction(B), timeout_ms)
     return {
         "raw_relation": rel,
         "old_only_sat": old_only,
@@ -111,9 +119,55 @@ def vocab_audit(script_dir: Path, old: Path, new: Path):
     return p.returncode, payload
 
 
+def variant_json(root: Path, name: str) -> Path:
+    return root / name / "bench/formal" / f"g4_{name}.json"
+
+
+def reduce_or_preflight(root: Path, out: Path):
+    names = sorted(set(x for pair in PAIRS.values() for x in pair))
+    audits = {}
+    for name in names:
+        p = variant_json(root, name)
+        a = reduce_or_cal.reachable_audit(p)
+        if a["unsupported_reachable"]:
+            raise RuntimeError(f"{name}: unsupported reachable {a['unsupported_reachable']}")
+        if len(a["reduce_or"]) != 1:
+            raise RuntimeError(f"{name}: expected exactly one reachable $reduce_or, got {len(a['reduce_or'])}")
+        r = a["reduce_or"][0]
+        shape = (r["A_WIDTH"], r["Y_WIDTH"], r["A_SIGNED"], r["A_bits"], r["Y_bits"])
+        if shape != (4, 1, 0, 4, 1):
+            raise RuntimeError(f"{name}: unauthorized $reduce_or shape {shape}")
+        audits[name] = a
+
+    synthetic = out / "reduce_or_width4.json"
+    reduce_or_cal.synthetic_json(synthetic)
+    ir = IR(str(synthetic))
+    expr = ir.sig([6], False, "g4-r1-calibration:y")
+    rows = []
+    for val in range(16):
+        expected = 1 if val else 0
+        tv = reduce_or_cal.tnf_value(ir, expr, val)
+        bits = format(val, "04b")
+        cmd = f"read_json {synthetic}; prep -top top; sat -verify -set a 4'b{bits} -prove y {expected}"
+        q = subprocess.run(["yosys", "-q", "-p", cmd], capture_output=True, text=True, timeout=60)
+        row = {
+            "input_decimal": val,
+            "input_bits": bits,
+            "expected": expected,
+            "tnf": tv,
+            "yosys_proved_expected": q.returncode == 0,
+            "yosys_returncode": q.returncode,
+        }
+        row["pass"] = tv == expected and q.returncode == 0
+        rows.append(row)
+    if len(rows) != 16 or not all(x["pass"] for x in rows):
+        raise RuntimeError("G4 Amendment 02 same-run $reduce_or calibration failed")
+    return {"variant_reachable_audits": audits, "calibration_rows": rows, "calibration_pass": True}
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--variants-root", required=True, help="R0 output variants directory")
+    ap.add_argument("--variants-root", required=True)
     ap.add_argument("--r0-result", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--timeout-ms", type=int, default=20000)
@@ -125,24 +179,26 @@ def main():
     out.mkdir(parents=True, exist_ok=True)
     script_dir = Path(__file__).resolve().parent
 
+    # Pre-use gate required by prospective Amendment 02.
+    reduce_or_evidence = reduce_or_preflight(root, out)
+    (out / "g4-r1-reduce-or-preflight.json").write_text(json.dumps(reduce_or_evidence, indent=2, sort_keys=True) + "\n")
+
     r0_map = {c["id"]: c for c in r0["cases"]}
-    source_results = []
-    failures = []
+    source_results, failures = [], []
 
     for cid, (old_name, new_name) in PAIRS.items():
         expected_e, expected_g = EXPECTED[cid]
         if r0_map[cid]["r0_verdict"] != "REALIZABLE":
             rec = {"id": cid, "verdict": "UNKNOWN", "reason": "R0_NOT_REALIZABLE", "expected": {"environment": expected_e, "guarantee": expected_g}}
             source_results.append(rec); failures.append(cid); continue
-        old = root / old_name / "bench/formal" / f"g4_{old_name}.json"
-        new = root / new_name / "bench/formal" / f"g4_{new_name}.json"
+        old, new = variant_json(root, old_name), variant_json(root, new_name)
         try:
             vrc, vocab = vocab_audit(script_dir, old, new)
             if vrc != 0:
                 raise RuntimeError("external vocabulary mismatch")
             e = compare_formal(old, new, "$assume", ns.timeout_ms)
-            g = compare_formal(old, new, "$assert", ns.timeout_ms)
-            computed_e, computed_g = env_label(e["raw_relation"]), guar_label(g["raw_relation"])
+            gg = compare_formal(old, new, "$assert", ns.timeout_ms)
+            computed_e, computed_g = env_label(e["raw_relation"]), guar_label(gg["raw_relation"])
             verdict = "MATCH" if (computed_e, computed_g) == (expected_e, expected_g) else "MISMATCH"
             rec = {
                 "id": cid,
@@ -151,7 +207,7 @@ def main():
                 "expected": {"environment": expected_e, "guarantee": expected_g},
                 "computed": {"environment": computed_e, "guarantee": computed_g},
                 "environment_detail": e,
-                "guarantee_detail": g,
+                "guarantee_detail": gg,
                 "external_vocabulary": vocab,
                 "verdict": verdict,
             }
@@ -181,10 +237,15 @@ def main():
         "schema": "g4-r1-semantic-ground-truth-v1",
         "r1_protocol_sha": "f95501f63ca3423e6dd315cbbf5452ef74e0c0cf",
         "r0_closure_sha": "7bc29940c131a22b8a7cd700eb4340042b6b78dc",
+        "amendment02_sha": AMENDMENT02_SHA,
+        "preserved_first_r1_red": PRESERVED_R1_RED,
         "g3_kernel_files": {
             "tnf_scope": "smoke/tnf_scope.py",
+            "reduce_or_overlay": "smoke/g3_negative_controls_v3.py",
+            "reduce_or_calibration": "smoke/g3_reduce_or_calibration.py",
             "vocabulary_audit": "smoke/vocabulary_audit.py",
         },
+        "reduce_or_preflight": {"pass": True, "variant_count": len(reduce_or_evidence["variant_reachable_audits"]), "calibration": "16/16"},
         "source_formal": source_results,
         "structural": structural_results,
         "a11": a11,
