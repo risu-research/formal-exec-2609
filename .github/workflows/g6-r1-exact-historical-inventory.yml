@@ -1,0 +1,80 @@
+name: g6-r1-exact-historical-inventory
+
+on:
+  push:
+    paths:
+      - 'smoke/g6_r1_exact_historical_inventory.py'
+      - '.github/workflows/g6-r1-exact-historical-inventory.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout public runner
+        uses: actions/checkout@v4
+
+      - name: Preflight frozen authorities
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q '96217099573c869cfa2232bbb559a4f47d6561590bfe8faa459a6ed6b96a5aed' smoke/g6_r1_exact_historical_inventory.py
+          grep -q '4c2f1637889f4049ddf69b5e4ca44b4cf5f7270f' smoke/g6_r1_exact_historical_inventory.py
+          grep -q '50c7b30fa3a404176108fc5f155c09cc9851578b' smoke/g6_r1_exact_historical_inventory.py
+
+      - name: Clone frozen history universes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git -c protocol.version=2 clone --filter=blob:limit=512k --no-checkout --single-branch https://github.com/ZipCPU/zipcpu.git zipcpu
+          git -c protocol.version=2 clone --filter=blob:limit=512k --no-checkout --single-branch https://github.com/SymbioticEDA/riscv-formal.git riscv-formal
+          git -c protocol.version=2 clone --filter=blob:limit=512k --no-checkout --single-branch https://github.com/lowRISC/opentitan.git opentitan
+
+      - name: Reconstruct exact frozen corpus from pre-result rule
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf g6-r1-corpus
+          mkdir -p g6-r1-corpus
+          python3 smoke/g6_r0_blind_corpus_seal.py \
+            --zipcpu zipcpu \
+            --riscv-formal riscv-formal \
+            --opentitan opentitan \
+            --out g6-r1-corpus
+          ACTUAL=$(sha256sum g6-r1-corpus/g6-r0-corpus-manifest.json | awk '{print $1}')
+          test "$ACTUAL" = '96217099573c869cfa2232bbb559a4f47d6561590bfe8faa459a6ed6b96a5aed'
+
+      - name: Execute R1 exact historical inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf g6-r1-evidence
+          mkdir -p g6-r1-evidence
+          python3 smoke/g6_r1_exact_historical_inventory.py \
+            --manifest g6-r1-corpus/g6-r0-corpus-manifest.json \
+            --zipcpu zipcpu \
+            --riscv-formal riscv-formal \
+            --opentitan opentitan \
+            --out g6-r1-evidence | tee g6-r1-evidence/runner.log
+
+      - name: Seal R1 provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s\n' "$GITHUB_SHA" > g6-r1-evidence/public-runner-head.txt
+          printf '%s\n' '4c2f1637889f4049ddf69b5e4ca44b4cf5f7270f' > g6-r1-evidence/g6-corpus-authority.txt
+          printf '%s\n' '96217099573c869cfa2232bbb559a4f47d6561590bfe8faa459a6ed6b96a5aed' > g6-r1-evidence/corpus-manifest.sha256
+          sha256sum smoke/g6_r1_exact_historical_inventory.py > g6-r1-evidence/runner-source.sha256
+          find g6-r1-evidence -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > g6-r1-evidence/SHA256SUMS.txt
+
+      - name: Upload G6 R1 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: g6-r1-exact-historical-inventory-evidence
+          path: g6-r1-evidence/
+          if-no-files-found: error
+          retention-days: 90
