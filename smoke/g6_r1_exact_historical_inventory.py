@@ -13,6 +13,7 @@ CORPUS_SHA256 = "96217099573c869cfa2232bbb559a4f47d6561590bfe8faa459a6ed6b96a5ae
 CORPUS_AUTHORITY = "4c2f1637889f4049ddf69b5e4ca44b4cf5f7270f"
 R1_R2_PROTOCOL = "50c7b30fa3a404176108fc5f155c09cc9851578b"
 SEMANTIC_SUPPORT = "538189291d09284303c27d717ca8b0b82e69b1e1"
+AMENDMENT01 = "99fd4bfb74e8b2ed5cd0b440e4490944feb99c55"
 
 SOURCE_SUFFIXES = {".v", ".sv", ".vh", ".svh", ".vhd", ".vhdl"}
 CONFIG_SUFFIXES = {".sby", ".hjson", ".json", ".yaml", ".yml", ".core", ".cfg", ".toml", ".ini"}
@@ -58,8 +59,9 @@ def strip_comments(text: str) -> str:
 
 
 def balanced_call(text: str, open_pos: int):
+    # Amendment01: Verilog apostrophe is numeric-literal syntax, not a string quote.
     depth = 0
-    quote = None
+    quote = False
     esc = False
     for i in range(open_pos, len(text)):
         c = text[i]
@@ -68,11 +70,11 @@ def balanced_call(text: str, open_pos: int):
                 esc = False
             elif c == "\\":
                 esc = True
-            elif c == quote:
-                quote = None
+            elif c == '"':
+                quote = False
             continue
-        if c in ("\"", "'"):
-            quote = c
+        if c == '"':
+            quote = True
         elif c == "(":
             depth += 1
         elif c == ")":
@@ -106,12 +108,19 @@ def source_surface(data: bytes):
         candidates.append({"kind":"native", "head":m.group(1).lower(), "canonical":canon, "sha256":sha256_bytes(canon.encode())})
     token_counts = {w: len(re.findall(rf"\b{re.escape(w)}\b", clean, flags=re.I)) for w in FORMAL_WORDS}
     multiset = Counter(x["sha256"] for x in candidates)
+    swallowed = []
+    for c in candidates:
+        s = c["canonical"]
+        repeated_macro = c["kind"] == "macro" and s.count("`" + c["head"]) > 1
+        if "; always" in s or repeated_macro or len(s) > 1000:
+            swallowed.append(c["sha256"])
     return {
         "candidate_count": len(candidates),
         "candidate_multiset": dict(sorted(multiset.items())),
         "candidate_multiset_sha256": sha256_bytes(json.dumps(dict(sorted(multiset.items())), sort_keys=True).encode()),
         "macro_names": sorted(set(macros)),
         "token_counts": token_counts,
+        "lexical_sanity_failures": swallowed,
         "candidates": candidates,
     }
 
@@ -215,12 +224,14 @@ def summarize_pair(repo: Path, pair: dict):
         records.append({"path":path,"changed_path_present":path in changed_paths,
                         "old":blob_record(path,old),"new":blob_record(path,new)})
     state = "SOURCE_RETRIEVABLE" if provenance_ok and not retrieval_fail else ("PROVENANCE_FAILURE" if not provenance_ok else "MISSING_DEPENDENCY")
-    agg=[]
+    agg=[]; lexical_failures=[]
     for r in records:
         for side in ("old","new"):
             ss=r[side].get("source_surface")
             if ss:
                 agg.extend([f"{side}:{k}:{v}" for k,v in ss["candidate_multiset"].items()])
+                for h in ss.get("lexical_sanity_failures",[]):
+                    lexical_failures.append({"path":r["path"],"side":side,"candidate_sha256":h})
     return {
         "repository_full_name":pair["repository_full_name"],"parent":parent,"child":child,
         "sampling_digest":pair["sampling_digest"],"chronology_stratum":pair["chronology_stratum"],
@@ -228,6 +239,7 @@ def summarize_pair(repo: Path, pair: dict):
         "actual_parent_vector":parents,"machine_state":state,"retrieval_failures":retrieval_fail,
         "changed_path_count":len(changed_paths),"changed_name_status":changed,
         "formal_relevant_path_count":len(relpaths),"formal_records":records,
+        "lexical_sanity_failures":lexical_failures,
         "aggregate_candidate_surface_sha256":sha256_bytes("\n".join(sorted(agg)).encode()),
     }
 
@@ -249,16 +261,19 @@ def main():
             rows.append(summarize_pair(repo,pair))
     rows.sort(key=lambda r:(r["repository_full_name"],r["sampling_digest"]))
     counts=Counter(r["machine_state"] for r in rows)
+    lexical_failures=sum(len(r["lexical_sanity_failures"]) for r in rows)
     byproj={}
     for name in repos:
         rr=[r for r in rows if r["repository_full_name"]==name]
         byproj[name]={"total":len(rr),"states":dict(Counter(x["machine_state"] for x in rr)),
-                      "sentinels":sum(x["pre_registered_sentinel"] for x in rr)}
-    result={"schema":"g6-r1-exact-historical-inventory-v1","corpus_sha256":CORPUS_SHA256,
+                      "sentinels":sum(x["pre_registered_sentinel"] for x in rr),
+                      "lexical_sanity_failures":sum(len(x["lexical_sanity_failures"]) for x in rr)}
+    result={"schema":"g6-r1-exact-historical-inventory-v1-amendment01","corpus_sha256":CORPUS_SHA256,
             "corpus_authority":CORPUS_AUTHORITY,"r1_r2_protocol":R1_R2_PROTOCOL,"semantic_support":SEMANTIC_SUPPORT,
-            "pair_count":len(rows),"state_counts":dict(counts),"by_project":byproj,"rows":rows}
+            "amendment01":AMENDMENT01,"pair_count":len(rows),"state_counts":dict(counts),
+            "lexical_sanity_failures":lexical_failures,"by_project":byproj,"rows":rows}
     (out/"g6-r1-inventory.json").write_text(json.dumps(result,indent=2,sort_keys=True)+"\n")
-    summary={"pair_count":len(rows),"state_counts":dict(counts),"by_project":byproj,
+    summary={"pair_count":len(rows),"state_counts":dict(counts),"lexical_sanity_failures":lexical_failures,"by_project":byproj,
              "inventory_sha256":sha256_file(out/"g6-r1-inventory.json")}
     (out/"summary.json").write_text(json.dumps(summary,indent=2,sort_keys=True)+"\n")
     print(json.dumps(summary,sort_keys=True))
@@ -266,6 +281,8 @@ def main():
         raise RuntimeError(f"expected 144 frozen rows, got {len(rows)}")
     if any(not r["provenance_ok"] for r in rows):
         raise RuntimeError("R1 provenance failure present")
+    if lexical_failures:
+        raise RuntimeError(f"R1 lexical sanity failure count={lexical_failures}")
 
 if __name__ == "__main__":
     main()
