@@ -8,15 +8,16 @@ from pathlib import Path
 import z3
 import g3_negative_controls_v3 as amendment07
 import g3_reduce_or_calibration as reduce_or_cal
+import tnf_scope as tnf
 
-# Reuse the exact G3 Amendment-07 IR overlay rather than broadening tnf_scope.py.
-g = amendment07.g
-IR = g.IR
-_nz = g._nz
-_relation = g._relation
+# Importing Amendment 07 patches the shared tnf_scope.IR class in place.
+IR = tnf.IR
+_nz = tnf._nz
+_relation = tnf._relation
 
 AMENDMENT02_SHA = "ac5f4ca374c0c8d9b1189b73e8f159b2857d98d3"
 PRESERVED_R1_RED = 34993075282
+PRESERVED_R1_HARNESS_RED = 34993422332
 
 EXPECTED = {
     "G4-A01": ("E_CONTRACT", "G_EQ"),
@@ -179,7 +180,6 @@ def main():
     out.mkdir(parents=True, exist_ok=True)
     script_dir = Path(__file__).resolve().parent
 
-    # Pre-use gate required by prospective Amendment 02.
     reduce_or_evidence = reduce_or_preflight(root, out)
     (out / "g4-r1-reduce-or-preflight.json").write_text(json.dumps(reduce_or_evidence, indent=2, sort_keys=True) + "\n")
 
@@ -239,6 +239,7 @@ def main():
         "r0_closure_sha": "7bc29940c131a22b8a7cd700eb4340042b6b78dc",
         "amendment02_sha": AMENDMENT02_SHA,
         "preserved_first_r1_red": PRESERVED_R1_RED,
+        "preserved_r1_harness_red": PRESERVED_R1_HARNESS_RED,
         "g3_kernel_files": {
             "tnf_scope": "smoke/tnf_scope.py",
             "reduce_or_overlay": "smoke/g3_negative_controls_v3.py",
