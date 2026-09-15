@@ -1,0 +1,80 @@
+name: g6-r0-blind-corpus-seal-prefetch
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'smoke/g6_r0_blind_corpus_seal.py'
+      - '.github/workflows/g6-r0-blind-corpus-seal-prefetch.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  corpus_seal_prefetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout public runner
+        uses: actions/checkout@v4
+
+      - name: Preflight identical scientific runner
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('smoke/g6_r0_blind_corpus_seal.py').read_text()
+          assert '4c8218fe664816f01653e483a6f205428eac33c3' in s
+          assert '7ec2f62f2c68ac54879f1e25ec014e89a95b6ba8' in s
+          forbidden=['--format=%s','--format=%B','--format=%b','git log --oneline']
+          assert not [x for x in forbidden if x in s]
+          print('identical scientific runner preflight PASS')
+          PY
+
+      - name: Clone ZipCPU with source-blob batch prefetch
+        run: |
+          git -c protocol.version=2 clone --filter=blob:limit=512k --no-checkout --single-branch https://github.com/ZipCPU/zipcpu.git zipcpu
+          git -C zipcpu rev-parse HEAD
+
+      - name: Clone frozen riscv-formal identity with source-blob batch prefetch
+        run: |
+          git -c protocol.version=2 clone --filter=blob:limit=512k --no-checkout --single-branch https://github.com/SymbioticEDA/riscv-formal.git riscv-formal
+          git -C riscv-formal rev-parse HEAD
+          git -C riscv-formal remote -v
+
+      - name: Clone OpenTitan with source-blob batch prefetch
+        run: |
+          git -c protocol.version=2 clone --filter=blob:limit=512k --no-checkout --single-branch https://github.com/lowRISC/opentitan.git opentitan
+          git -C opentitan rev-parse HEAD
+
+      - name: Execute identical selection-only R0
+        run: |
+          rm -rf g6-r0-prefetch-evidence
+          mkdir -p g6-r0-prefetch-evidence
+          python3 smoke/g6_r0_blind_corpus_seal.py \
+            --zipcpu zipcpu \
+            --riscv-formal riscv-formal \
+            --opentitan opentitan \
+            --out g6-r0-prefetch-evidence | tee g6-r0-prefetch-evidence/runner.log
+
+      - name: Seal corroboration provenance
+        if: always()
+        run: |
+          mkdir -p g6-r0-prefetch-evidence
+          printf '%s\n' "$GITHUB_SHA" > g6-r0-prefetch-evidence/public-runner-head.txt
+          printf '%s\n' '4c8218fe664816f01653e483a6f205428eac33c3' > g6-r0-prefetch-evidence/g6-preselection-authority.txt
+          printf '%s\n' '999d0a4487fa63714bc30143ff3b1aec4ee9e807' > g6-r0-prefetch-evidence/prefetch-amendment-authority.txt
+          git -C zipcpu rev-parse HEAD > g6-r0-prefetch-evidence/zipcpu-fetch-head.txt 2>/dev/null || true
+          git -C riscv-formal rev-parse HEAD > g6-r0-prefetch-evidence/riscv-formal-fetch-head.txt 2>/dev/null || true
+          git -C opentitan rev-parse HEAD > g6-r0-prefetch-evidence/opentitan-fetch-head.txt 2>/dev/null || true
+          sha256sum smoke/g6_r0_blind_corpus_seal.py > g6-r0-prefetch-evidence/runner-source.sha256
+          find g6-r0-prefetch-evidence -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > g6-r0-prefetch-evidence/SHA256SUMS.txt || true
+
+      - name: Upload G6 R0 prefetch evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: g6-r0-blind-corpus-seal-prefetch-evidence
+          path: g6-r0-prefetch-evidence/
+          if-no-files-found: error
+          retention-days: 90
