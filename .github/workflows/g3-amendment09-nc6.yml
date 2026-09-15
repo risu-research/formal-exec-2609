@@ -1,0 +1,92 @@
+name: g3-amendment09-nc6-authority
+on:
+  push:
+    paths:
+      - '.github/workflows/g3-amendment09-nc6.yml'
+      - 'smoke/g3_amendment09_nc6_pairwise.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+
+env:
+  AMENDMENT09_FREEZE_SHA: 'cfc64a1626ca45193b0d51249d3743b333863e22'
+  POSITIVE_RUN: '34796525891'
+  POSITIVE_HEAD: 'ec1213c9d954d4f4e40929096a6e16bcd1c75707'
+  POSITIVE_ARTIFACT_ID: '10330037135'
+  POSITIVE_ARTIFACT_DIGEST: 'sha256:14dff22d531a6694d2e36a275b797834b6c1d927e5864fff5af40f499b17ce62'
+  ETHOS_COMMIT: '221641668d75eaffd308e0511d63962cea937110'
+
+jobs:
+  pairwise_nc6:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify pre-result Amendment09 binding and positive artifact provenance
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          grep -q "$AMENDMENT09_FREEZE_SHA" smoke/g3_amendment09_nc6_pairwise.py
+          test "$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$POSITIVE_RUN" --jq .head_sha)" = "$POSITIVE_HEAD"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$POSITIVE_ARTIFACT_ID" --jq .digest)" = "$POSITIVE_ARTIFACT_DIGEST"
+
+      - name: Install pinned Ethos checker
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y git build-essential cmake libgmp-dev
+          git clone -q https://github.com/cvc5/ethos.git /tmp/ethos
+          git -C /tmp/ethos checkout -q "$ETHOS_COMMIT"
+          test "$(git -C /tmp/ethos rev-parse HEAD)" = "$ETHOS_COMMIT"
+          cmake -S /tmp/ethos -B /tmp/ethos/build -DCMAKE_BUILD_TYPE=Release >/dev/null
+          cmake --build /tmp/ethos/build -j2 >/dev/null
+          ETHOS=/tmp/ethos/build/src/ethos
+          test -x "$ETHOS"
+          echo "ETHOS=$ETHOS" >> "$GITHUB_ENV"
+
+      - name: Download exact proof-certified positive authority
+        uses: actions/download-artifact@v4
+        with:
+          name: g3-metamorphic-cert-evidence
+          path: positive
+          run-id: 34796525891
+          github-token: ${{ github.token }}
+
+      - name: Execute frozen pairwise intact-ACCEPT corrupted-REJECT gate
+        run: |
+          set +e
+          mkdir -p evidence
+          python3 smoke/g3_amendment09_nc6_pairwise.py \
+            --positive positive \
+            --ethos "$ETHOS" \
+            --out evidence \
+            > evidence/stdout.txt 2> evidence/stderr.txt
+          rc=$?
+          echo "$rc" > evidence/rc.txt
+          exit 0
+
+      - name: Seal Amendment09 authority provenance
+        if: always()
+        run: |
+          set -euo pipefail
+          git rev-parse HEAD > evidence/runner.commit.txt
+          printf '%s\n' "$AMENDMENT09_FREEZE_SHA" > evidence/amendment09.freeze.sha.txt
+          printf '%s\n' "$POSITIVE_ARTIFACT_DIGEST" > evidence/positive.artifact.digest.txt
+          git -C /tmp/ethos rev-parse HEAD > evidence/ethos.commit.txt
+          sha256sum "$ETHOS" > evidence/ethos.binary.sha256
+          sha256sum smoke/g3_amendment09_nc6_pairwise.py .github/workflows/g3-amendment09-nc6.yml > evidence/runner-sources.sha256
+          find evidence -type f ! -name ALL_SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > evidence/ALL_SHA256SUMS.txt
+
+      - name: Upload Amendment09 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: g3-amendment09-nc6-evidence
+          path: evidence/
+
+      - name: Enforce Amendment09 authority gate
+        if: always()
+        run: test "$(cat evidence/rc.txt)" = 0
