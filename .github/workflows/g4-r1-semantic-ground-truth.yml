@@ -1,3 +1,4 @@
+# Execution trigger only; scientific protocol is frozen at f95501f63ca3423e6dd315cbbf5452ef74e0c0cf.
 name: g4-r1-semantic-ground-truth
 
 on:
