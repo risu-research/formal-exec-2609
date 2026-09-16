@@ -1,0 +1,83 @@
+name: e5-s1-native-verilator-independent-replay
+"on":
+  push:
+    branches:
+      - experiment/e5-s1-v3-independent-replay-20260916
+    paths:
+      - .github/workflows/e5-s1-native-verilator.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  replay-frozen-first-witness:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@v4
+      - name: Preserve exact prospective code and versions
+        run: |
+          set -euo pipefail
+          mkdir -p native-replay
+          test "$(git hash-object smoke/e5_s1_native_replay.py)" = 36415bc95dd8d6dbd122022322906f93a0ff7d0a
+          test "$(git hash-object smoke/e5_s1_verilator_audit.py)" = 913d53884679e8899ba4962977ace20ad41becf2
+          printf '%s\n' 'pre-result-amendment=d1273d1af9b5ee02628db1cbec1ba9b59989039a' "trigger_commit=$GITHUB_SHA" > native-replay/amendment-provenance.txt
+          sudo apt-get update -qq
+          sudo apt-get install -y z3 iverilog verilator python3 build-essential
+          {
+            z3 --version
+            iverilog -V
+            verilator --version
+            c++ --version
+            dpkg-query -W z3 iverilog verilator python3
+            sha256sum "$(command -v verilator)" "$(command -v iverilog)" "$(command -v z3)"
+          } > native-replay/verilator-toolchain.txt 2>&1
+      - name: Recover and verify immutable v2 evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: e5-s1-uninstrumented-pin-evidence
+          run-id: 35122112448
+          github-token: ${{ github.token }}
+          path: v3
+      - name: Rebuild fixed query from exact authenticated models
+        run: |
+          set -euo pipefail
+          (cd v3 && sha256sum -c SHA256SUMS) | tee native-replay/original-carrier-sha.log
+          python3 smoke/e5_s1_incremental_monitor_free_v3.py v3 > native-replay/v3-query-generation.log
+      - name: Reproduce original witness with frozen Icarus diagnostic RED
+        shell: bash
+        run: |
+          set -uo pipefail
+          python3 smoke/e5_s1_native_replay.py v3 native-replay > native-replay/icarus-reproduction.log 2>&1
+          rc=$?
+          set -e
+          printf 'icarus_original_exit=%d\n' "$rc" | tee native-replay/icarus-original-exit.txt
+          test "$rc" -eq 1
+          grep -q 'X or Z in native output' native-replay/icarus-reproduction.log
+          grep -q 'found no sensitivities' native-replay/compile.log
+          grep -q '^TRACE 2 .*x' native-replay/simulation.log
+          printf '%s\n' \
+            'e4bca93c1ed20dd9d92fcc79e803550d778f01764f1825a0380a8e060f082be3  native-replay/witness_vectors.json' \
+            'c4be215499857b3396e4652bc33e53e88b3447d6623be055bdc545d8ab4847c5  native-replay/native_replay_tb.sv' \
+            '340254abd12b605d272ccd7896001d47182846f80b3b4a7e1c7afd3b781d981e  native-replay/observed_cycle_witness_query.smt2' | sha256sum -c - | tee native-replay/frozen-witness-identity.log
+      - name: Independently compile EXACT original source with Verilator
+        run: |
+          set -euo pipefail
+          verilator --binary --timing --top-module tb -Wno-fatal \
+            --Mdir native-replay/verilator_obj -o native_replay_verilator \
+            v3/E_removed/pipemem.v native-replay/native_replay_tb.sv \
+            > native-replay/verilator_compile.log 2>&1
+          native-replay/verilator_obj/native_replay_verilator \
+            > native-replay/verilator_simulation.log 2>&1
+          python3 smoke/e5_s1_verilator_audit.py native-replay v3/E_removed/pipemem.v \
+            | tee native-replay/verilator_runner_summary.log
+      - name: Preserve full GREEN or RED original evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e5-s1-native-verilator-frozen-witness-v1
+          path: |
+            native-replay/
+            v3/incremental/QUERY_MANIFEST.json
+          if-no-files-found: warn
+          retention-days: 90
