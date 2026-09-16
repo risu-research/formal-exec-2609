@@ -1,1 +1,4 @@
-trigger frozen G9 C1 build preflight v5 amendment06 git
+trigger frozen G9 C1 build preflight v6 amendment07 dtc failfast
+private implementation freeze=9b386e5f7798f080654d1455cb281aa3536046ad
+v5 cancelled diagnostic=ef88cc608f6aca6b3e4a27bd1c2638070c0e955d
+science unchanged; build-only, no Qmask/Qfail
