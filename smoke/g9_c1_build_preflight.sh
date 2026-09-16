@@ -63,7 +63,7 @@ docker run --rm \
   -w /work \
   -e RISCV=/tmp/riscv \
   "$JAVA8_IMAGE" \
-  bash -lc 'set -euo pipefail; apt-get update >/dev/null; DEBIAN_FRONTEND=noninteractive apt-get install -y make >/dev/null; dpkg-query -W -f="${Package}=${Version}\n" make > /evidence/container-make-package.txt; make --version > /evidence/container-make-version.txt; mkdir -p /tmp/riscv; make -C vsim verilog CONFIG=DefaultConfigWithRVFIMonitors'
+  bash -lc 'set -euo pipefail; apt-get update >/dev/null; DEBIAN_FRONTEND=noninteractive apt-get install -y make >/dev/null; dpkg-query -W -f="\${Package}=\${Version}\n" make > /evidence/container-make-package.txt; make --version > /evidence/container-make-version.txt; mkdir -p /tmp/riscv; make -C vsim verilog CONFIG=DefaultConfigWithRVFIMonitors'
 
 GEN="$ROCKET/vsim/generated-src"
 VFILE="$GEN/rocketchip.DefaultConfigWithRVFIMonitors.v"
