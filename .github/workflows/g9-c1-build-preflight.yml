@@ -28,7 +28,7 @@ jobs:
       - name: Enforce preflight source identity
         run: |
           set -euo pipefail
-          test "$(git hash-object smoke/g9_c1_build_preflight.sh)" = 'PLACEHOLDER_PREFLIGHT_BLOB'
+          test "$(git hash-object smoke/g9_c1_build_preflight.sh)" = '76ebd465e62e0bee7e405e8705c1b8d155958572'
           bash -n smoke/g9_c1_build_preflight.sh
 
       - name: Execute build-only preflight
