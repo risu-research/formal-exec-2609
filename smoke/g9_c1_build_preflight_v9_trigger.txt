@@ -1,0 +1,4 @@
+G9 C1 V9 exact-byte alias-only build trigger.
+Prospective Amendment10 de0b6962ab8c457bb680415b9bf39ed15a31d308.
+Pre-result V9 implementation freeze aeba4037206111a844a30a12065d0dc1fcdd528c.
+No carrier Qmask/Qfail claim by build preflight.
