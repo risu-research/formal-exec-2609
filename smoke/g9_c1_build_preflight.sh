@@ -80,7 +80,7 @@ docker run --rm \
 
     apt-get update >/dev/null
     DEBIAN_FRONTEND=noninteractive apt-get install -y "$MAKE_PACKAGE" >/dev/null
-    dpkg-query -W -f="${Package}=${Version}\n" make > /evidence/container-make-package.txt
+    dpkg-query -W -f="\${Package}=\${Version}\n" make > /evidence/container-make-package.txt
     make --version > /evidence/container-make-version.txt
 
     cat > /work/g9-repositories <<"EOF"
