@@ -6,6 +6,7 @@ ROOT=$(pwd)
 RISCV_SHA=1150bba16a44ec4cb741982695fe1ca4cc4cdcfd
 ROCKET_SHA=3ce023df7fbfc55b1eb78874b5a7780221fe242f
 JAVA8_IMAGE='eclipse-temurin@sha256:5759e5329a0983257ca7276540563f4559704f12753ecfb56b1b1794eb2b37b3'
+MAKE_PACKAGE='make=4.4.1-3'
 
 rm -rf "$OUT" /tmp/g9-c1-riscv
 mkdir -p "$OUT"
@@ -55,15 +56,52 @@ docker run --rm "$JAVA8_IMAGE" java -version > "$OUT/java8-version.txt" 2>&1
 
 grep -q '5759e5329a0983257ca7276540563f4559704f12753ecfb56b1b1794eb2b37b3' "$OUT/java8-repodigests.json"
 
-# Generate exact successor Rocket Verilog. Install only the missing build utility
-# inside the exact pinned runtime; record the package and make versions.
+# Generate exact successor Rocket Verilog. Amendment05 changes repository
+# transport only: exact historical SBT/Scala/build/dependency coordinates remain.
 docker run --rm \
   -v "$ROCKET":/work \
   -v "$OUT_ABS":/evidence \
   -w /work \
   -e RISCV=/tmp/riscv \
+  -e MAKE_PACKAGE="$MAKE_PACKAGE" \
   "$JAVA8_IMAGE" \
-  bash -lc 'set -euo pipefail; apt-get update >/dev/null; DEBIAN_FRONTEND=noninteractive apt-get install -y make >/dev/null; dpkg-query -W -f="\${Package}=\${Version}\n" make > /evidence/container-make-package.txt; make --version > /evidence/container-make-version.txt; mkdir -p /tmp/riscv; make -C vsim verilog CONFIG=DefaultConfigWithRVFIMonitors'
+  bash -lc '
+    set -euo pipefail
+    inventory() {
+      set +e
+      cd /root
+      find .ivy2 .sbt .cache/coursier -type f -print0 2>/dev/null \
+        | sort -z \
+        | xargs -0 -r sha256sum \
+        > /evidence/dependency-cache-sha256.txt
+      cd /work
+    }
+    trap inventory EXIT
+
+    apt-get update >/dev/null
+    DEBIAN_FRONTEND=noninteractive apt-get install -y "$MAKE_PACKAGE" >/dev/null
+    dpkg-query -W -f="${Package}=${Version}\n" make > /evidence/container-make-package.txt
+    make --version > /evidence/container-make-version.txt
+
+    cat > /work/g9-repositories <<"EOF"
+[repositories]
+local
+maven-central: https://repo1.maven.org/maven2/
+sbt-plugin-releases: https://repo.scala-sbt.org/scalasbt/sbt-plugin-releases/, [organization]/[module]/(scala_[scalaVersion]/)(sbt_[sbtVersion]/)[revision]/[type]s/[artifact](-[classifier]).[ext]
+EOF
+    cp /work/g9-repositories /evidence/g9-repositories.txt
+    sha256sum /work/g9-repositories > /evidence/g9-repositories.sha256
+    sha256sum /work/sbt-launch.jar > /evidence/sbt-launch-sha256.txt
+    printf "%s\n" "sbt=1.1.1" "scala=2.12.4" > /evidence/sbt-scala-expected.txt
+    printf "%s\n" "T1_ONLY" > /evidence/dependency-transport-mode.txt
+    printf "%s\n" "{\"mode\":\"T1\",\"entries\":[]}" > /evidence/t2-mirror-manifest.json
+
+    SBT_CMD="java -Xmx2G -Xss8M -XX:MaxPermSize=256M -Dsbt.override.build.repos=true -Dsbt.repository.config=/work/g9-repositories -jar /work/sbt-launch.jar ++2.12.4"
+    printf "%s\n" "$SBT_CMD" > /evidence/sbt-invocation.txt
+
+    mkdir -p /tmp/riscv
+    make -C vsim verilog CONFIG=DefaultConfigWithRVFIMonitors SBT="$SBT_CMD"
+  '
 
 GEN="$ROCKET/vsim/generated-src"
 VFILE="$GEN/rocketchip.DefaultConfigWithRVFIMonitors.v"
