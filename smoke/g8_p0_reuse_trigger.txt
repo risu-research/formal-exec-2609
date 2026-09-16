@@ -1,0 +1,1 @@
+trigger first frozen G8 Amendment01 exact P0 reuse execution
