@@ -1,0 +1,134 @@
+name: e5-s1-uninstrumented-pin-check
+on:
+  push:
+    paths:
+      - .github/workflows/e5-s1-uninstrumented-pin-check.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  independent-pin-check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install separate solvers and record toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y yosys z3 unzip curl python3 git
+          mkdir -p pin-check/tool /tmp/e5-cvc5
+          curl -L --fail --retry 3 -o /tmp/e5-cvc5.zip https://github.com/cvc5/cvc5/releases/download/cvc5-1.3.4/cvc5-Linux-x86_64-static.zip
+          echo 'dcdbfada0ce493ee98259c0816e0daafc561c223aadb3af298c2968e73ea39c6  /tmp/e5-cvc5.zip' | sha256sum -c -
+          CVC5=$(find /tmp/e5-cvc5 -type f -name cvc5 | head -n1)
+          test -x "$CVC5"
+          echo "CVC5=$CVC5" >> "$GITHUB_ENV"
+          {
+            yosys -V
+            z3 --version
+            "$CVC5" --version
+            sha256sum "$(command -v yosys)" "$(command -v z3)" "$CVC5" /tmp/e5-cvc5.zip
+            sha256sum smoke/e5_s1_uninstrumented_pin_check.py
+            git rev-parse HEAD
+          } > pin-check/tool/toolchain.txt
+      - name: Rebuild both uninstrumented arms from exact historical child
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone https://github.com/ZipCPU/zipcpu.git /tmp/e5-s1-origin
+          git -C /tmp/e5-s1-origin worktree add --detach /tmp/e5-s1-removed d511239e19be8fcc7f340a64554ea93699637e62
+          git -C /tmp/e5-s1-origin worktree add --detach /tmp/e5-s1-restored d511239e19be8fcc7f340a64554ea93699637e62
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib,subprocess
+          child='d511239e19be8fcc7f340a64554ea93699637e62'
+          old='//always @(posedge i_clk)\n//\tif ((f_past_valid)&&($past(f_cyc))&&(!$past(i_lock)))\n//\t\t`ASSUME(!i_lock);\n'
+          new='\talways @(posedge i_clk)\n\tif ((f_past_valid)&&($past(f_cyc))&&(!$past(i_lock)))\n\t\t`ASSUME(!i_lock);\n'
+          for arm,src in [('E_removed',Path('/tmp/e5-s1-removed')),('E_restored',Path('/tmp/e5-s1-restored'))]:
+            out=Path('pin-check')/arm;out.mkdir(parents=True,exist_ok=True)
+            head=subprocess.check_output(['git','-C',str(src),'rev-parse','HEAD'],text=True).strip()
+            assert head==child,head
+            p=src/'rtl/core/pipemem.v'; ys=src/'bench/formal/pipemem.ys'
+            def gitblob(f):return subprocess.check_output(['git','-C',str(src),'hash-object',str(f)],text=True).strip()
+            assert gitblob(p)=='60f5c6c75e2f396ccb7391d6ea1c3c6f55fec22b'
+            assert gitblob(ys)=='7d50d1c975eec1b94e70b4cbcadd62ce81085f7d'
+            assert hashlib.sha256(p.read_bytes()).hexdigest()=='7238c0ff1c735c8dd467ec0ba9c3acc6a91ddd7bd1cc8268a3d4cffca0d61abc'
+            helper=src/'rtl/ex/fwb_master.v'
+            assert hashlib.sha256(helper.read_bytes()).hexdigest()=='b8938883120bf392af64d5166d3381a825597ba44d75467681436382897f9b9d'
+            body=p.read_text();assert body.count(old)==1 and 'f_s1_onset' not in body and 'cover(' not in body
+            if arm=='E_restored':p.write_text(body.replace(old,new,1))
+            script=ys.read_text();assert script.count('write_smt2 -wires pipemem.smt2')==1
+            ys.write_text(script.replace('write_smt2 -wires pipemem.smt2','dffunmap\nwrite_smt2 -wires pipemem.smt2',1))
+            (out/'pipemem.v').write_bytes(p.read_bytes())
+            (out/'actual-task.ys').write_bytes(ys.read_bytes())
+            (out/'source-identity.txt').write_text('child='+head+'\noriginal_blob=60f5c6c75e2f396ccb7391d6ea1c3c6f55fec22b\nhelper_sha256=b8938883120bf392af64d5166d3381a825597ba44d75467681436382897f9b9d\n')
+          PY
+          for arm in E_removed E_restored; do
+            src="/tmp/e5-s1-${arm#E_}"
+            (cd "$src/bench/formal"; yosys -ql "$GITHUB_WORKSPACE/pin-check/$arm/yosys.log" -s pipemem.ys)
+            cp "$src/bench/formal/pipemem.smt2" "pin-check/$arm/pipemem.smt2"
+          done
+          python3 smoke/e5_s1_uninstrumented_pin_check.py pin-check | tee pin-check/query-summary.log
+      - name: Run pin-only queries under two independent solvers
+        shell: bash
+        run: |
+          set -uo pipefail
+          mkdir -p pin-check/solvers
+          for arm in E_removed E_restored; do
+            for mode in pin_any observed_cycle negative_control; do
+              for solver in cvc5 z3; do
+                src="pin-check/$arm/$mode.smt2"
+                log="pin-check/solvers/${arm}_${mode}_${solver}.log"
+                rcfile="pin-check/solvers/${arm}_${mode}_${solver}.rc"
+                if [[ "$solver" = cvc5 ]]; then
+                  timeout --signal=TERM --kill-after=10s 90s "$CVC5" --lang smt2 "$src" > "$log" 2>&1
+                else
+                  timeout --signal=TERM --kill-after=10s 90s z3 -smt2 "$src" > "$log" 2>&1
+                fi
+                echo "$?" > "$rcfile"
+                printf '%s %s %s: ' "$arm" "$mode" "$solver"
+                head -n 1 "$log" || true
+              done
+            done
+          done
+      - name: Seal result and distinguish scientific verdict from runner success
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib,json
+          base=Path('pin-check');rows={};complete=True
+          for arm in ('E_removed','E_restored'):
+            rows[arm]={}
+            for mode in ('pin_any','observed_cycle','negative_control'):
+              rows[arm][mode]={}
+              for solver in ('cvc5','z3'):
+                stem=base/'solvers'/f'{arm}_{mode}_{solver}'
+                l=Path(str(stem)+'.log');r=Path(str(stem)+'.rc')
+                output=l.read_text() if l.exists() else ''
+                nonempty=[x.strip() for x in output.splitlines() if x.strip()]
+                status=next((x for x in nonempty if x in ('sat','unsat','unknown')),'MISSING')
+                rc=r.read_text().strip() if r.exists() else 'MISSING'
+                rows[arm][mode][solver]={'status':status,'exit':rc,'sha256':hashlib.sha256(output.encode()).hexdigest()}
+                complete &= status in ('sat','unsat') and rc=='0'
+          consistent=complete and all(rows[arm][mode]['cvc5']['status']==rows[arm][mode]['z3']['status'] for arm in rows for mode in rows[arm])
+          controls=consistent and all(rows[arm]['negative_control']['cvc5']['status']=='unsat' for arm in rows)
+          expected=controls and rows['E_removed']['observed_cycle']['cvc5']['status']=='sat' and rows['E_restored']['observed_cycle']['cvc5']['status']=='unsat'
+          pin_any={arm:rows[arm]['pin_any']['cvc5']['status'] for arm in rows}
+          verdict=('MONITOR_FREE_PIN_CROSSOVER_REPLAY_CONFIRMED' if expected else 'MONITOR_FREE_PIN_CROSSOVER_UNRESOLVED')
+          if expected and pin_any=={'E_removed':'sat','E_restored':'unsat'}:verdict='MONITOR_FREE_OUTPUT_REACHABILITY_DIFFERENCE_CONFIRMED'
+          out={'schema':'e5-s1-monitor-free-dual-solver-v1','class':verdict,'pin_any':pin_any,'both_solvers_agree':consistent,'negative_controls_pass':controls,'no_original_property_failure_claim':True,'posthoc_observed_cycle':True,'rows':rows}
+          (base/'VERDICT.json').write_text(json.dumps(out,indent=2,sort_keys=True)+'\n')
+          print(json.dumps(out,indent=2,sort_keys=True))
+          PY
+          cd pin-check
+          find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 -r sha256sum > SHA256SUMS
+      - name: Upload data including any failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e5-s1-uninstrumented-pin-evidence
+          path: pin-check/
+          if-no-files-found: error
