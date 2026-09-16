@@ -12,7 +12,7 @@ jobs:
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
-      - name: Install separate solvers and record toolchain
+      - name: Install pinned cvc5 and independent Z3
         shell: bash
         run: |
           set -euo pipefail
@@ -21,6 +21,7 @@ jobs:
           mkdir -p pin-check/tool /tmp/e5-cvc5
           curl -L --fail --retry 3 -o /tmp/e5-cvc5.zip https://github.com/cvc5/cvc5/releases/download/cvc5-1.3.4/cvc5-Linux-x86_64-static.zip
           echo 'dcdbfada0ce493ee98259c0816e0daafc561c223aadb3af298c2968e73ea39c6  /tmp/e5-cvc5.zip' | sha256sum -c -
+          unzip -q /tmp/e5-cvc5.zip -d /tmp/e5-cvc5
           CVC5=$(find /tmp/e5-cvc5 -type f -name cvc5 | head -n1)
           test -x "$CVC5"
           echo "CVC5=$CVC5" >> "$GITHUB_ENV"
@@ -29,10 +30,10 @@ jobs:
             z3 --version
             "$CVC5" --version
             sha256sum "$(command -v yosys)" "$(command -v z3)" "$CVC5" /tmp/e5-cvc5.zip
-            sha256sum smoke/e5_s1_uninstrumented_pin_check.py
+            sha256sum smoke/e5_s1_uninstrumented_pin_check.py .github/workflows/e5-s1-uninstrumented-pin-check.yml
             git rev-parse HEAD
           } > pin-check/tool/toolchain.txt
-      - name: Rebuild both uninstrumented arms from exact historical child
+      - name: Rebuild two monitor-free models from the exact original child
         shell: bash
         run: |
           set -euo pipefail
@@ -70,13 +71,15 @@ jobs:
             cp "$src/bench/formal/pipemem.smt2" "pin-check/$arm/pipemem.smt2"
           done
           python3 smoke/e5_s1_uninstrumented_pin_check.py pin-check | tee pin-check/query-summary.log
-      - name: Run pin-only queries under two independent solvers
+          ! grep -F '(assert (not (|pipemem_is| |q1|)))' pin-check/E_removed/pin_any.smt2
+          ! grep -F '(get-value' pin-check/E_restored/observed_cycle.smt2
+      - name: Solve independent DUT-output and helper queries in Z3 and cvc5
         shell: bash
         run: |
           set -uo pipefail
           mkdir -p pin-check/solvers
           for arm in E_removed E_restored; do
-            for mode in pin_any observed_cycle negative_control; do
+            for mode in pin_any output_only_any observed_cycle negative_control; do
               for solver in cvc5 z3; do
                 src="pin-check/$arm/$mode.smt2"
                 log="pin-check/solvers/${arm}_${mode}_${solver}.log"
@@ -92,7 +95,7 @@ jobs:
               done
             done
           done
-      - name: Seal result and distinguish scientific verdict from runner success
+      - name: Seal complete evidence, never conflate CI success with verdict
         if: always()
         shell: bash
         run: |
@@ -102,7 +105,7 @@ jobs:
           base=Path('pin-check');rows={};complete=True
           for arm in ('E_removed','E_restored'):
             rows[arm]={}
-            for mode in ('pin_any','observed_cycle','negative_control'):
+            for mode in ('pin_any','output_only_any','observed_cycle','negative_control'):
               rows[arm][mode]={}
               for solver in ('cvc5','z3'):
                 stem=base/'solvers'/f'{arm}_{mode}_{solver}'
@@ -117,15 +120,19 @@ jobs:
           controls=consistent and all(rows[arm]['negative_control']['cvc5']['status']=='unsat' for arm in rows)
           expected=controls and rows['E_removed']['observed_cycle']['cvc5']['status']=='sat' and rows['E_restored']['observed_cycle']['cvc5']['status']=='unsat'
           pin_any={arm:rows[arm]['pin_any']['cvc5']['status'] for arm in rows}
-          verdict=('MONITOR_FREE_PIN_CROSSOVER_REPLAY_CONFIRMED' if expected else 'MONITOR_FREE_PIN_CROSSOVER_UNRESOLVED')
-          if expected and pin_any=={'E_removed':'sat','E_restored':'unsat'}:verdict='MONITOR_FREE_OUTPUT_REACHABILITY_DIFFERENCE_CONFIRMED'
-          out={'schema':'e5-s1-monitor-free-dual-solver-v1','class':verdict,'pin_any':pin_any,'both_solvers_agree':consistent,'negative_controls_pass':controls,'no_original_property_failure_claim':True,'posthoc_observed_cycle':True,'rows':rows}
+          output_only={arm:rows[arm]['output_only_any']['cvc5']['status'] for arm in rows}
+          verdict=('MONITOR_FREE_OBSERVED_CYCLE_REPLAY_CONFIRMED' if expected else 'MONITOR_FREE_CROSSOVER_UNRESOLVED')
+          if expected and pin_any=={'E_removed':'sat','E_restored':'unsat'}:
+            verdict='MONITOR_FREE_HELPER_CONSTRAINED_REACHABILITY_DIFFERENCE'
+          if expected and output_only=={'E_removed':'sat','E_restored':'unsat'}:
+            verdict='MONITOR_FREE_DUT_OUTPUT_REACHABILITY_DIFFERENCE'
+          out={'schema':'e5-s1-monitor-free-dual-solver-v2','class':verdict,'pin_any':pin_any,'output_only_any':output_only,'both_solvers_agree':consistent,'negative_controls_pass':controls,'no_original_property_failure_claim':True,'observed_cycle_is_posthoc':True,'rows':rows}
           (base/'VERDICT.json').write_text(json.dumps(out,indent=2,sort_keys=True)+'\n')
           print(json.dumps(out,indent=2,sort_keys=True))
           PY
           cd pin-check
           find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 -r sha256sum > SHA256SUMS
-      - name: Upload data including any failure
+      - name: Upload unmodified evidence even for science or build RED
         if: always()
         uses: actions/upload-artifact@v4
         with:
