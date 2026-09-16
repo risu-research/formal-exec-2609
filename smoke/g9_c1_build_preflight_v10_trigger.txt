@@ -1,0 +1,5 @@
+G9 C1 V10 build-only preflight trigger.
+V9 RED c575017a458a769a279eda9594c03ce4d95b0051.
+Prospective Amendment11 65cf45423259351a2e3bf11ea2468449c4571c71.
+Pre-execution V10 implementation freeze 202a3b302de8dffe653e9ac34cc4abd5c561feb0.
+No Qmask or Qfail verdict claimed.
