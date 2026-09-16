@@ -7,6 +7,7 @@ RISCV_SHA=1150bba16a44ec4cb741982695fe1ca4cc4cdcfd
 ROCKET_SHA=3ce023df7fbfc55b1eb78874b5a7780221fe242f
 JAVA8_IMAGE='eclipse-temurin@sha256:5759e5329a0983257ca7276540563f4559704f12753ecfb56b1b1794eb2b37b3'
 MAKE_PACKAGE='make=4.4.1-3'
+GIT_PACKAGE='git'
 
 rm -rf "$OUT" /tmp/g9-c1-riscv
 mkdir -p "$OUT"
@@ -57,13 +58,15 @@ docker run --rm "$JAVA8_IMAGE" java -version > "$OUT/java8-version.txt" 2>&1
 grep -q '5759e5329a0983257ca7276540563f4559704f12753ecfb56b1b1794eb2b37b3' "$OUT/java8-repodigests.json"
 
 # Generate exact successor Rocket Verilog. Amendment05 changes repository
-# transport only: exact historical SBT/Scala/build/dependency coordinates remain.
+# transport only; Amendment06 adds only the external git executable required
+# by the already-historical sbt-git build plugin.
 docker run --rm \
   -v "$ROCKET":/work \
   -v "$OUT_ABS":/evidence \
   -w /work \
   -e RISCV=/tmp/riscv \
   -e MAKE_PACKAGE="$MAKE_PACKAGE" \
+  -e GIT_PACKAGE="$GIT_PACKAGE" \
   "$JAVA8_IMAGE" \
   bash -lc '
     set -euo pipefail
@@ -78,10 +81,21 @@ docker run --rm \
     }
     trap inventory EXIT
 
+    find /etc/apt -maxdepth 3 -type f -print0 2>/dev/null \
+      | sort -z \
+      | xargs -0 -r sha256sum \
+      > /evidence/apt-source-files-sha256.txt
     apt-get update >/dev/null
-    DEBIAN_FRONTEND=noninteractive apt-get install -y "$MAKE_PACKAGE" >/dev/null
+    apt-cache policy git > /evidence/git-apt-policy.txt
+    apt-get --print-uris --yes install "$GIT_PACKAGE" > /evidence/git-install-uris.txt 2>&1 || true
+    DEBIAN_FRONTEND=noninteractive apt-get install -y "$MAKE_PACKAGE" "$GIT_PACKAGE" >/dev/null
+
     dpkg-query -W -f="\${Package}=\${Version}\n" make > /evidence/container-make-package.txt
     make --version > /evidence/container-make-version.txt
+    dpkg-query -W -f="\${Package}=\${Version}\n" git > /evidence/container-git-package.txt
+    git --version > /evidence/container-git-version.txt
+    command -v git > /evidence/container-git-path.txt
+    sha256sum "$(command -v git)" > /evidence/container-git-binary-sha256.txt
 
     cat > /work/g9-repositories <<"EOF"
 [repositories]
