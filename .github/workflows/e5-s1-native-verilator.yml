@@ -47,6 +47,7 @@ jobs:
       - name: Reproduce original witness with frozen Icarus diagnostic RED
         shell: bash
         run: |
+          set +e
           set -uo pipefail
           python3 smoke/e5_s1_native_replay.py v3 native-replay > native-replay/icarus-reproduction.log 2>&1
           rc=$?
