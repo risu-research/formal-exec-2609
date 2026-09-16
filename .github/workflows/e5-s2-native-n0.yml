@@ -1,0 +1,96 @@
+name: e5-s2-native-n0
+
+on:
+  push:
+    paths:
+      - .github/workflows/e5-s2-native-n0.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native-original-pair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - name: Checkout public execution authority
+        uses: actions/checkout@v4
+      - name: Install formal prerequisites and record exact versions
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$GITHUB_WORKSPACE/e5-s2-n0"
+          sudo apt-get update
+          sudo apt-get install -y yosys boolector git make python3-click
+          git clone https://github.com/YosysHQ/sby.git /tmp/e5-sby
+          cd /tmp/e5-sby
+          git checkout --detach b1a1e98cba941ec8433f8dc27f416cd7bb7f14be
+          test "$(git rev-parse HEAD)" = b1a1e98cba941ec8433f8dc27f416cd7bb7f14be
+          sudo make install
+          {
+            yosys -V
+            boolector --version
+            sby --version || true
+            git --version
+            python3 --version
+            dpkg-query -W yosys boolector python3-click
+            git rev-parse HEAD
+            sha256sum "$(command -v yosys)" "$(command -v boolector)" "$(command -v sby)"
+          } > "$GITHUB_WORKSPACE/e5-s2-n0/toolchain.txt" 2>&1
+      - name: Verify both exact original Git checkouts and unmodified task
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone https://github.com/ZipCPU/zipcpu.git /tmp/e5-zipcpu
+          cd /tmp/e5-zipcpu
+          for item in 'P:894d3a633bc10fe9544cff82923b4b051d6ff98d' 'C:19112823d4bc5b52b3cfb002cc1d67f9498eb521'; do
+            label="${item%%:*}"; commit="${item#*:}"
+            git checkout --detach "$commit"
+            test "$(git rev-parse HEAD)" = "$commit"
+            test "$(git hash-object bench/formal/zipcpu.sby)" = 64dc92a2dead6e3f375ed2b2b3af0f4baa23c1b7
+            test -z "$(git status --porcelain)"
+            printf '%s %s %s\n' "$label" "$commit" "$(sha256sum bench/formal/zipcpu.sby)" >> "$GITHUB_WORKSPACE/e5-s2-n0/original-inputs.txt"
+          done
+      - name: Run frozen lowlogic proof on BOTH originals without stopping after failure
+        id: both
+        shell: bash
+        run: |
+          set -uo pipefail
+          cd /tmp/e5-zipcpu
+          for item in 'P:894d3a633bc10fe9544cff82923b4b051d6ff98d' 'C:19112823d4bc5b52b3cfb002cc1d67f9498eb521'; do
+            label="${item%%:*}"; commit="${item#*:}"
+            mkdir -p "$GITHUB_WORKSPACE/e5-s2-n0/$label"
+            git reset --hard -q
+            git clean -fdx -q
+            git checkout --detach -q "$commit"
+            if [[ "$(git rev-parse HEAD)" != "$commit" || "$(git hash-object bench/formal/zipcpu.sby)" != 64dc92a2dead6e3f375ed2b2b3af0f4baa23c1b7 ]]; then
+              echo IDENTITY_RED > "$GITHUB_WORKSPACE/e5-s2-n0/$label/exit.txt"
+              continue
+            fi
+            cd bench/formal
+            timeout --signal=TERM --kill-after=30s 900s sby -f zipcpu.sby lowlogic > "$GITHUB_WORKSPACE/e5-s2-n0/$label/native.log" 2>&1
+            rc=$?
+            echo "$rc" > "$GITHUB_WORKSPACE/e5-s2-n0/$label/exit.txt"
+            find . -maxdepth 4 -type f \( -name 'status' -o -name 'logfile.txt' -o -name 'logfile' -o -name '*.vcd' -o -name '*.smt2' \) -print0 | while IFS= read -r -d '' f; do
+              mkdir -p "$GITHUB_WORKSPACE/e5-s2-n0/$label/files/$(dirname "$f")"
+              cp "$f" "$GITHUB_WORKSPACE/e5-s2-n0/$label/files/$f" || true
+            done
+            cd /tmp/e5-zipcpu
+          done
+          # A negative native result is evidence, not a reason to hide the second original.
+      - name: Seal and upload positive or negative evidence
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/e5-s2-n0"
+          cd "$GITHUB_WORKSPACE/e5-s2-n0"
+          find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 -r sha256sum > SHA256SUMS
+          printf 'protocol_commit=074cd7d75eb28b4639635d0f116d3480a4519f38\nrun_plan_commit=ca70ecdcfaa46be41987603a79b29c09f469199e\nrunner_head=%s\n' "$GITHUB_SHA" > execution-provenance.txt
+      - name: Upload unmodified native original proof artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e5-s2-native-n0-evidence
+          path: e5-s2-n0/
+          if-no-files-found: error
