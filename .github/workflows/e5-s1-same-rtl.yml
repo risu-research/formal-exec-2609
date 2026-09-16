@@ -1,0 +1,50 @@
+name: e5-s1-same-rtl-functional
+
+on:
+  push:
+    paths:
+      - .github/workflows/e5-s1-same-rtl.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  same-rtl:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 22
+    steps:
+      - name: Checkout public study script
+        uses: actions/checkout@v4
+      - name: Install toolchain and record immutable source identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$GITHUB_WORKSPACE/e5-s1-same-rtl"
+          sudo apt-get update
+          sudo apt-get install -y yosys z3 git python3
+          {
+            yosys -V
+            z3 --version
+            git --version
+            python3 --version
+            dpkg-query -W yosys z3
+            sha256sum "$(command -v yosys)" "$(command -v yosys-smtbmc)" "$(command -v z3)"
+          } > "$GITHUB_WORKSPACE/e5-s1-same-rtl/toolchain.txt" 2>&1
+          printf 'protocol_commit=9c08db70af060ad2a1dfdd42fcdb4acb2bc5bf20\nrunner_commit=%s\nscript_git_blob=%s\n' "$GITHUB_SHA" "$(git hash-object smoke/e5_s1_same_rtl.py)" > "$GITHUB_WORKSPACE/e5-s1-same-rtl/provenance.txt"
+          test "$(git hash-object smoke/e5_s1_same_rtl.py)" = 3e4a633b38998bd01fdfaac57fadd6a77990d1b7
+          git clone https://github.com/ZipCPU/zipcpu.git /tmp/e5-s1-zipcpu
+          git -C /tmp/e5-s1-zipcpu checkout --detach d511239e19be8fcc7f340a64554ea93699637e62
+          test "$(git -C /tmp/e5-s1-zipcpu rev-parse HEAD)" = d511239e19be8fcc7f340a64554ea93699637e62
+      - name: Execute both arms, preserve negative outcomes
+        shell: bash
+        run: |
+          python3 smoke/e5_s1_same_rtl.py
+          cat e5-s1-same-rtl/result.json
+      - name: Upload audit evidence even for a tool or scientific RED
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e5-s1-same-rtl-functional-evidence
+          path: e5-s1-same-rtl/
+          if-no-files-found: error
