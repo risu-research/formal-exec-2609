@@ -1,0 +1,7 @@
+# E5 S1 V3 first replay — partial diagnostic RED, not a scientific verdict
+
+Prospectively frozen protocol: `bef7ecaa0c6186bc4958dd9a4101dd100b91268c`; initial implementation: `77eb4e7bef9d55fb37b0ddbf2866a7ba5303a13f`; workflow trigger: `6b00c170cc14e4628a397fbca729ecacc022e615`; run `35127091646`.
+
+The two cvc5 jobs reported CI success but their stored full-bound and prefix reachability logs both contain `(error "cannot push when not solving incrementally (use --incremental)")`. The contradictory negative controls and post-hoc observed-cycle queries ran without `push`, returned UNSAT for the restored arm, but do not license promotion of any missing target result. The ZIP for restored cvc5 artifact `10460045216` independently matched GitHub SHA-256 `bc12f1f219b530cc45975b1d087ba21bdb72e1f2548afdf7ae36cb04597044b6`; the ZIP for removed cvc5 artifact `10459802542` independently matched `987b01dff6908658035eedfc274dd5cdce63a610a8a03b41d881d085913c7fbf`. Their `SHA256SUMS` incorrectly includes `runner-summary.log` while it is still being written by `tee`, so its hash fails after upload even though the other checked entries pass. Preserve both original ZIPs, never repair them in place.
+
+Z3 jobs were still in progress at the time of this RED record; their outcomes remain separate and must be audited before any scientific claim. No cvc5 SAT/UNSAT conclusion exists for any incremental target; no source/model/target/horizon change is authorized.
