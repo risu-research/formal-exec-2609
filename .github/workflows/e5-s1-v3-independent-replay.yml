@@ -1,4 +1,5 @@
 name: e5-s1-v3-independent-replay
+# Amendment01: cvc5 --incremental, stable checksums, truthful missing-result exit.
 "on":
   push:
     branches:
