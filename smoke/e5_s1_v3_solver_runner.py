@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Replay already frozen v3 incremental SMT2 queries without altering models/targets.
+"""Replay unchanged v3 incremental SMT2 queries, six-state and forty-state.
 
-A short prefix is q0..q5; the original full bound is q0..q39. Timeouts
-and partial check-sat outputs are NOT non-reachability certificates.
+Execution-only Amendment01 after documented first-run diagnostic RED.
+Timeouts/partial results never certify non-reachability.
 """
 import hashlib
 import json
@@ -19,12 +19,13 @@ assert arm in ('E_removed', 'E_restored')
 assert solver in ('z3', 'cvc5')
 assert (root/'incremental/QUERY_MANIFEST.json').is_file()
 out.mkdir(parents=True, exist_ok=True)
-program = {'z3':['z3', '-smt2'], 'cvc5':['cvc5', '--lang', 'smt2']}[solver]
+program = {'z3':['z3', '-smt2'], 'cvc5':['cvc5', '--incremental', '--lang', 'smt2']}[solver]
 version = subprocess.run([program[0], '--version'], capture_output=True, text=True, timeout=15)
 assert version.returncode == 0
 results = {'schema':'e5-s1-v3-dual-horizon-runner-v1', 'arm':arm, 'solver':solver,
            'version':version.stdout.strip(), 'source_commit':'d511239e19be8fcc7f340a64554ea93699637e62',
            'prior_run':35122112448, 'frozen_protocol_commit':'bef7ecaa0c6186bc4958dd9a4101dd100b91268c',
+           'execution_amendment_commit':'1824e439ca32a85d85a25a5fda5f6e41e1dae0d9',
            'queries':{}}
 manifest = json.loads((root/'incremental/QUERY_MANIFEST.json').read_text())
 assert manifest['schema'] == 'e5-s1-incremental-monitor-free-v3'
@@ -86,8 +87,11 @@ for mode, short in [('negative_control', False), ('observed_cycle',False),
     print(json.dumps({'arm':arm,'solver':solver,'mode':label,'seconds':seconds,'complete':clean,
                       'checks':len(statuses),'first':statuses[:7]},sort_keys=True),flush=True)
 
-(root/'incremental/QUERY_MANIFEST.json').exists() or sys.exit(2)
+# runner-summary.log is concurrently written by tee; never hash it prematurely.
 (out/'SHA256SUMS').write_text(''.join(
     f'{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.name}\n'
-    for p in sorted(out.iterdir()) if p.is_file() and p.name != 'SHA256SUMS'))
-print('RUNNER_DONE; science verdict requires cross-arm/cross-solver independent audit',flush=True)
+    for p in sorted(out.iterdir()) if p.is_file() and p.name not in ('SHA256SUMS','runner-summary.log')))
+all_complete = all(row['complete'] for row in results['queries'].values())
+print('RUNNER_DONE science verdict requires independent cross-arm/cross-solver audit; all_complete='+str(all_complete),flush=True)
+if not all_complete:
+    sys.exit(2)
