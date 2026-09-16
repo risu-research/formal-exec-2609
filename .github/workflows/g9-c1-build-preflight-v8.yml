@@ -1,0 +1,98 @@
+name: g9-c1-build-preflight-v8
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'smoke/g9_c1_build_preflight_v8_trigger.txt'
+
+permissions:
+  contents: read
+
+jobs:
+  build-preflight-v8:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - name: Checkout public runner
+        uses: actions/checkout@v4
+
+      - name: Install host dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y git make yosys python3 gzip
+          yosys -V
+          docker --version
+
+      - name: Enforce all frozen runner and patcher identities
+        run: |
+          set -euo pipefail
+          test "$(git hash-object smoke/g9_c1_build_preflight.sh)" = '0d0a91eb57739228c4a2141126c1487ae8d81bf6'
+          test "$(git hash-object smoke/g9_c1_amendment07_patch.py)" = 'f2dc7353a1728ff84b300318bc270688f399d4a3'
+          test "$(git hash-object smoke/g9_c1_amendment08_patch.py)" = '4a0b539bc568f7243c1831d4020241a28fbc7bd0'
+          test "$(git hash-object smoke/g9_c1_amendment09_patch.py)" = '66448414ebe8c4a475fa4dbeab348b156f07ae51'
+          python3 -m py_compile smoke/g9_c1_amendment07_patch.py smoke/g9_c1_amendment08_patch.py smoke/g9_c1_amendment09_patch.py
+          bash -n smoke/g9_c1_build_preflight.sh
+
+      - name: Derive exact V6 V7 V8 and enforce Amendment09 scope
+        run: |
+          set -euo pipefail
+          python3 smoke/g9_c1_amendment07_patch.py smoke/g9_c1_build_preflight.sh smoke/g9_c1_build_preflight_v6.sh g9-c1-v6.patch > g9-c1-v6-derivation.json
+          test "$(git hash-object smoke/g9_c1_build_preflight_v6.sh)" = '5536b46074b07fd94c3f3392fea72f946cd97819'
+          python3 smoke/g9_c1_amendment08_patch.py smoke/g9_c1_build_preflight_v6.sh smoke/g9_c1_build_preflight_v7.sh g9-c1-v7.patch > g9-c1-v7-derivation.json
+          test "$(git hash-object smoke/g9_c1_build_preflight_v7.sh)" = 'ada4af1131806c48bdc8556341e12320829a33d3'
+          python3 smoke/g9_c1_amendment09_patch.py smoke/g9_c1_build_preflight_v7.sh smoke/g9_c1_build_preflight_v8.sh g9-c1-v8.patch > g9-c1-v8-derivation.json
+          bash -n smoke/g9_c1_build_preflight_v6.sh smoke/g9_c1_build_preflight_v7.sh smoke/g9_c1_build_preflight_v8.sh
+          python3 - <<'PY'
+          import json, subprocess
+          a=[json.load(open('g9-c1-'+v+'-derivation.json',encoding='utf-8')) for v in ('v6','v7','v8')]
+          assert a[0]['v5_blob']=='0d0a91eb57739228c4a2141126c1487ae8d81bf6'
+          assert a[0]['v6_blob']==a[1]['v6_blob']=='5536b46074b07fd94c3f3392fea72f946cd97819'
+          assert a[1]['v7_blob']==a[2]['v7_blob']=='ada4af1131806c48bdc8556341e12320829a33d3'
+          assert [x['replacements'] for x in a]==[7,6,3]
+          assert subprocess.check_output(['git','hash-object','smoke/g9_c1_build_preflight_v8.sh'],text=True).strip()==a[2]['v8_blob']
+          patch=open('g9-c1-v8.patch',encoding='utf-8').read()
+          assert 'freechips.rocketchip.system.DefaultConfigWithRVFIMonitors' in patch
+          assert 'generated-rocket-verilog.v.gz' in patch and 'generated-behavioral-sram.v.gz' in patch
+          assert 'RISCV_SHA=' not in patch and 'ROCKET_SHA=' not in patch and 'JAVA8_IMAGE=' not in patch
+          print('G9_C1_V8_DERIVATION_PASS',a[2]['v8_blob'])
+          PY
+
+      - name: Execute build-only V8 preflight
+        run: |
+          set -uo pipefail
+          chmod +x smoke/g9_c1_build_preflight_v8.sh
+          set +e
+          ./smoke/g9_c1_build_preflight_v8.sh g9-c1-build-out 2>&1 | tee g9-c1-build.log
+          rc=${PIPESTATUS[0]}
+          set -e
+          exit "$rc"
+
+      - name: Seal immutable inputs and diagnostics
+        if: always()
+        run: |
+          mkdir -p g9-c1-build-out
+          if test -f g9-c1-build.log; then cp g9-c1-build.log g9-c1-build-out/runner.log; fi
+          for name in v6 v7 v8; do
+            if test -f "g9-c1-${name}.patch"; then cp "g9-c1-${name}.patch" "g9-c1-build-out/${name}-source.patch"; fi
+            if test -f "g9-c1-${name}-derivation.json"; then cp "g9-c1-${name}-derivation.json" "g9-c1-build-out/${name}-derivation.json"; fi
+          done
+          printf '%s\n' "$GITHUB_SHA" > g9-c1-build-out/public-runner-head.txt
+          printf '%s\n' '0c852d9c5c3e46cde2504b23d9979296d6cda236' > g9-c1-build-out/g9-c1-carrier-protocol.txt
+          printf '%s\n' '018bfa3583b9bff99e4c4933e2961031ea51da0f' > g9-c1-build-out/g9-v7-filename-red-closure.txt
+          printf '%s\n' 'da33d4a945fa41e1d44f2cb33bd7cbe777d41feb' > g9-c1-build-out/g9-build-amendment09-frozen.txt
+          for path in smoke/g9_c1_build_preflight.sh smoke/g9_c1_amendment07_patch.py smoke/g9_c1_amendment08_patch.py smoke/g9_c1_amendment09_patch.py smoke/g9_c1_build_preflight_v6.sh smoke/g9_c1_build_preflight_v7.sh smoke/g9_c1_build_preflight_v8.sh; do
+            if test -f "$path"; then printf '%s ' "$path" >> g9-c1-build-out/runner-and-patcher-blobs.txt; git hash-object "$path" >> g9-c1-build-out/runner-and-patcher-blobs.txt; fi
+          done
+          git hash-object .github/workflows/g9-c1-build-preflight-v8.yml > g9-c1-build-out/workflow-v8-blob.txt
+          find g9-c1-build-out -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > g9-c1-build-out/SHA256SUMS.txt || true
+
+      - name: Upload V8 build preflight evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: g9-c1-build-preflight-v8-evidence
+          path: g9-c1-build-out/
+          if-no-files-found: error
+          retention-days: 90
