@@ -28,15 +28,20 @@ jobs:
       - name: Enforce preflight source identity
         run: |
           set -euo pipefail
-          test "$(git hash-object smoke/g9_c1_build_preflight.sh)" = 'fcdc05903096957096233187134001c06358eba0'
+          test "$(git hash-object smoke/g9_c1_build_preflight.sh)" = '346e812dd4d54504f9351bddc2167118ac22f779'
           bash -n smoke/g9_c1_build_preflight.sh
 
       - name: Execute build-only preflight
         run: |
-          set -euo pipefail
+          set -uo pipefail
           chmod +x smoke/g9_c1_build_preflight.sh
-          ./smoke/g9_c1_build_preflight.sh g9-c1-build-out | tee g9-c1-build.log
+          set +e
+          ./smoke/g9_c1_build_preflight.sh g9-c1-build-out 2>&1 | tee g9-c1-build.log
+          rc=${PIPESTATUS[0]}
+          set -e
+          mkdir -p g9-c1-build-out
           cp g9-c1-build.log g9-c1-build-out/runner.log
+          exit "$rc"
 
       - name: Seal provenance
         if: always()
@@ -46,7 +51,9 @@ jobs:
           printf '%s\n' '0c852d9c5c3e46cde2504b23d9979296d6cda236' > g9-c1-build-out/g9-c1-carrier-protocol.txt
           printf '%s\n' 'fe8e029a5ddfce01c9abbddb0653441ad42c8708' > g9-c1-build-out/g9-build-amendment03.txt
           printf '%s\n' 'e6a8e9725e4293a51871537f7cfa17251c7f3723' > g9-c1-build-out/g9-build-amendment04.txt
+          printf '%s\n' '6ca7abc525190587a6a59bc21cc50e027dbacbbd' > g9-c1-build-out/g9-build-amendment05.txt
           git hash-object smoke/g9_c1_build_preflight.sh > g9-c1-build-out/preflight-runner-blob.txt
+          git hash-object .github/workflows/g9-c1-build-preflight.yml > g9-c1-build-out/workflow-blob.txt
           find g9-c1-build-out -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > g9-c1-build-out/SHA256SUMS.txt || true
 
       - name: Upload build preflight evidence
