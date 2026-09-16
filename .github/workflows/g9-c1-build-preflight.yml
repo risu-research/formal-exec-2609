@@ -25,28 +25,45 @@ jobs:
           yosys -V
           docker --version
 
-      - name: Enforce preflight source identity
+      - name: Enforce frozen V5 and Amendment07 patcher identities
         run: |
           set -euo pipefail
           test "$(git hash-object smoke/g9_c1_build_preflight.sh)" = '0d0a91eb57739228c4a2141126c1487ae8d81bf6'
+          test "$(git hash-object smoke/g9_c1_amendment07_patch.py)" = 'f2dc7353a1728ff84b300318bc270688f399d4a3'
           bash -n smoke/g9_c1_build_preflight.sh
+          python3 -m py_compile smoke/g9_c1_amendment07_patch.py
+
+      - name: Derive and verify exact build-only V6 runner
+        run: |
+          set -euo pipefail
+          python3 smoke/g9_c1_amendment07_patch.py smoke/g9_c1_build_preflight.sh smoke/g9_c1_build_preflight_v6.sh g9-c1-v6.patch > g9-c1-v6-derivation.json
+          bash -n smoke/g9_c1_build_preflight_v6.sh
+          python3 - <<'PY'
+          import json, subprocess
+          d = json.load(open('g9-c1-v6-derivation.json', encoding='utf-8'))
+          assert d['v5_blob'] == '0d0a91eb57739228c4a2141126c1487ae8d81bf6'
+          assert d['replacements'] == 7
+          assert subprocess.check_output(['git', 'hash-object', 'smoke/g9_c1_build_preflight_v6.sh'], text=True).strip() == d['v6_blob']
+          print('G9_C1_V6_DERIVATION_PASS', d['v6_blob'])
+          PY
 
       - name: Execute build-only preflight
         run: |
           set -uo pipefail
-          chmod +x smoke/g9_c1_build_preflight.sh
+          chmod +x smoke/g9_c1_build_preflight_v6.sh
           set +e
-          ./smoke/g9_c1_build_preflight.sh g9-c1-build-out 2>&1 | tee g9-c1-build.log
+          ./smoke/g9_c1_build_preflight_v6.sh g9-c1-build-out 2>&1 | tee g9-c1-build.log
           rc=${PIPESTATUS[0]}
           set -e
-          mkdir -p g9-c1-build-out
-          cp g9-c1-build.log g9-c1-build-out/runner.log
           exit "$rc"
 
-      - name: Seal provenance
+      - name: Seal provenance and cancellation-safe diagnostics
         if: always()
         run: |
           mkdir -p g9-c1-build-out
+          if test -f g9-c1-build.log; then cp g9-c1-build.log g9-c1-build-out/runner.log; fi
+          if test -f g9-c1-v6.patch; then cp g9-c1-v6.patch g9-c1-build-out/v6-source.patch; fi
+          if test -f g9-c1-v6-derivation.json; then cp g9-c1-v6-derivation.json g9-c1-build-out/v6-derivation.json; fi
           printf '%s\n' "$GITHUB_SHA" > g9-c1-build-out/public-runner-head.txt
           printf '%s\n' '0c852d9c5c3e46cde2504b23d9979296d6cda236' > g9-c1-build-out/g9-c1-carrier-protocol.txt
           printf '%s\n' 'fe8e029a5ddfce01c9abbddb0653441ad42c8708' > g9-c1-build-out/g9-build-amendment03.txt
@@ -54,7 +71,11 @@ jobs:
           printf '%s\n' '6ca7abc525190587a6a59bc21cc50e027dbacbbd' > g9-c1-build-out/g9-build-amendment05.txt
           printf '%s\n' 'e9e022cd48c369d1cd68f1830f68a87b9af2b642' > g9-c1-build-out/g9-v4-red-closure.txt
           printf '%s\n' 'a47ab18ab4f7faea4a187e8eb5fd67808c41b2b9' > g9-c1-build-out/g9-build-amendment06.txt
-          git hash-object smoke/g9_c1_build_preflight.sh > g9-c1-build-out/preflight-runner-blob.txt
+          printf '%s\n' 'ef88cc608f6aca6b3e4a27bd1c2638070c0e955d' > g9-c1-build-out/g9-v5-cancelled-closure.txt
+          printf '%s\n' '77ec584a6b0586617dd726cf48c21750587d616c' > g9-c1-build-out/g9-build-amendment07.txt
+          git hash-object smoke/g9_c1_build_preflight.sh > g9-c1-build-out/preflight-runner-v5-blob.txt
+          git hash-object smoke/g9_c1_amendment07_patch.py > g9-c1-build-out/amendment07-patcher-blob.txt
+          if test -f smoke/g9_c1_build_preflight_v6.sh; then git hash-object smoke/g9_c1_build_preflight_v6.sh > g9-c1-build-out/preflight-runner-v6-blob.txt; fi
           git hash-object .github/workflows/g9-c1-build-preflight.yml > g9-c1-build-out/workflow-blob.txt
           find g9-c1-build-out -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > g9-c1-build-out/SHA256SUMS.txt || true
 
