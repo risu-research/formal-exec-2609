@@ -1,0 +1,6 @@
+G9 C1 V7 build-only execution trigger.
+Prospective Amendment08 authority: 73a9dbc5f6ed797e33bd6b4b6bbfce6343e186bf
+Implementation freeze: af29a2a9cbbe44a4e5684a3e01a529b993c1fe23
+Patcher blob: 4a0b539bc568f7243c1831d4020241a28fbc7bd0
+Workflow blob: 027d9c9d35ce4d3578abffed466ee7fa8f9d7c06
+BUILD-ONLY. No G9 semantic verdict authorized.
