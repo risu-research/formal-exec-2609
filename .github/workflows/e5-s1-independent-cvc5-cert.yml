@@ -1,0 +1,150 @@
+name: e5-s1-independent-cvc5-cert
+on:
+  push:
+    paths:
+      - .github/workflows/e5-s1-independent-cvc5-cert.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  independent-certification:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 22
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install exact independent solver and audit toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y yosys unzip curl python3
+          mkdir -p cert /tmp/e5-cvc5 "$HOME/.local/bin"
+          curl -L --fail --retry 3 -o /tmp/e5-cvc5.zip https://github.com/cvc5/cvc5/releases/download/cvc5-1.3.4/cvc5-Linux-x86_64-static.zip
+          echo 'dcdbfada0ce493ee98259c0816e0daafc561c223aadb3af298c2968e73ea39c6  /tmp/e5-cvc5.zip' | sha256sum -c -
+          unzip -q /tmp/e5-cvc5.zip -d /tmp/e5-cvc5
+          CVC5=$(find /tmp/e5-cvc5 -type f -name cvc5 | head -n 1)
+          test -x "$CVC5"
+          ln -s "$CVC5" "$HOME/.local/bin/cvc5"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          {
+            "$CVC5" --version
+            yosys -V
+            dpkg-query -W yosys
+            sha256sum "$CVC5" "$(command -v yosys-smtbmc)" /tmp/e5-cvc5.zip
+            git rev-parse HEAD
+          } > cert/toolchain.txt 2>&1
+          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+      - name: Download exact sealed source run, not a fresh generated pair
+        uses: actions/download-artifact@v4
+        with:
+          name: e5-s1-same-rtl-functional-evidence
+          run-id: 35118517311
+          github-token: ${{ github.token }}
+          path: sealed
+      - name: Independently validate sealed source and real output trace
+        shell: bash
+        run: |
+          python3 - <<'PY' | tee cert/independent-source-trace.json
+          import hashlib,json,re,zipfile
+          from pathlib import Path
+          R=Path('sealed');h=lambda b:hashlib.sha256(b).hexdigest()
+          manifest=R.joinpath('SHA256SUMS').read_text().splitlines();seen=set()
+          for line in manifest:
+              dig,name=line.split('  ',1);p=R/name
+              assert name not in seen and p.is_file() and h(p.read_bytes())==dig,name
+              seen.add(name)
+          assert {str(p.relative_to(R)) for p in R.rglob('*') if p.is_file()}==seen|{'SHA256SUMS'}
+          m=json.loads((R/'result.json').read_text())
+          assert m['protocol']=='9c08db70af060ad2a1dfdd42fcdb4acb2bc5bf20'
+          assert m['original_child']=='d511239e19be8fcc7f340a64554ea93699637e62'
+          assert m['original_child_sha256']=='7238c0ff1c735c8dd467ec0ba9c3acc6a91ddd7bd1cc8268a3d4cffca0d61abc'
+          assert m['horizon']==40 and m['solver']=='z3'
+          A=(R/'E_removed/pipemem.v').read_text();B=(R/'E_restored/pipemem.v').read_text()
+          old='//always @(posedge i_clk)\n//\tif ((f_past_valid)&&($past(f_cyc))&&(!$past(i_lock)))\n//\t\t`ASSUME(!i_lock);\n'
+          restore='\talways @(posedge i_clk)\n\t\tif ((f_past_valid)&&($past(f_cyc))&&(!$past(i_lock)))\n\t\t\t`ASSUME(!i_lock);\n'
+          assert A.count(old)==B.count(restore)==1 and A.replace(old,restore,1)==B
+          assert A.count('cover(f_s1_endpoint)')==B.count('cover(f_s1_endpoint)')==1
+          assert A.count('`define\tASSUME\tassume')==1
+          assert (R/'E_removed/actual-task.ys').read_bytes()==(R/'E_restored/actual-task.ys').read_bytes()
+          x=(R/'E_removed/pipemem.smt2').read_text();y=(R/'E_restored/pipemem.smt2').read_text()
+          assert x.count('; yosys-smt2-assume ')==25 and y.count('; yosys-smt2-assume ')==26
+          assert x.count('; yosys-smt2-cover ')==y.count('; yosys-smt2-cover ')==1
+          assert '; yosys-smt2-assume 9 $assume$../../rtl/core/pipemem.v:392' in y
+          assert h(x.encode())==m['arms']['E_removed']['smt_sha256']
+          assert h(y.encode())==m['arms']['E_restored']['smt_sha256']
+          # Independent minimal VCD parser: recompute from DUT pins, not the cover monitor.
+          scopes=[];ids={};vals={};frames={};t=None;body=False
+          for line in (R/'E_removed/trace.vcd').read_text().splitlines():
+              s=line.strip()
+              if s.startswith('$scope '):scopes.append(s.split()[2])
+              elif s.startswith('$upscope '):scopes.pop()
+              elif s.startswith('$var '):
+                  a=s.split();ids['/'.join(scopes+[a[4]])]=a[3]
+              elif s.startswith('$enddefinitions'):body=True
+              elif body and s.startswith('#'):
+                  if t is not None:frames[t]=vals.copy()
+                  t=int(s[1:])
+              elif body and s.startswith('b'):
+                  a=s.split()
+                  if len(a)==2:vals[a[1]]=a[0][1:].lower()
+              elif body and s and s[0] in '01xXzZ' and s[1:]:vals[s[1:]]=s[0].lower()
+          if t is not None:frames[t]=vals.copy()
+          def get(t,k):
+              sym=ids['pipemem/'+k];v=frames[t][sym]
+              assert re.fullmatch('[01]+',v),(t,k,v)
+              return int(v,2)
+          assert sorted(k for k in frames if k<=50)==[0,5,10,15,20,25,30,35,40,45,50]
+          assert get(20,'f_cyc')==1 and get(20,'i_lock')==0
+          assert get(30,'f_cyc')==1 and get(30,'i_lock')==1
+          assert get(40,'f_cyc')==get(40,'f_outstanding')==0
+          assert get(40,'o_wb_stb_gbl')==get(40,'o_wb_stb_lcl')==0
+          assert get(40,'o_wb_cyc_gbl')==get(40,'genblk1/lock_gbl')==1
+          assert get(40,'o_wb_cyc_lcl')==get(40,'o_busy')==0
+          assert get(50,'o_wb_cyc_gbl')==0
+          assert 'Reached cover statement' in (R/'E_removed/cover.log').read_text()
+          assert 'Status: FAILED' in (R/'E_restored/cover.log').read_text()
+          print(json.dumps({'audit':'PASS','source_only_difference':'historical i_lock assumption','original_commit':m['original_child'],'manifest_entries':len(manifest),'SMT_assumptions':[25,26],'VCD_actual_output_cycle_at_step4':1,'VCD_outstanding_at_step4':0,'VCD_output_cycle_step5':0,'z3_cover_step':5,'original_bound':40},sort_keys=True))
+          PY
+      - name: Independently rerun exact stored SMT2 for both arms under cvc5
+        shell: bash
+        run: |
+          set -uo pipefail
+          for arm in E_removed E_restored; do
+            if timeout --signal=TERM --kill-after=15s 480s yosys-smtbmc --presat -s cvc5 -c -t 40 "sealed/$arm/pipemem.smt2" > "cert/$arm.cvc5.log" 2>&1; then
+              rc=0
+            else
+              rc=$?
+            fi
+            echo "$rc" > "cert/$arm.cvc5.rc"
+            printf '%s exit=%s\n' "$arm" "$rc"
+            tail -n 5 "cert/$arm.cvc5.log"
+          done
+      - name: Independent certification verdict (not a safety-failure assertion)
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+          p=Path('cert');rows={};ok=(p/'independent-source-trace.json').is_file()
+          for arm in ('E_removed','E_restored'):
+              r=(p/(arm+'.cvc5.rc'));q=(p/(arm+'.cvc5.log'))
+              rc=r.read_text().strip() if r.is_file() else 'MISSING'
+              text=q.read_text() if q.is_file() else ''
+              if arm=='E_removed':valid=rc=='0' and 'Reached cover statement' in text and 'in step 5.' in text and 'Status: PASSED' in text
+              else:valid=rc=='1' and 'Unreached cover statement' in text and 'Status: FAILED' in text and text.count('Checking cover reachability in step ')==40
+              rows[arm]={'exit':rc,'replay_valid':valid,'log_sha256':__import__('hashlib').sha256(text.encode()).hexdigest()}
+              ok=ok and valid
+          verdict='DUAL_SOLVER_BOUNDED_FUNCTIONAL_REACHABILITY_DIFFERENCE' if ok else 'INDEPENDENT_CERTIFICATION_UNRESOLVED'
+          (p/'VERDICT.json').write_text(json.dumps({'class':verdict,'independence':'same SMT2, distinct solver, independent original-source/VCD audit','safety_failure':False,'arms':rows},indent=2,sort_keys=True)+'\n')
+          print((p/'VERDICT.json').read_text())
+          PY
+          find cert -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 -r sha256sum > cert/SHA256SUMS
+      - name: Upload successful or negative independent evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e5-s1-cvc5-independent-evidence
+          path: cert/
+          if-no-files-found: error
