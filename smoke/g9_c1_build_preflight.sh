@@ -5,10 +5,11 @@ OUT=${1:-g9-c1-build-out}
 ROOT=$(pwd)
 RISCV_SHA=1150bba16a44ec4cb741982695fe1ca4cc4cdcfd
 ROCKET_SHA=3ce023df7fbfc55b1eb78874b5a7780221fe242f
-JAVA8_IMAGE=eclipse-temurin:8-jdk
+JAVA8_IMAGE='eclipse-temurin@sha256:5759e5329a0983257ca7276540563f4559704f12753ecfb56b1b1794eb2b37b3'
 
 rm -rf "$OUT" /tmp/g9-c1-riscv
 mkdir -p "$OUT"
+OUT_ABS=$(readlink -f "$OUT")
 
 # Exact candidate source without reading candidate commit prose.
 git init -q /tmp/g9-c1-riscv
@@ -46,21 +47,23 @@ sed -i '/^module/ s/\([A-Z]\+=\)/parameter &/g' "$ROCKET/vsrc/plusarg_reader.v"
 test -s "$ROCKET/src/main/resources/vsrc/RVFIMonitor.v"
 grep -q '^module plusarg_reader #(parameter' "$ROCKET/src/main/resources/vsrc/plusarg_reader.v"
 
-# Java 8 is required by the historical SBT invocation. Preflight intentionally
-# records the moving tag's resolved digest; the verdict-bearing run will pin it.
+# Exact Java 8 runtime learned from the second build-only RED.
 docker pull "$JAVA8_IMAGE" >/dev/null
 docker image inspect "$JAVA8_IMAGE" --format '{{json .RepoDigests}}' > "$OUT/java8-repodigests.json"
 docker image inspect "$JAVA8_IMAGE" --format '{{.Id}}' > "$OUT/java8-image-id.txt"
 docker run --rm "$JAVA8_IMAGE" java -version > "$OUT/java8-version.txt" 2>&1
 
-# Generate exact successor Rocket Verilog. The source tree is mounted read-write
-# because SBT/FIRRTL materialize generated files and caches inside it.
+grep -q '5759e5329a0983257ca7276540563f4559704f12753ecfb56b1b1794eb2b37b3' "$OUT/java8-repodigests.json"
+
+# Generate exact successor Rocket Verilog. Install only the missing build utility
+# inside the exact pinned runtime; record the package and make versions.
 docker run --rm \
   -v "$ROCKET":/work \
+  -v "$OUT_ABS":/evidence \
   -w /work \
   -e RISCV=/tmp/riscv \
   "$JAVA8_IMAGE" \
-  bash -lc 'set -euo pipefail; mkdir -p /tmp/riscv; make -C vsim verilog CONFIG=DefaultConfigWithRVFIMonitors'
+  bash -lc 'set -euo pipefail; apt-get update >/dev/null; DEBIAN_FRONTEND=noninteractive apt-get install -y make >/dev/null; dpkg-query -W -f="${Package}=${Version}\n" make > /evidence/container-make-package.txt; make --version > /evidence/container-make-version.txt; mkdir -p /tmp/riscv; make -C vsim verilog CONFIG=DefaultConfigWithRVFIMonitors'
 
 GEN="$ROCKET/vsim/generated-src"
 VFILE="$GEN/rocketchip.DefaultConfigWithRVFIMonitors.v"
