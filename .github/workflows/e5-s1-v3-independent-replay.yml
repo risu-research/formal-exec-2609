@@ -1,0 +1,80 @@
+name: e5-s1-v3-independent-replay
+"on":
+  push:
+    branches:
+      - experiment/e5-s1-v3-independent-replay-20260916
+    paths:
+      - .github/workflows/e5-s1-v3-independent-replay.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  dual-horizon-solver:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 16
+    strategy:
+      fail-fast: false
+      matrix:
+        arm: [E_removed, E_restored]
+        solver: [z3, cvc5]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Obtain original immutable V2 evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: e5-s1-uninstrumented-pin-evidence
+          run-id: 35122112448
+          github-token: ${{ github.token }}
+          path: v3
+      - name: Verify prior evidence and build byte-identified V3 queries
+        run: |
+          set -euo pipefail
+          (cd v3 && sha256sum -c SHA256SUMS)
+          python3 smoke/e5_s1_incremental_monitor_free_v3.py v3 | tee v3/generator.log
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          p=json.loads(Path('v3/incremental/QUERY_MANIFEST.json').read_text())
+          assert p['prior_artifact_id']==10457767655
+          assert p['prior_digest']=='sha256:9662c2a052d58312cca8d6906a36ca5aa9b2554b6e345344da6349ae60e0674f'
+          assert p['horizon_states']==40
+          for arm in ('E_removed','E_restored'):
+              for mode in ('pin_any','output_only_any','observed_cycle','negative_control'):
+                  assert (Path('v3/incremental')/f'{arm}_{mode}.smt2').is_file()
+          print('IMMUTABLE_V2_MODELS_AND_V3_QUERIES_VERIFIED')
+          PY
+      - name: Install solver and seal version
+        run: |
+          set -euo pipefail
+          mkdir -p v3-results/${{ matrix.arm }}_${{ matrix.solver }}
+          if [[ '${{ matrix.solver }}' = 'z3' ]]; then
+            sudo apt-get update -qq
+            sudo apt-get install -y z3
+            z3 --version | tee v3-results/${{ matrix.arm }}_${{ matrix.solver }}/solver-version.txt
+          else
+            curl -fLsS --retry 3 -o /tmp/e5-cvc5.zip https://github.com/cvc5/cvc5/releases/download/cvc5-1.3.4/cvc5-Linux-x86_64-static.zip
+            echo 'dcdbfada0ce493ee98259c0816e0daafc561c223aadb3af298c2968e73ea39c6  /tmp/e5-cvc5.zip' | sha256sum -c -
+            mkdir -p /tmp/e5-cvc5
+            unzip -q /tmp/e5-cvc5.zip -d /tmp/e5-cvc5
+            CVC5="$(find /tmp/e5-cvc5 -type f -name cvc5 | head -n1)"
+            test -x "$CVC5"
+            sudo ln -s "$CVC5" /usr/local/bin/cvc5
+            cvc5 --version | tee v3-results/${{ matrix.arm }}_${{ matrix.solver }}/solver-version.txt
+            sha256sum "$CVC5" /tmp/e5-cvc5.zip >> v3-results/${{ matrix.arm }}_${{ matrix.solver }}/solver-version.txt
+          fi
+      - name: Execute frozen six-state and forty-state checks
+        run: |
+          set -euo pipefail
+          python3 smoke/e5_s1_v3_solver_runner.py v3 v3-results/${{ matrix.arm }}_${{ matrix.solver }} '${{ matrix.arm }}' '${{ matrix.solver }}' | tee v3-results/${{ matrix.arm }}_${{ matrix.solver }}/runner-summary.log
+      - name: Preserve every partial result even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e5-s1-v3-${{ matrix.arm }}-${{ matrix.solver }}
+          path: |
+            v3/incremental/
+            v3/generator.log
+            v3-results/
+          if-no-files-found: warn
+          retention-days: 90
