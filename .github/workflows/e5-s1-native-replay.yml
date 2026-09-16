@@ -1,0 +1,75 @@
+name: e5-s1-native-rtl-witness-replay
+"on":
+  push:
+    branches:
+      - experiment/e5-s1-v3-independent-replay-20260916
+    paths:
+      - .github/workflows/e5-s1-native-replay.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  native-original-rtl:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout prospectively frozen implementation
+        uses: actions/checkout@v4
+      - name: Toolchain, implementation identity, and raw evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p native-replay
+          {
+            echo 'parent_protocol_commit=945c4a6b878b27e385bfd50d1dafe428c262991d'
+            echo 'implementation_commit=fb3427fc90817769104101500b4a7bc739456fa8'
+            echo "trigger_commit=$GITHUB_SHA"
+            echo "script_blob=$(git hash-object smoke/e5_s1_native_replay.py)"
+          } | tee native-replay/provenance.txt
+          test "$(git hash-object smoke/e5_s1_native_replay.py)" = 36415bc95dd8d6dbd122022322906f93a0ff7d0a
+          sudo apt-get update -qq
+          sudo apt-get install -y z3 iverilog python3
+          {
+            z3 --version
+            iverilog -V
+            dpkg-query -W z3 iverilog python3
+            sha256sum "$(command -v z3)" "$(command -v iverilog)" "$(command -v vvp)"
+          } > native-replay/toolchain.txt 2>&1
+      - name: Recover exact monitor-free authenticated v2 carrier
+        uses: actions/download-artifact@v4
+        with:
+          name: e5-s1-uninstrumented-pin-evidence
+          run-id: 35122112448
+          github-token: ${{ github.token }}
+          path: v3
+      - name: Check historic evidence and generate existing fixed queries
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd v3 && sha256sum -c SHA256SUMS) | tee native-replay/prior-sha256sum.log
+          python3 smoke/e5_s1_incremental_monitor_free_v3.py v3 | tee native-replay/query-generation.log
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          p=json.loads(Path('v3/incremental/QUERY_MANIFEST.json').read_text())
+          assert p['schema']=='e5-s1-incremental-monitor-free-v3'
+          assert p['prior_artifact_id']==10457767655
+          assert p['prior_digest']=='sha256:9662c2a052d58312cca8d6906a36ca5aa9b2554b6e345344da6349ae60e0674f'
+          print('ORIGINAL_CARRIER_SHA_AND_FROZEN_QUERY_IDENTITY_PASS')
+          PY
+      - name: Extract first frozen witness and replay unmodified RTL
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 smoke/e5_s1_native_replay.py v3 native-replay | tee native-replay/run-summary.log
+      - name: Upload full original witness and RED/GREEN evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e5-s1-native-rtl-original-witness-v1
+          path: |
+            native-replay/
+            v3/incremental/QUERY_MANIFEST.json
+          if-no-files-found: warn
+          retention-days: 90
