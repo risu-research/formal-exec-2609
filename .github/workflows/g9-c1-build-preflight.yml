@@ -1,0 +1,57 @@
+name: g9-c1-build-preflight
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'smoke/g9_c1_build_preflight_trigger.txt'
+
+permissions:
+  contents: read
+
+jobs:
+  build-preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - name: Checkout public runner
+        uses: actions/checkout@v4
+
+      - name: Install host dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y git make yosys python3 gzip
+          yosys -V
+          docker --version
+
+      - name: Enforce preflight source identity
+        run: |
+          set -euo pipefail
+          test "$(git hash-object smoke/g9_c1_build_preflight.sh)" = 'PLACEHOLDER_PREFLIGHT_BLOB'
+          bash -n smoke/g9_c1_build_preflight.sh
+
+      - name: Execute build-only preflight
+        run: |
+          set -euo pipefail
+          chmod +x smoke/g9_c1_build_preflight.sh
+          ./smoke/g9_c1_build_preflight.sh g9-c1-build-out | tee g9-c1-build.log
+          cp g9-c1-build.log g9-c1-build-out/runner.log
+
+      - name: Seal provenance
+        if: always()
+        run: |
+          mkdir -p g9-c1-build-out
+          printf '%s\n' "$GITHUB_SHA" > g9-c1-build-out/public-runner-head.txt
+          printf '%s\n' '0c852d9c5c3e46cde2504b23d9979296d6cda236' > g9-c1-build-out/g9-c1-carrier-protocol.txt
+          git hash-object smoke/g9_c1_build_preflight.sh > g9-c1-build-out/preflight-runner-blob.txt
+          find g9-c1-build-out -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > g9-c1-build-out/SHA256SUMS.txt || true
+
+      - name: Upload build preflight evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: g9-c1-build-preflight-evidence
+          path: g9-c1-build-out/
+          if-no-files-found: error
+          retention-days: 90
