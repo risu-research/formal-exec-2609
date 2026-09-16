@@ -1,0 +1,4 @@
+G9 C1 V8 carrier preflight trigger.
+Parent amendment09 authority da33d4a945fa41e1d44f2cb33bd7cbe777d41feb.
+Implementation freeze 7b264fd17a94d10dd2e9e41bb988f84e9e2143b9.
+No Qmask/Qfail scientific result is claimed by this trigger.
