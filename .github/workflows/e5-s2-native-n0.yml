@@ -69,8 +69,11 @@ jobs:
               continue
             fi
             cd bench/formal
-            timeout --signal=TERM --kill-after=30s 900s sby -f zipcpu.sby lowlogic > "$GITHUB_WORKSPACE/e5-s2-n0/$label/native.log" 2>&1
-            rc=$?
+            if timeout --signal=TERM --kill-after=30s 900s sby -f zipcpu.sby lowlogic > "$GITHUB_WORKSPACE/e5-s2-n0/$label/native.log" 2>&1; then
+              rc=0
+            else
+              rc=$?
+            fi
             echo "$rc" > "$GITHUB_WORKSPACE/e5-s2-n0/$label/exit.txt"
             find . -maxdepth 4 -type f \( -name 'status' -o -name 'logfile.txt' -o -name 'logfile' -o -name '*.vcd' -o -name '*.smt2' \) -print0 | while IFS= read -r -d '' f; do
               mkdir -p "$GITHUB_WORKSPACE/e5-s2-n0/$label/files/$(dirname "$f")"
@@ -78,15 +81,15 @@ jobs:
             done
             cd /tmp/e5-zipcpu
           done
-          # A negative native result is evidence, not a reason to hide the second original.
+          # Nonzero statuses are recorded evidence, not process failures.
       - name: Seal and upload positive or negative evidence
         if: always()
         shell: bash
         run: |
           mkdir -p "$GITHUB_WORKSPACE/e5-s2-n0"
           cd "$GITHUB_WORKSPACE/e5-s2-n0"
+          printf 'protocol_commit=074cd7d75eb28b4639635d0f116d3480a4519f38\nrunner_correction_commit=7915af08e0f611cd4d1456819da8db3bc5c50866\nrun_plan_commit=ca70ecdcfaa46be41987603a79b29c09f469199e\nrunner_head=%s\n' "$GITHUB_SHA" > execution-provenance.txt
           find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 -r sha256sum > SHA256SUMS
-          printf 'protocol_commit=074cd7d75eb28b4639635d0f116d3480a4519f38\nrun_plan_commit=ca70ecdcfaa46be41987603a79b29c09f469199e\nrunner_head=%s\n' "$GITHUB_SHA" > execution-provenance.txt
       - name: Upload unmodified native original proof artifacts
         if: always()
         uses: actions/upload-artifact@v4
