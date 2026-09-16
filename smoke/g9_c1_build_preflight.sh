@@ -27,12 +27,24 @@ test "$(git -C /tmp/g9-c1-riscv/cores/rocket/rocket-chip rev-parse HEAD)" = "$RO
 # Only generation-relevant exact gitlinks; no riscv-tools build.
 git -C /tmp/g9-c1-riscv/cores/rocket/rocket-chip submodule update --init --depth 1 hardfloat chisel3 firrtl
 
+# Reconstruct the root vsrc alias expected by the historical riscv-formal build.
+ROCKET=/tmp/g9-c1-riscv/cores/rocket/rocket-chip
+test -d "$ROCKET/src/main/resources/vsrc"
+test -f "$ROCKET/src/main/resources/vsrc/plusarg_reader.v"
+test ! -e "$ROCKET/vsrc"
+ln -s src/main/resources/vsrc "$ROCKET/vsrc"
+test -L "$ROCKET/vsrc"
+test "$(readlink "$ROCKET/vsrc")" = 'src/main/resources/vsrc'
+
 # Reproduce the historical RVFI monitor generation and source compatibility edit.
 (
   cd /tmp/g9-c1-riscv/monitor
   python3 generate.py -p RVFIMonitor -MC
-) > /tmp/g9-c1-riscv/cores/rocket/rocket-chip/vsrc/RVFIMonitor.v
-sed -i '/^module/ s/\([A-Z]\+=\)/parameter &/g' /tmp/g9-c1-riscv/cores/rocket/rocket-chip/vsrc/plusarg_reader.v
+) > "$ROCKET/vsrc/RVFIMonitor.v"
+sed -i '/^module/ s/\([A-Z]\+=\)/parameter &/g' "$ROCKET/vsrc/plusarg_reader.v"
+
+test -s "$ROCKET/src/main/resources/vsrc/RVFIMonitor.v"
+grep -q '^module plusarg_reader #(parameter' "$ROCKET/src/main/resources/vsrc/plusarg_reader.v"
 
 # Java 8 is required by the historical SBT invocation. Preflight intentionally
 # records the moving tag's resolved digest; the verdict-bearing run will pin it.
@@ -44,13 +56,13 @@ docker run --rm "$JAVA8_IMAGE" java -version > "$OUT/java8-version.txt" 2>&1
 # Generate exact successor Rocket Verilog. The source tree is mounted read-write
 # because SBT/FIRRTL materialize generated files and caches inside it.
 docker run --rm \
-  -v /tmp/g9-c1-riscv/cores/rocket/rocket-chip:/work \
+  -v "$ROCKET":/work \
   -w /work \
   -e RISCV=/tmp/riscv \
   "$JAVA8_IMAGE" \
   bash -lc 'set -euo pipefail; mkdir -p /tmp/riscv; make -C vsim verilog CONFIG=DefaultConfigWithRVFIMonitors'
 
-GEN=/tmp/g9-c1-riscv/cores/rocket/rocket-chip/vsim/generated-src
+GEN="$ROCKET/vsim/generated-src"
 VFILE="$GEN/rocketchip.DefaultConfigWithRVFIMonitors.v"
 SRAM="$GEN/rocketchip.DefaultConfigWithRVFIMonitors.behav_srams.v"
 test -s "$VFILE"
@@ -72,10 +84,11 @@ grep -q 'rvfi_valid' "$IL"
   echo "riscv_formal=$RISCV_SHA"
   echo "rocket_chip=$ROCKET_SHA"
   echo "riscv_tree=$(git -C /tmp/g9-c1-riscv rev-parse HEAD^{tree})"
-  echo "rocket_tree=$(git -C /tmp/g9-c1-riscv/cores/rocket/rocket-chip rev-parse HEAD^{tree})"
-  echo "hardfloat=$(git -C /tmp/g9-c1-riscv/cores/rocket/rocket-chip rev-parse HEAD:hardfloat)"
-  echo "chisel3=$(git -C /tmp/g9-c1-riscv/cores/rocket/rocket-chip rev-parse HEAD:chisel3)"
-  echo "firrtl=$(git -C /tmp/g9-c1-riscv/cores/rocket/rocket-chip rev-parse HEAD:firrtl)"
+  echo "rocket_tree=$(git -C "$ROCKET" rev-parse HEAD^{tree})"
+  echo "hardfloat=$(git -C "$ROCKET" rev-parse HEAD:hardfloat)"
+  echo "chisel3=$(git -C "$ROCKET" rev-parse HEAD:chisel3)"
+  echo "firrtl=$(git -C "$ROCKET" rev-parse HEAD:firrtl)"
+  echo "root_vsrc_link=$(readlink "$ROCKET/vsrc")"
 } > "$OUT/source-identities.txt"
 
 yosys -V > "$OUT/yosys-version.txt"
@@ -87,6 +100,8 @@ sha256sum \
   /tmp/g9-c1-riscv/checks/rvfi_insn_check.sv \
   /tmp/g9-c1-riscv/insns/isa_rv32i.txt \
   /tmp/g9-c1-riscv/monitor/generate.py \
+  "$ROCKET/src/main/resources/vsrc/plusarg_reader.v" \
+  "$ROCKET/src/main/resources/vsrc/RVFIMonitor.v" \
   "$VFILE" "$SRAM" "$IL" > "$OUT/artifact-sha256.txt"
 
 # Keep the exact generated IL for the verdict-bearing runner; compress only for transport.
