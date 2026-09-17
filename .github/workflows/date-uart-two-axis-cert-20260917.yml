@@ -1,0 +1,107 @@
+name: date-uart-two-axis-cert-20260917
+on:
+  push:
+    branches: [research/date-uart-two-axis-cert-20260917]
+    paths:
+      - .github/workflows/date-uart-two-axis-cert-20260917.yml
+      - cert/date-second-natural-20260917/two_axis.py
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  obligations:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install formal tools
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y git yosys python3-z3 z3 cvc5
+          mkdir -p obligation-out/ir obligation-out/work/ir
+      - name: Rebuild exact historical formal targets
+        run: |
+          set -euo pipefail
+          git clone -q --filter=blob:none https://github.com/ZipCPU/wbuart32.git /tmp/wbuart32
+          for item in old:2270d473bed97748f444537dc05a39eb6bcc0f6a new:e13a7f30d6dce7579dd90285ceb9327a0ed80bbc; do
+            side="${item%%:*}"; sha="${item#*:}"
+            git -C /tmp/wbuart32 checkout -q --detach "$sha"
+            git -C /tmp/wbuart32 rev-parse HEAD | tee "obligation-out/ir/$side.commit"
+            (cd /tmp/wbuart32/bench/formal && yosys -Q -T -l "$GITHUB_WORKSPACE/obligation-out/ir/$side.yosys.log" -p 'read_verilog -formal -DTXUARTLITE ../../rtl/txuartlite.v; prep -top txuartlite -flatten; write_json '"$GITHUB_WORKSPACE/obligation-out/ir/$side.json")
+          done
+          echo '14390a906fb4dfb9c595f170f000597de871532471ebf171082942defbf617cf  obligation-out/ir/old.json' > obligation-out/ir/EXPECTED_SHA256
+          echo '432a9815bdfc88f89468de1507dc0ba60377a483de28daf29201fabe456b58f3  obligation-out/ir/new.json' >> obligation-out/ir/EXPECTED_SHA256
+          sha256sum -c obligation-out/ir/EXPECTED_SHA256
+          cp obligation-out/ir/*.json obligation-out/work/ir/
+      - name: Independently reconstruct and cross-check whole-F
+        run: |
+          set -euo pipefail
+          /usr/bin/python3 cert/date-second-natural-20260917/independent_wholef.py obligation-out/work | tee obligation-out/independent.log
+          grep -qx INDEPENDENT_WHOLEF_PASS <(tail -1 obligation-out/independent.log)
+          mkdir -p obligation-out/solvers
+          for q in loss gain positive_loss positive_gain; do
+            f="obligation-out/work/independent/$q.smt2"
+            z3 "$f" | tee "obligation-out/solvers/$q.z3"
+            cvc5 --lang smt2 "$f" | tee "obligation-out/solvers/$q.cvc5"
+            case "$q" in loss|gain) answer=unsat;; *) answer=sat;; esac
+            test "$(tail -1 obligation-out/solvers/$q.z3)" = "$answer"
+            test "$(tail -1 obligation-out/solvers/$q.cvc5)" = "$answer"
+          done
+          echo VERIFIED_OBLIGATION_PRESERVATION | tee obligation-out/VERDICT.txt
+      - name: Seal and upload obligation evidence
+        if: always()
+        run: |
+          mkdir -p obligation-out
+          find obligation-out -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > obligation-out/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: two-axis-obligations
+          path: obligation-out/
+          if-no-files-found: error
+          retention-days: 90
+  behavior:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Yosys and fetch exact original RTL
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y git yosys
+          mkdir -p behavior-out
+          git clone -q --filter=blob:none https://github.com/ZipCPU/wbuart32.git /tmp/wbuart32
+          git -C /tmp/wbuart32 show 2270d473bed97748f444537dc05a39eb6bcc0f6a:rtl/txuartlite.v > behavior-out/old.original.v
+          git -C /tmp/wbuart32 show e13a7f30d6dce7579dd90285ceb9327a0ed80bbc:rtl/txuartlite.v > behavior-out/new.original.v
+          python3 cert/date-second-natural-20260917/two_axis.py behavior-out | tee behavior-out/generation.log
+          yosys -V | tee behavior-out/yosys-version.txt
+      - name: Prove joint legal-state relational invariant from initialization
+        run: |
+          set -euo pipefail
+          cd behavior-out
+          yosys -Q -T -l proof.log prove.ys
+          grep -E 'SUCCESS|FAIL|induction|base case|ERROR' proof.log | tail -80 > proof-summary.txt || true
+          grep -q 'SUCCESS' proof.log
+          echo REACHABLE_FULL_STATE_AND_OUTPUT_EQUIVALENCE_PASS | tee VERDICT.txt
+      - name: Mutation control must generate a concrete observable counterexample
+        run: |
+          set -euo pipefail
+          cd behavior-out
+          yosys -Q -T -l mutation.log mutation.ys
+          grep -E 'SUCCESS|FAIL|model found|counterexample|ERROR' mutation.log | tail -80 > mutation-summary.txt || true
+          grep -q 'FAIL' mutation.log
+          echo OUTPUT_MUTATION_DETECTED | tee mutation-verdict.txt
+      - name: Seal and upload behavior evidence
+        if: always()
+        run: |
+          mkdir -p behavior-out
+          find behavior-out -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > behavior-out/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: two-axis-behavior
+          path: behavior-out/
+          if-no-files-found: error
+          retention-days: 90
