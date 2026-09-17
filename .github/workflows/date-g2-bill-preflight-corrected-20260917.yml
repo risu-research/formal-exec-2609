@@ -1,0 +1,84 @@
+name: date-g2-bill-preflight-corrected-20260917
+on:
+  push:
+    branches: [research/date-g2-independent-20260917]
+    paths: [.github/workflows/date-g2-bill-preflight-corrected-20260917.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  frozen-bill-pair:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {side: old, commit: 8fd43ee5973422c6cb3c9e2cb293b8f3bd9067c3}
+          - {side: new, commit: 2659b5831303fc1fb66d664fa2513a66e264cb7b}
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - name: Confirm prospective frozen pair unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          d=json.load(open('cert/date-g2-independent-20260917/FROZEN_SELECTION.json'))
+          x=next(r for r in d['candidate_order_frozen_before_any_new_whole_F_query'] if r['id']=='X-BILL-PACKET')
+          assert x['parent']=='8fd43ee5973422c6cb3c9e2cb293b8f3bd9067c3'
+          assert x['child']=='2659b5831303fc1fb66d664fa2513a66e264cb7b'
+          assert x['whole_F']=='not_run'
+          print('FROZEN_PAIR_UNCHANGED')
+          PY
+      - name: Original-target compatible replay; no invented prove task
+        shell: bash
+        env:
+          SIDE: ${{ matrix.side }}
+          SHA: ${{ matrix.commit }}
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          sudo apt-get update -qq
+          sudo apt-get install -y git make yosys z3 python3-click
+          git clone -q --depth 1 https://github.com/YosysHQ/sby.git /tmp/g2-sby
+          git -C /tmp/g2-sby rev-parse HEAD > evidence/sby_sha.txt
+          sudo make -s -C /tmp/g2-sby install
+          { yosys -V; z3 --version; sby --version; } > evidence/tools.txt 2>&1
+          git clone -q --filter=blob:none https://github.com/billdmar/fifo-verification-suite.git /tmp/g2-source
+          git -C /tmp/g2-source checkout -q --detach "$SHA"
+          test "$(git -C /tmp/g2-source rev-parse HEAD)" = "$SHA"
+          cp /tmp/g2-source/formal/axis_pkt_fifo_bmc.sby evidence/original.sby
+          sha256sum /tmp/g2-source/formal/axis_pkt_fifo_bmc.sby /tmp/g2-source/rtl/axis_pkt_fifo.sv > evidence/original_sha256.txt
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('/tmp/g2-source/formal/axis_pkt_fifo_bmc.sby')
+          s=p.read_text()
+          assert '[tasks]' not in s, 'The original BMC target acquired named tasks: stop for review'
+          assert s.count('smtbmc yices') == 1, 'Original engine changed: stop for review'
+          p.with_name('g2_compat_z3.sby').write_text(s.replace('smtbmc yices','smtbmc z3'))
+          print('ONLY_ENGINE_COMPATIBILITY_SUBSTITUTION')
+          PY
+          set +e
+          (cd /tmp/g2-source && timeout 660 sby -f formal/g2_compat_z3.sby) > evidence/solver.log 2>&1
+          rc=$?
+          set -e
+          echo "$rc" > evidence/exit_code.txt
+          find /tmp/g2-source -maxdepth 3 -name status -type f -print > evidence/status_locations.txt
+          find /tmp/g2-source -maxdepth 3 -name PASS -type f -print > evidence/pass_locations.txt
+          if [ "$rc" -eq 0 ] && grep -q 'DONE (PASS' evidence/solver.log && test -s evidence/pass_locations.txt; then echo COMPATIBILITY_PASS > evidence/verdict.txt; else echo NOT_ESTABLISHED > evidence/verdict.txt; fi
+          tail -65 evidence/solver.log > evidence/log_tail.txt
+          cat evidence/verdict.txt
+      - name: Preserve checksums even for failed and inconclusive runs
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p evidence
+          find evidence -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 -r sha256sum > evidence/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: date-g2-bill-corrected-${{ matrix.side }}
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 90
