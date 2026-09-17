@@ -1,0 +1,100 @@
+name: date-uart-native-replay-v2-20260917
+on:
+  push:
+    branches: [research/date-uart-two-axis-cert-20260917]
+    paths:
+      - .github/workflows/date-uart-native-replay-v2-20260917.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native-replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {bits: 5, baud: 1}
+          - {bits: 5, baud: 8}
+          - {bits: 5, baud: 31}
+          - {bits: 24, baud: 8}
+          - {bits: 24, baud: 868}
+    env:
+      BITS: ${{ matrix.bits }}
+      BAUD: ${{ matrix.baud }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Restore source-bound RTL and identify simulator
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y git iverilog
+          mkdir -p native
+          git clone -q --filter=blob:none https://github.com/ZipCPU/wbuart32.git /tmp/wbuart32
+          git -C /tmp/wbuart32 show 2270d473bed97748f444537dc05a39eb6bcc0f6a:rtl/txuartlite.v > native/old.original.v
+          git -C /tmp/wbuart32 show e13a7f30d6dce7579dd90285ceb9327a0ed80bbc:rtl/txuartlite.v > native/new.original.v
+          python3 cert/date-second-natural-20260917/two_axis.py native | tee native/generation.log
+          iverilog -V 2>&1 | head -2 | tee native/simulator-version.txt || true
+          sha256sum native/old.original.v native/new.original.v native/old.cert.v native/new.cert.v > native/SOURCES.sha256
+      - name: Replay named-port original implementations, detect X and differences
+        run: |
+          set -euo pipefail
+          cd native
+          cat > tb.v <<'V'
+          `timescale 1ns/1ps
+          module tb;
+            parameter integer BITS=5, BAUD=8;
+            reg clk=0, wr=0;
+            reg [7:0] data=0;
+            wire tx_old,busy_old,tx_new,busy_new;
+            integer i;
+            integer seed=32'h64abc31f;
+            old_txuartlite #(.TIMING_BITS(BITS),.CLOCKS_PER_BAUD(BAUD)) old_dut(
+              .i_clk(clk), .i_wr(wr), .i_data(data), .o_uart_tx(tx_old), .o_busy(busy_old));
+            new_txuartlite #(.TIMING_BITS(BITS),.CLOCKS_PER_BAUD(BAUD)) new_dut(
+              .i_clk(clk), .i_wr(wr), .i_data(data), .o_uart_tx(tx_new), .o_busy(busy_new));
+            always #1 clk=~clk;
+            task check_output;
+              begin
+                if ((^{tx_old,busy_old,tx_new,busy_new}) === 1'bx) begin
+                  $display("UNKNOWN_OUTPUT cycle=%0d old=%b%b new=%b%b",i,tx_old,busy_old,tx_new,busy_new);
+                  $fatal(1);
+                end
+                if ({tx_old,busy_old} !== {tx_new,busy_new}) begin
+                  $display("OBSERVABLE_MISMATCH cycle=%0d old=%b%b new=%b%b",i,tx_old,busy_old,tx_new,busy_new);
+                  $fatal(1);
+                end
+              end
+            endtask
+            initial begin
+              i=0; #0.2; check_output();
+              for(i=0;i<30000;i=i+1) begin
+                @(negedge clk);
+                wr=($random(seed)&7)==0;
+                data=$random(seed);
+                #0.2; check_output();
+                @(posedge clk); #0.2; check_output();
+              end
+              $display("NATIVE_30000_CYCLE_DIFF_PASS bits=%0d baud=%0d",BITS,BAUD);
+              $finish;
+            end
+          endmodule
+          V
+          iverilog -g2012 -s tb -Ptb.BITS="${BITS}" -Ptb.BAUD="${BAUD}" -o sim old.cert.v new.cert.v tb.v 2>&1 | tee compile.log
+          vvp sim 2>&1 | tee replay.log
+          grep -qx "NATIVE_30000_CYCLE_DIFF_PASS bits=${BITS} baud=${BAUD}" replay.log
+          printf 'NATIVE_REPLAY_PASS bits=%s baud=%s\n' "$BITS" "$BAUD" | tee VERDICT.txt
+      - name: Seal evidence even if replay fails
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p native
+          find native -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > native/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: uart-native-v2-${{ matrix.bits }}-${{ matrix.baud }}
+          path: native/
+          if-no-files-found: error
+          retention-days: 90
