@@ -1,0 +1,51 @@
+name: date-second-natural-preflight-20260917
+on:
+  push:
+    branches: [research/date-second-natural-20260917]
+    paths: [.github/workflows/date-second-natural-preflight-20260917.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  historical-native-preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reconstruct independently selected riscv-formal parent and child
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p second-natural-evidence
+          git clone --filter=blob:none https://github.com/SymbioticEDA/riscv-formal.git /tmp/riscv-formal
+          for item in old:0c8a3cc321150f59b308ac63e9b9a759c11908bc new:1150bba16a44ec4cb741982695fe1ca4cc4cdcfd; do
+            name="${item%%:*}"; sha="${item#*:}"
+            git -C /tmp/riscv-formal checkout --detach "$sha"
+            git -C /tmp/riscv-formal rev-parse HEAD > "second-natural-evidence/$name.sha"
+            if (cd /tmp/riscv-formal/cores/rocket && python3 insncheck.py); then
+              echo 'ORIGINAL_GENERATOR_OK' > "second-natural-evidence/$name.generator"
+              cp /tmp/riscv-formal/cores/rocket/insncheck/insn_add.sby "second-natural-evidence/$name.insn_add.sby"
+            else
+              echo 'ORIGINAL_GENERATOR_FAILED' > "second-natural-evidence/$name.generator"
+            fi
+            if test -f /tmp/riscv-formal/cores/rocket/rocket-chip.il; then
+              echo 'NATIVE_ROCKET_IL_PRESENT' > "second-natural-evidence/$name.implementation"
+            else
+              echo 'NATIVE_ROCKET_IL_MISSING; no original-target PASS can be asserted' > "second-natural-evidence/$name.implementation"
+            fi
+          done
+          python3 - <<'PY'
+          import json,pathlib
+          p=pathlib.Path('second-natural-evidence')
+          d={'pair':'0c8a3cc321150f59b308ac63e9b9a759c11908bc->1150bba16a44ec4cb741982695fe1ca4cc4cdcfd','provenance':'G6 presampled blind edge, posthoc research follow-up; not G6 blind discovery','status':'NOT_CLOSED','green_green':'UNVERIFIED','whole_F':'UNVERIFIED','native_evidence':{n:{s:(p/f'{n}.{s}').read_text().strip() for s in ('sha','generator','implementation')} for n in ('old','new')}}
+          (p/'gate.json').write_text(json.dumps(d,sort_keys=True,indent=2)+'\n')
+          print(json.dumps(d,sort_keys=True))
+          PY
+      - name: Upload unmodified-status preflight evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: date-second-natural-preflight-20260917
+          path: second-natural-evidence/
+          if-no-files-found: warn
+          retention-days: 90
