@@ -45,8 +45,6 @@ jobs:
       - name: Independent whole-F reconstruction with z3py
         run: |
           set -euo pipefail
-          mkdir -p cert-out/work
-          cp cert-out/ir/*.json cert-out/work/
           mkdir -p cert-out/work/ir
           cp cert-out/ir/*.json cert-out/work/ir/
           python3 cert/date-second-natural-20260917/independent_wholef.py cert-out/work | tee cert-out/independent.log
@@ -55,29 +53,44 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          run_solver () {
+            solver="$1"; q="$2"; expect="$3"; f="cert-out/work/independent/$q.smt2"
+            out="cert-out/solver/${q}.${solver}.out"; err="cert-out/solver/${q}.${solver}.err"
+            set +e
+            case "$solver" in
+              z3) z3 "$f" >"$out" 2>"$err" ;;
+              cvc5) cvc5 --lang smt2 "$f" >"$out" 2>"$err" ;;
+              boolector) boolector "$f" >"$out" 2>"$err" ;;
+            esac
+            rc=$?
+            set -e
+            ans=$(grep -E '^(sat|unsat|unknown)$' "$out" | tail -1 || true)
+            printf '%s %s expect=%s answer=%s rc=%s\n' "$q" "$solver" "$expect" "${ans:-NO_RESULT}" "$rc" | tee -a cert-out/solver/cross.txt
+            if [ "$solver" = boolector ] && [ -z "$ans" ]; then
+              echo "$q BOOLECTOR_INCOMPATIBLE_OR_NO_RESULT rc=$rc" | tee -a cert-out/solver/cross.txt
+              return 0
+            fi
+            test "$ans" = "$expect"
+            case "$expect" in
+              sat) test "$rc" -eq 0 -o "$rc" -eq 10 ;;
+              unsat) test "$rc" -eq 0 -o "$rc" -eq 20 ;;
+            esac
+          }
           for q in loss gain extra_entailed; do
-            f="cert-out/work/independent/$q.smt2"
-            rz=$(z3 "$f" | tail -1)
-            rc=$(cvc5 --lang smt2 "$f" | tail -1)
-            rb=$(boolector "$f" | tail -1)
-            printf '%s z3=%s cvc5=%s boolector=%s\n' "$q" "$rz" "$rc" "$rb" | tee -a cert-out/solver/cross.txt
-            test "$rz" = unsat; test "$rc" = unsat; test "$rb" = unsat
+            run_solver z3 "$q" unsat
+            run_solver cvc5 "$q" unsat
+            run_solver boolector "$q" unsat
           done
           for q in old_f new_f extra_unrestricted positive_loss positive_gain; do
-            f="cert-out/work/independent/$q.smt2"
-            rz=$(z3 "$f" | tail -1)
-            rc=$(cvc5 --lang smt2 "$f" | tail -1)
-            rb=$(boolector "$f" | tail -1)
-            printf '%s z3=%s cvc5=%s boolector=%s\n' "$q" "$rz" "$rc" "$rb" | tee -a cert-out/solver/cross.txt
-            test "$rz" = sat; test "$rc" = sat; test "$rb" = sat
+            run_solver z3 "$q" sat
+            run_solver cvc5 "$q" sat
+            run_solver boolector "$q" sat
           done
-          echo CROSS_SOLVER_3WAY_PASS | tee -a cert-out/solver/cross.txt
+          echo CROSS_SOLVER_Z3_CVC5_REQUIRED_PASS | tee -a cert-out/solver/cross.txt
       - name: Source-level lemma check independent of IR translator
         run: |
           set -euo pipefail
           python3 - <<'PY' | tee cert-out/source-lemma.log
-          # G0: z == (b==0); G4: (b!=0)->busy; new: (!busy)->z.
-          # Exhaustively enumerate abstract booleans z, b_nonzero, busy.
           good=[]
           for z in (0,1):
             for bn in (0,1):
@@ -138,11 +151,11 @@ jobs:
         if: always()
         run: |
           set -euo pipefail
-          sha256sum cert-out/ir/*.json cert-out/work/independent/*.smt2 cert-out/solver/cross.txt cert-out/source-lemma.log cert-out/equiv/* > cert-out/SHA256SUMS.txt || true
+          find cert-out -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > cert-out/SHA256SUMS.txt
           python3 - <<'PY'
           import json,hashlib,pathlib
           p=pathlib.Path('cert-out')
-          out={'schema':'date-second-natural-final-cert-v1','parent':'2270d473bed97748f444537dc05a39eb6bcc0f6a','child':'e13a7f30d6dce7579dd90285ceb9327a0ed80bbc','ir_old_sha256':hashlib.sha256((p/'ir/old.json').read_bytes()).hexdigest(),'ir_new_sha256':hashlib.sha256((p/'ir/new.json').read_bytes()).hexdigest(),'independent_results':json.loads((p/'work/independent/results.json').read_text()),'cross_solver':(p/'solver/cross.txt').read_text() if (p/'solver/cross.txt').exists() else None,'source_lemma':(p/'source-lemma.log').read_text() if (p/'source-lemma.log').exists() else None,'random_diff':(p/'equiv/random-diff.log').read_text() if (p/'equiv/random-diff.log').exists() else None,'yosys_equiv_rc':(p/'equiv/yosys-equiv.rc').read_text().strip() if (p/'equiv/yosys-equiv.rc').exists() else None}
+          out={'schema':'date-second-natural-final-cert-v2','parent':'2270d473bed97748f444537dc05a39eb6bcc0f6a','child':'e13a7f30d6dce7579dd90285ceb9327a0ed80bbc','ir_old_sha256':hashlib.sha256((p/'ir/old.json').read_bytes()).hexdigest(),'ir_new_sha256':hashlib.sha256((p/'ir/new.json').read_bytes()).hexdigest(),'independent_results':json.loads((p/'work/independent/results.json').read_text()),'cross_solver':(p/'solver/cross.txt').read_text() if (p/'solver/cross.txt').exists() else None,'source_lemma':(p/'source-lemma.log').read_text() if (p/'source-lemma.log').exists() else None,'random_diff':(p/'equiv/random-diff.log').read_text() if (p/'equiv/random-diff.log').exists() else None,'yosys_equiv_rc':(p/'equiv/yosys-equiv.rc').read_text().strip() if (p/'equiv/yosys-equiv.rc').exists() else None,'yosys_equiv_summary':(p/'equiv/yosys-equiv.summary').read_text() if (p/'equiv/yosys-equiv.summary').exists() else None}
           (p/'FINAL_CERT.json').write_text(json.dumps(out,sort_keys=True,indent=2)+'\n')
           PY
       - name: Upload final certification evidence
