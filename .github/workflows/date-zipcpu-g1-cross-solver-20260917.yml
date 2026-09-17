@@ -1,0 +1,54 @@
+name: date-zipcpu-g1-cross-solver-20260917
+on:
+  push:
+    branches: [research/date-uart-two-axis-cert-20260917]
+    paths:
+      - .github/workflows/date-zipcpu-g1-cross-solver-20260917.yml
+      - cert/date-zipcpu-g1/**
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  source-replayed-cross-solver:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Obtain pinned original successful source-replay evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: date-zipcpu-g1-source-20260917
+          run-id: 35275901145
+          github-token: ${{ github.token }}
+          path: g1
+      - name: Verify original evidence integrity and pinned IR identities
+        run: |
+          set -euo pipefail
+          sed 's|  g1/|  |' g1/SHA256SUMS.txt > g1/SHA256SUMS.relative.txt
+          (cd g1 && sha256sum -c SHA256SUMS.relative.txt)
+          sha256sum g1/ir/old.json g1/ir/new.json g1/ir/patched.json | tee g1/IR_INPUT_HASHES.txt
+      - name: Install two separate command-line solvers
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y z3 cvc5 python3
+          mkdir -p g1-cross
+          { z3 --version; cvc5 --version | head -1; python3 --version; } | tee g1-cross/tool_versions.txt
+      - name: Cross-solver full-F original and one-edit counterfactual
+        run: |
+          set -euo pipefail
+          python3 cert/date-zipcpu-g1/cross_solver.py | tee g1-cross/cross-run.log
+          grep -q G1_SOURCE_REPLAY_Z3_CVC5_WHOLE_F_FOUR_DIRECTION_PASS g1-cross/cross-run.log
+      - name: Seal evidence on both success and failure
+        if: always()
+        run: |
+          mkdir -p g1-cross
+          find g1-cross -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > g1-cross/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: date-zipcpu-g1-cross-solver-20260917
+          path: g1-cross/
+          if-no-files-found: error
+          retention-days: 90
