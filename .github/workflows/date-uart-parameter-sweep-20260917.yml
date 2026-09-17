@@ -1,0 +1,111 @@
+name: date-uart-parameter-sweep-20260917
+on:
+  push:
+    branches: [research/date-uart-two-axis-cert-20260917]
+    paths:
+      - .github/workflows/date-uart-parameter-sweep-20260917.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  prove-and-replay:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {bits: 5, baud: 1}
+          - {bits: 5, baud: 8}
+          - {bits: 5, baud: 31}
+          - {bits: 24, baud: 8}
+          - {bits: 24, baud: 868}
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install tools and fetch frozen RTLs
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y git yosys iverilog
+          mkdir -p sweep
+          git clone -q --filter=blob:none https://github.com/ZipCPU/wbuart32.git /tmp/wbuart32
+          git -C /tmp/wbuart32 show 2270d473bed97748f444537dc05a39eb6bcc0f6a:rtl/txuartlite.v > sweep/old.original.v
+          git -C /tmp/wbuart32 show e13a7f30d6dce7579dd90285ceb9327a0ed80bbc:rtl/txuartlite.v > sweep/new.original.v
+          python3 cert/date-second-natural-20260917/two_axis.py sweep | tee sweep/generation.log
+      - name: Prove per-parameter reachable relational invariant
+        env:
+          BITS: ${{ matrix.bits }}
+          BAUD: ${{ matrix.baud }}
+        run: |
+          set -euo pipefail
+          cd sweep
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          bits=int(os.environ['BITS']); baud=int(os.environ['BAUD'])
+          assert bits in (5,24) and 1 <= baud < (1 << bits)
+          s=Path('uart_pair.v').read_text()
+          assert s.count('wire [4:0] oc, nc;') == 1
+          assert s.count('.TIMING_BITS(5),.CLOCKS_PER_BAUD(8)') == 2
+          s=s.replace('wire [4:0] oc, nc;', f'wire [{bits-1}:0] oc, nc;')
+          s=s.replace('.TIMING_BITS(5),.CLOCKS_PER_BAUD(8)',f'.TIMING_BITS({bits}),.CLOCKS_PER_BAUD({baud})')
+          Path('uart_pair_parameterized.v').write_text(s)
+          y=Path('prove.ys').read_text().replace('uart_pair.v','uart_pair_parameterized.v')
+          Path('prove-parameterized.ys').write_text(y)
+          print(f'PARAMETER_CONFIG bits={bits} baud={baud}')
+          PY
+          yosys -Q -T -l proof-parameterized.log prove-parameterized.ys
+          grep -E 'Base case.*proven|Induction step proven|SUCCESS|ERROR' proof-parameterized.log | tail -25 | tee proof-summary.txt
+          grep -q 'Induction step proven: SUCCESS!' proof-parameterized.log
+          echo "EQUIVALENCE_PROVEN bits=${BITS} baud=${BAUD}" | tee VERDICT.txt
+      - name: Independent native Icarus randomized differential replay
+        env:
+          BITS: ${{ matrix.bits }}
+          BAUD: ${{ matrix.baud }}
+        run: |
+          set -euo pipefail
+          cd sweep
+          cat >tb.v <<'V'
+          `timescale 1ns/1ps
+          module tb;
+            parameter integer BITS=5, BAUD=8;
+            reg clk=0, wr=0; reg [7:0] data=0;
+            wire tx_old,busy_old,tx_new,busy_new;
+            integer i; integer seed=32'h64abc31f;
+            old_txuartlite #(.TIMING_BITS(BITS),.CLOCKS_PER_BAUD(BAUD)) a(clk,wr,data,tx_old,busy_old);
+            new_txuartlite #(.TIMING_BITS(BITS),.CLOCKS_PER_BAUD(BAUD)) b(clk,wr,data,tx_new,busy_new);
+            always #1 clk=~clk;
+            initial begin
+              for(i=0;i<30000;i=i+1) begin
+                @(negedge clk);
+                wr=($random(seed)&7)==0;
+                data=$random(seed);
+                #0.2;
+                if ({tx_old,busy_old} !== {tx_new,busy_new}) begin
+                  $display("PRE_EDGE_DIFF cycle=%0d",i); $fatal;
+                end
+                @(posedge clk); #0.2;
+                if ({tx_old,busy_old} !== {tx_new,busy_new}) begin
+                  $display("POST_EDGE_DIFF cycle=%0d",i); $fatal;
+                end
+              end
+              $display("NATIVE_30000_CYCLE_DIFF_PASS"); $finish;
+            end
+          endmodule
+          V
+          iverilog -g2012 -s tb -Ptb.BITS="$BITS" -Ptb.BAUD="$BAUD" -o sim old.cert.v new.cert.v tb.v
+          vvp sim | tee replay.log
+          grep -q NATIVE_30000_CYCLE_DIFF_PASS replay.log
+          echo "NATIVE_EQUIVALENCE_REPLAY_PASS bits=${BITS} baud=${BAUD}" | tee replay-verdict.txt
+      - name: Preserve evidence and hashes even on failure
+        if: always()
+        run: |
+          mkdir -p sweep
+          find sweep -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > sweep/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: uart-parameter-${{ matrix.bits }}-${{ matrix.baud }}
+          path: sweep/
+          if-no-files-found: error
+          retention-days: 90
