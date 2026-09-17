@@ -1,0 +1,64 @@
+name: date-second-natural-rtl-equiv-cert-20260917
+on:
+  push:
+    branches: [research/date-second-natural-20260917]
+    paths:
+      - .github/workflows/date-second-natural-rtl-equiv-cert-20260917.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  rtl-equiv-cert:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Yosys
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y git yosys
+          yosys -V
+      - name: Fetch exact historical RTLs
+        run: |
+          set -euo pipefail
+          git clone -q --filter=blob:none https://github.com/ZipCPU/wbuart32.git /tmp/wbuart32
+          git -C /tmp/wbuart32 show 2270d473bed97748f444537dc05a39eb6bcc0f6a:rtl/txuartlite.v > /tmp/old.v
+          git -C /tmp/wbuart32 show e13a7f30d6dce7579dd90285ceb9327a0ed80bbc:rtl/txuartlite.v > /tmp/new.v
+          sed -i 's/module[[:space:]]\+txuartlite/module old_txuartlite/' /tmp/old.v
+          sed -i 's/module[[:space:]]\+txuartlite[[:space:]]*#/module new_txuartlite #/' /tmp/new.v
+          sha256sum /tmp/old.v /tmp/new.v | tee rtl-source-sha256.txt
+      - name: Strict sequential equivalence proof
+        run: |
+          set -euo pipefail
+          cat >/tmp/equiv.ys <<'YS'
+          read_verilog /tmp/old.v /tmp/new.v
+          hierarchy -check
+          proc
+          memory
+          opt
+          equiv_make old_txuartlite new_txuartlite equiv
+          hierarchy -top equiv
+          opt_clean
+          equiv_simple
+          equiv_induct -seq 40
+          equiv_status -assert
+          YS
+          yosys -Q -T -l yosys-equiv.log /tmp/equiv.ys
+          grep -E 'Equivalence successfully proven|unproven|ERROR|Proved' yosys-equiv.log | tail -60 | tee yosys-equiv-summary.txt || true
+          if grep -qi 'unproven' yosys-equiv.log; then
+            echo UNPROVEN_FOUND
+            exit 1
+          fi
+          echo STRICT_YOSYS_EQUIV_PASS | tee -a yosys-equiv-summary.txt
+      - name: Upload strict equivalence evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: date-second-natural-rtl-equiv-cert-20260917
+          path: |
+            yosys-equiv.log
+            yosys-equiv-summary.txt
+            rtl-source-sha256.txt
+          if-no-files-found: error
+          retention-days: 90
