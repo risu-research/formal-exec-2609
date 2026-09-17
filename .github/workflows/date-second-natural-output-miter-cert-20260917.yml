@@ -1,0 +1,58 @@
+name: date-second-natural-output-miter-cert-20260917
+on:
+  push:
+    branches: [research/date-second-natural-20260917]
+    paths:
+      - .github/workflows/date-second-natural-output-miter-cert-20260917.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  output-miter:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Yosys
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y git yosys
+          yosys -V
+      - name: Fetch exact historical RTLs
+        run: |
+          set -euo pipefail
+          git clone -q --filter=blob:none https://github.com/ZipCPU/wbuart32.git /tmp/wbuart32
+          git -C /tmp/wbuart32 show 2270d473bed97748f444537dc05a39eb6bcc0f6a:rtl/txuartlite.v > /tmp/old.v
+          git -C /tmp/wbuart32 show e13a7f30d6dce7579dd90285ceb9327a0ed80bbc:rtl/txuartlite.v > /tmp/new.v
+          sed -i 's/module[[:space:]]\+txuartlite/module old_txuartlite/' /tmp/old.v
+          sed -i 's/module[[:space:]]\+txuartlite[[:space:]]*#/module new_txuartlite #/' /tmp/new.v
+      - name: Prove observable output equivalence from initialized designs
+        run: |
+          set -euo pipefail
+          cat >/tmp/miter.ys <<'YS'
+          read_verilog /tmp/old.v /tmp/new.v
+          hierarchy -check
+          proc
+          memory
+          opt
+          miter -equiv -make_assert -make_outputs old_txuartlite new_txuartlite miter
+          hierarchy -top miter
+          flatten
+          opt
+          sat -verify -tempinduct -prove-asserts -seq 1 -maxsteps 100 -show-inputs -show-outputs
+          YS
+          yosys -Q -T -l output-miter.log /tmp/miter.ys
+          grep -E 'SUCCESS|FAIL|induction|base case|SAT proof|ERROR' output-miter.log | tail -100 | tee output-miter-summary.txt || true
+          grep -q 'SUCCESS' output-miter.log
+          echo OUTPUT_MITER_TEMPINDUCT_PASS | tee -a output-miter-summary.txt
+      - name: Upload output equivalence evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: date-second-natural-output-miter-cert-20260917
+          path: |
+            output-miter.log
+            output-miter-summary.txt
+          if-no-files-found: error
+          retention-days: 90
