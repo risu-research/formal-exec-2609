@@ -1,0 +1,126 @@
+name: date-g2-independent-preflight-20260917
+on:
+  push:
+    branches: [research/date-g2-independent-20260917]
+    paths:
+      - .github/workflows/date-g2-independent-preflight-20260917.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  preflight:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: X-BILL-PACKET
+            repository: billdmar/fifo-verification-suite
+            old_sha: 8fd43ee5973422c6cb3c9e2cb293b8f3bd9067c3
+            new_sha: 2659b5831303fc1fb66d664fa2513a66e264cb7b
+            target: formal/axis_pkt_fifo_bmc.sby
+            original_engine: yices
+          - id: X-DREW-PORT
+            repository: drewbabel/fifo
+            old_sha: 9ae13f188f36d82bee98e1b7578b572bb6ac500a
+            new_sha: 40a7d1a17e90324cb9a274e56cb35ea5da0124ce
+            target: formal/async_fifo.sby
+            original_engine: z3
+    runs-on: ubuntu-latest
+    timeout-minutes: 24
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify immutable selection was committed first
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,os
+          d=json.load(open('cert/date-g2-independent-20260917/FROZEN_SELECTION.json'))
+          cid=os.environ['CID']
+          row=next((x for x in d['candidate_order_frozen_before_any_new_whole_F_query'] if x['id']==cid),None)
+          assert row and row['whole_F']=='not_run' and row['green_green']=='not_yet_reproduced'
+          print('FROZEN_SELECTION_VERIFIED',cid)
+          PY
+        env:
+          CID: ${{ matrix.id }}
+      - name: Install transparent open-source compatible toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          sudo apt-get update -qq
+          sudo apt-get install -y git make yosys z3 python3-click
+          git clone -q --depth 1 https://github.com/YosysHQ/sby.git /tmp/sby-date-g2
+          git -C /tmp/sby-date-g2 rev-parse HEAD > evidence/sby_commit.txt
+          sudo make -s -C /tmp/sby-date-g2 install
+          { yosys -V; z3 --version; sby --version; if command -v yices-smt2 >/dev/null; then yices-smt2 --version; else echo 'yices-smt2 UNAVAILABLE'; fi; } > evidence/tools.txt 2>&1
+      - name: Exact historical target preflight for both fixed revisions
+        shell: bash
+        env:
+          CID: ${{ matrix.id }}
+          REPO: ${{ matrix.repository }}
+          OLD: ${{ matrix.old_sha }}
+          NEW: ${{ matrix.new_sha }}
+          TARGET: ${{ matrix.target }}
+          ORIGINAL_ENGINE: ${{ matrix.original_engine }}
+        run: |
+          set -euo pipefail
+          git clone -q --filter=blob:none "https://github.com/$REPO.git" /tmp/g2-upstream
+          for side in old new; do
+            sha="$OLD"; if [ "$side" = new ]; then sha="$NEW"; fi
+            git -C /tmp/g2-upstream checkout -q --detach "$sha"
+            actual="$(git -C /tmp/g2-upstream rev-parse HEAD)"
+            test "$actual" = "$sha"
+            echo "$actual" > "evidence/$side.commit"
+            test -s "/tmp/g2-upstream/$TARGET"
+            (cd /tmp/g2-upstream && find rtl formal -type f \( -name '*.sv' -o -name '*.v' -o -name '*.sby' \) -print0 | sort -z | xargs -0 sha256sum) > "evidence/$side.source_sha256"
+            cp "/tmp/g2-upstream/$TARGET" "evidence/$side.original.sby"
+            if [ "$ORIGINAL_ENGINE" = yices ] && ! command -v yices-smt2 >/dev/null 2>&1; then
+              python3 - "$TARGET" <<'PY'
+          import pathlib,sys
+          p=pathlib.Path('/tmp/g2-upstream')/sys.argv[1]
+          t=p.read_text()
+          assert t.count('smtbmc yices')==1, 'Expected only one original yices engine declaration'
+          p.with_name('g2_compat_z3.sby').write_text(t.replace('smtbmc yices','smtbmc z3'))
+          PY
+              selected="formal/g2_compat_z3.sby"
+              echo SYMMETRIC_Z3_ENGINE_SUBSTITUTION > "evidence/$side.engine_scope"
+            else
+              selected="$TARGET"
+              echo EXACT_ORIGINAL_ENGINE > "evidence/$side.engine_scope"
+            fi
+            set +e
+            (cd /tmp/g2-upstream && timeout 480 sby -f "$selected" prove) > "evidence/$side.run.log" 2>&1
+            rc=$?
+            set -e
+            echo "$rc" > "evidence/$side.rc"
+            root="/tmp/g2-upstream/$(basename "$selected" .sby)_prove"
+            if [ -f "$root/status" ]; then cp "$root/status" "evidence/$side.status"; fi
+            if [ -f "$root/logfile.txt" ]; then cp "$root/logfile.txt" "evidence/$side.sby.log"; fi
+            if [ "$rc" -eq 0 ] && [ -f "$root/PASS" ] && grep -q 'DONE (PASS' "evidence/$side.run.log"; then
+              echo PASS > "evidence/$side.verdict"
+            else
+              echo NOT_REPRODUCED > "evidence/$side.verdict"
+            fi
+          done
+          python3 - <<'PY'
+          import json,os,pathlib
+          p=pathlib.Path('evidence'); d={'id':os.environ['CID'],'repository':os.environ['REPO'],'parent':os.environ['OLD'],'child':os.environ['NEW'],'task':os.environ['TARGET'],'original_engine':os.environ['ORIGINAL_ENGINE'],'per_revision':{s:{'commit':(p/f'{s}.commit').read_text().strip(),'verdict':(p/f'{s}.verdict').read_text().strip(),'exit_code':int((p/f'{s}.rc').read_text()),'engine_scope':(p/f'{s}.engine_scope').read_text().strip()} for s in ('old','new')},'whole_F':'NOT_RUN','RTL_B':'NOT_RUN'}
+          d['green_green']='REPRODUCED' if all(v['verdict']=='PASS' for v in d['per_revision'].values()) else 'NOT_ESTABLISHED'
+          d['green_green_scope']='EXACT_ORIGINAL' if all(v['engine_scope']=='EXACT_ORIGINAL_ENGINE' for v in d['per_revision'].values()) else 'SYMMETRIC_COMPATIBILITY_ONLY'
+          (p/'gate.json').write_text(json.dumps(d,indent=2,sort_keys=True)+'\n')
+          print(json.dumps(d,sort_keys=True))
+          PY
+      - name: Integrity manifest even for failed runs
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p evidence
+          find evidence -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 -r sha256sum > evidence/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: date-g2-preflight-${{ matrix.id }}
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 90
