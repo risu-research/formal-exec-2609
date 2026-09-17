@@ -1,0 +1,79 @@
+name: g9-c1-build-preflight-v11r
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'smoke/g9_c1_build_preflight_v11r_trigger.txt'
+
+permissions:
+  contents: read
+
+jobs:
+  build-preflight-v11r:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - name: Checkout public runner
+        uses: actions/checkout@v4
+      - name: Install host dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y git make yosys python3 gzip
+          yosys -V
+          docker --version
+      - name: Enforce frozen inputs
+        run: |
+          set -euo pipefail
+          test "$(git hash-object smoke/g9_c1_build_preflight.sh)" = '0d0a91eb57739228c4a2141126c1487ae8d81bf6'
+          test "$(git hash-object smoke/g9_c1_amendment07_patch.py)" = 'f2dc7353a1728ff84b300318bc270688f399d4a3'
+          test "$(git hash-object smoke/g9_c1_amendment08_patch.py)" = '4a0b539bc568f7243c1831d4020241a28fbc7bd0'
+          test "$(git hash-object smoke/g9_c1_amendment09_patch.py)" = '66448414ebe8c4a475fa4dbeab348b156f07ae51'
+          test "$(git hash-object smoke/g9_c1_amendment10_patch.py)" = '672f460b43caef65ecca44e98cb3ca4e7f8653c9'
+          test "$(git hash-object smoke/g9_c1_amendment11_patch.py)" = '5cd85cbd2d8faf7228aaf875d3ff37ec5dd767d4'
+          test "$(git hash-object smoke/g9_c1_amendment12_patch.py)" = 'a90f6e508ab6abcdfcf72ff471bf5ec93575c8d5'
+          python3 -m py_compile smoke/g9_c1_amendment{07,08,09,10,11,12}_patch.py
+      - name: Derive exact frozen V11 runner
+        run: |
+          set -euo pipefail
+          python3 smoke/g9_c1_amendment07_patch.py smoke/g9_c1_build_preflight.sh smoke/g9_c1_build_preflight_v6.sh g9-c1-v6.patch > g9-c1-v6-derivation.json
+          python3 smoke/g9_c1_amendment08_patch.py smoke/g9_c1_build_preflight_v6.sh smoke/g9_c1_build_preflight_v7.sh g9-c1-v7.patch > g9-c1-v7-derivation.json
+          python3 smoke/g9_c1_amendment09_patch.py smoke/g9_c1_build_preflight_v7.sh smoke/g9_c1_build_preflight_v8.sh g9-c1-v8.patch > g9-c1-v8-derivation.json
+          python3 smoke/g9_c1_amendment10_patch.py smoke/g9_c1_build_preflight_v8.sh smoke/g9_c1_build_preflight_v9.sh g9-c1-v9.patch > g9-c1-v9-derivation.json
+          python3 smoke/g9_c1_amendment11_patch.py smoke/g9_c1_build_preflight_v9.sh smoke/g9_c1_build_preflight_v10.sh g9-c1-v10.patch > g9-c1-v10-derivation.json
+          python3 smoke/g9_c1_amendment12_patch.py smoke/g9_c1_build_preflight_v10.sh smoke/g9_c1_build_preflight_v11.sh g9-c1-v11.patch > g9-c1-v11-derivation.json
+          test "$(git hash-object smoke/g9_c1_build_preflight_v11.sh)" = '0c66003c98cb5e7598404a91fac59f997e1a1664'
+          test "$(sha256sum g9-c1-v11.patch | awk '{print $1}')" = '59d1c2f0e1c30ae430ba7f04ffc1ede992f25251112ee3a1c9f21638dc65307f'
+          bash -n smoke/g9_c1_build_preflight_v11.sh
+          echo G9_C1_V11R_EXACT_IDENTITY_PASS
+      - name: Execute exact frozen V11 build preflight
+        run: |
+          set -uo pipefail
+          chmod +x smoke/g9_c1_build_preflight_v11.sh
+          set +e
+          ./smoke/g9_c1_build_preflight_v11.sh g9-c1-build-out 2>&1 | tee g9-c1-build.log
+          rc=${PIPESTATUS[0]}
+          set -e
+          exit "$rc"
+      - name: Seal immutable inputs and diagnostics
+        if: always()
+        run: |
+          mkdir -p g9-c1-build-out
+          if test -f g9-c1-build.log; then cp g9-c1-build.log g9-c1-build-out/runner.log; fi
+          for name in v6 v7 v8 v9 v10 v11; do
+            if test -f "g9-c1-${name}.patch"; then cp "g9-c1-${name}.patch" "g9-c1-build-out/${name}-source.patch"; fi
+            if test -f "g9-c1-${name}-derivation.json"; then cp "g9-c1-${name}-derivation.json" "g9-c1-build-out/${name}-derivation.json"; fi
+          done
+          printf '%s\n' "$GITHUB_SHA" > g9-c1-build-out/public-runner-head.txt
+          printf '%s\n' '4a4a7d08b602bb11ac8a5ac9fec68e23d014682e' > g9-c1-build-out/g9-build-amendment13-authority-commit.txt
+          git hash-object .github/workflows/g9-c1-build-preflight-v11r.yml > g9-c1-build-out/workflow-v11r-blob.txt
+          find g9-c1-build-out -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > g9-c1-build-out/SHA256SUMS.txt || true
+      - name: Upload V11r evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: g9-c1-build-preflight-v11r-evidence
+          path: g9-c1-build-out/
+          if-no-files-found: error
+          retention-days: 90
