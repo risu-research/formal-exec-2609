@@ -1,0 +1,58 @@
+name: second-natural-pair-20260917
+on:
+  push:
+    branches: [research/second-natural-pair-20260917]
+    paths: [.github/workflows/second-natural-pair-20260917.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  original-history-screen:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Checkout isolated public runner
+        uses: actions/checkout@v4
+      - name: Install formal tools
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq yosys z3 git make python3
+          git clone -q https://github.com/YosysHQ/sby.git /tmp/sby
+          git -C /tmp/sby checkout -q --detach b1a1e98cba941ec8433f8dc27f416cd7bb7f14be
+          sudo make -C /tmp/sby install
+          mkdir -p evidence
+          { yosys -V; z3 --version; sby --version || true; git -C /tmp/sby rev-parse HEAD; } > evidence/toolchain.txt 2>&1
+      - name: Exact unmodified ZipCPU S3 pair screening
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone -q --filter=blob:none https://github.com/ZipCPU/zipcpu.git /tmp/zipcpu
+          for spec in 'parent:b34918d13cf4c5f674cdb41e1bb6c6a5ef405420' 'child:f49e57c4bda78cd240cec532fe8b7c7363857966'; do
+            label=${spec%%:*}; commit=${spec#*:}
+            cd /tmp/zipcpu
+            git reset --hard -q; git clean -fdx -q
+            git checkout -q --detach "$commit"
+            test "$(git rev-parse HEAD)" = "$commit"
+            mkdir -p "$GITHUB_WORKSPACE/evidence/$label"
+            { git rev-parse HEAD; git status --porcelain; git hash-object bench/formal/cpuops.sby; git hash-object bench/formal/pipemem.sby || true; } > "$GITHUB_WORKSPACE/evidence/$label/source-identity.txt"
+            for target in cpuops pipemem; do
+              dest="$GITHUB_WORKSPACE/evidence/$label/$target"
+              mkdir -p "$dest"
+              if test ! -f "bench/formal/$target.sby"; then echo MISSING_ORIGINAL_TASK > "$dest/state.txt"; continue; fi
+              (cd bench/formal; set +e; timeout --signal=TERM --kill-after=15s 300s sby -f "$target.sby" > "$dest/original-native.log" 2>&1; rc=$?; echo "$rc" > "$dest/exit.txt"; if test -f "$target/status"; then cp "$target/status" "$dest/status.txt"; else echo NO_NATIVE_STATUS > "$dest/status.txt"; fi; find "$target" -type f \( -name design.il -o -name design.json \) -exec cp '{}' "$dest/" \; 2>/dev/null || true)
+            done
+          done
+      - name: Seal all observations, including negative evidence
+        if: always()
+        run: |
+          mkdir -p evidence
+          printf 'S3 ancestor=b34918d13cf4c5f674cdb41e1bb6c6a5ef405420\nS3 child=f49e57c4bda78cd240cec532fe8b7c7363857966\nscientific classification=NONE until original parent and child PASS and matched semantic-IR comparison\npublic executor head=%s\n' "$GITHUB_SHA" > evidence/provenance.txt
+          find evidence -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 -r sha256sum > evidence/SHA256SUMS.txt
+      - name: Upload original unmodified parent and child evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: second-natural-pair-s3-native-screen
+          path: evidence/
+          if-no-files-found: error
