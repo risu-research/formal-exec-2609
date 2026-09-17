@@ -7,7 +7,7 @@ STEPS=9
 
 def safe(s): return re.sub('[^A-Za-z0-9_]','_',s)
 def b1(v): return BitVecVal(v,1)
-def bool1(x): return x != b1(0)
+def bool1(x): return x != BitVecVal(0,x.size())
 def as1(p): return If(p,b1(1),b1(0))
 
 def cat(bits):
