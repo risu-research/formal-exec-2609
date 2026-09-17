@@ -1,0 +1,70 @@
+name: date-second-natural-uart-z3-20260917
+on:
+  push:
+    branches: [research/date-second-natural-20260917]
+    paths: [.github/workflows/date-second-natural-uart-z3-20260917.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  symmetric-uart-replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install proof toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y yosys z3 git make python3-click
+          git clone -q --depth 1 https://github.com/YosysHQ/sby.git /tmp/sby-date
+          sudo make -s -C /tmp/sby-date install
+          mkdir -p uart-z3-evidence
+          (yosys -V; z3 --version; sby --version) > uart-z3-evidence/tools.txt 2>&1
+      - name: Run identical compatibility engine transform on both original targets
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone -q --filter=blob:none https://github.com/ZipCPU/wbuart32.git /tmp/wbuart32
+          for item in old:2270d473bed97748f444537dc05a39eb6bcc0f6a new:e13a7f30d6dce7579dd90285ceb9327a0ed80bbc; do
+            name="${item%%:*}"; sha="${item#*:}"
+            git -C /tmp/wbuart32 checkout -q --detach "$sha"
+            git -C /tmp/wbuart32 rev-parse HEAD > "uart-z3-evidence/$name.sha"
+            sha256sum /tmp/wbuart32/bench/formal/txuartlite.sby /tmp/wbuart32/rtl/txuartlite.v > "uart-z3-evidence/$name.original-sources.sha256"
+            python3 - <<'PY'
+          from pathlib import Path
+          p=Path('/tmp/wbuart32/bench/formal/txuartlite.sby'); t=p.read_text()
+          assert t.count('smtbmc boolector')==1,'Fail closed: original solver line changed'
+          Path('/tmp/wbuart32/bench/formal/txuartlite_z3.sby').write_text(t.replace('smtbmc boolector','smtbmc z3'))
+          PY
+            set +e
+            (cd /tmp/wbuart32/bench/formal && timeout 420 sby -f txuartlite_z3.sby prf) > "uart-z3-evidence/$name.log" 2>&1
+            rc=$?
+            set -e
+            printf '%s\n' "$rc" > "uart-z3-evidence/$name.rc"
+            if test "$rc" -eq 0 && test -f /tmp/wbuart32/bench/formal/txuartlite_z3_prf/PASS && grep -q 'DONE (PASS' "uart-z3-evidence/$name.log"; then
+              echo 'GREEN_SYMMETRIC_Z3' > "uart-z3-evidence/$name.verdict"
+            else
+              echo 'NOT_GREEN_SYMMETRIC_Z3' > "uart-z3-evidence/$name.verdict"
+            fi
+            if test -f /tmp/wbuart32/bench/formal/txuartlite_z3_prf/logfile.txt; then
+              cp /tmp/wbuart32/bench/formal/txuartlite_z3_prf/logfile.txt "uart-z3-evidence/$name.sby.log"
+            fi
+            rm -rf /tmp/wbuart32/bench/formal/txuartlite_z3_prf
+          done
+          python3 - <<'PY'
+          import json,pathlib
+          p=pathlib.Path('uart-z3-evidence');v={n:(p/f'{n}.verdict').read_text().strip() for n in ('old','new')}
+          d={'repository':'ZipCPU/wbuart32','parent':'2270d473bed97748f444537dc05a39eb6bcc0f6a','child':'e13a7f30d6dce7579dd90285ceb9327a0ed80bbc','original_task':'bench/formal/txuartlite.sby prf','compatibility_transform':'ONLY smtbmc boolector -> smtbmc z3 in copied SBY, symmetric','verdicts':v,'green_green':'REPRODUCED_UNDER_Z3_COMPATIBILITY' if all(x=='GREEN_SYMMETRIC_Z3' for x in v.values()) else 'NOT_ESTABLISHED','whole_F':'NOT_RUN','status':'NOT_CLOSED'}
+          (p/'gate.json').write_text(json.dumps(d,sort_keys=True,indent=2)+'\n')
+          print(json.dumps(d,sort_keys=True))
+          PY
+      - name: Upload audit evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: date-second-natural-uart-z3-20260917
+          path: uart-z3-evidence/
+          if-no-files-found: warn
+          retention-days: 90
