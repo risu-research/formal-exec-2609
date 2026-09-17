@@ -1,0 +1,155 @@
+name: date-second-natural-final-cert-20260917
+on:
+  push:
+    branches: [research/date-second-natural-20260917]
+    paths:
+      - .github/workflows/date-second-natural-final-cert-20260917.yml
+      - cert/date-second-natural-20260917/independent_wholef.py
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  final-cert:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install independent toolchain
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y git yosys python3-z3 z3 cvc5 boolector iverilog
+          mkdir -p cert-out/ir cert-out/solver cert-out/equiv
+          { yosys -V; z3 --version; cvc5 --version | head -1; boolector --version | head -1; iverilog -V 2>&1 | head -2; } | tee cert-out/tools.txt
+      - name: Regenerate both source-bound IRs and pin hashes
+        run: |
+          set -euo pipefail
+          git clone -q --filter=blob:none https://github.com/ZipCPU/wbuart32.git /tmp/wbuart32
+          for item in old:2270d473bed97748f444537dc05a39eb6bcc0f6a new:e13a7f30d6dce7579dd90285ceb9327a0ed80bbc; do
+            side="${item%%:*}"; sha="${item#*:}"
+            git -C /tmp/wbuart32 checkout -q --detach "$sha"
+            git -C /tmp/wbuart32 rev-parse HEAD | tee cert-out/ir/$side.sha
+            (cd /tmp/wbuart32/bench/formal && yosys -Q -T -l "$GITHUB_WORKSPACE/cert-out/ir/$side.yosys.log" -p 'read_verilog -formal -DTXUARTLITE ../../rtl/txuartlite.v; prep -top txuartlite -flatten; write_json '"$GITHUB_WORKSPACE/cert-out/ir/$side.json")
+          done
+          test "$(sha256sum cert-out/ir/old.json | cut -d' ' -f1)" = 14390a906fb4dfb9c595f170f000597de871532471ebf171082942defbf617cf
+          test "$(sha256sum cert-out/ir/new.json | cut -d' ' -f1)" = 432a9815bdfc88f89468de1507dc0ba60377a483de28daf29201fabe456b58f3
+          python3 - <<'PY'
+          import json
+          for s,e in [('old',(3,11,1)),('new',(3,12,1))]:
+            m=json.load(open(f'cert-out/ir/{s}.json'))['modules']['txuartlite'];cs=list(m['cells'].values())
+            got=tuple(sum(c['type']==t for c in cs) for t in ('$assume','$assert','$cover'))
+            assert got==e,(s,got,e)
+            assert sum(c['type']=='$dff' for c in cs)==49
+          print('IR_REGEN_HASH_AND_COUNTS_PASS')
+          PY
+      - name: Independent whole-F reconstruction with z3py
+        run: |
+          set -euo pipefail
+          mkdir -p cert-out/work
+          cp cert-out/ir/*.json cert-out/work/
+          mkdir -p cert-out/work/ir
+          cp cert-out/ir/*.json cert-out/work/ir/
+          python3 cert/date-second-natural-20260917/independent_wholef.py cert-out/work | tee cert-out/independent.log
+          grep -qx 'INDEPENDENT_WHOLEF_PASS' <(tail -1 cert-out/independent.log)
+      - name: Cross-solver certification of generated queries
+        shell: bash
+        run: |
+          set -euo pipefail
+          for q in loss gain extra_entailed; do
+            f="cert-out/work/independent/$q.smt2"
+            rz=$(z3 "$f" | tail -1)
+            rc=$(cvc5 --lang smt2 "$f" | tail -1)
+            rb=$(boolector "$f" | tail -1)
+            printf '%s z3=%s cvc5=%s boolector=%s\n' "$q" "$rz" "$rc" "$rb" | tee -a cert-out/solver/cross.txt
+            test "$rz" = unsat; test "$rc" = unsat; test "$rb" = unsat
+          done
+          for q in old_f new_f extra_unrestricted positive_loss positive_gain; do
+            f="cert-out/work/independent/$q.smt2"
+            rz=$(z3 "$f" | tail -1)
+            rc=$(cvc5 --lang smt2 "$f" | tail -1)
+            rb=$(boolector "$f" | tail -1)
+            printf '%s z3=%s cvc5=%s boolector=%s\n' "$q" "$rz" "$rc" "$rb" | tee -a cert-out/solver/cross.txt
+            test "$rz" = sat; test "$rc" = sat; test "$rb" = sat
+          done
+          echo CROSS_SOLVER_3WAY_PASS | tee -a cert-out/solver/cross.txt
+      - name: Source-level lemma check independent of IR translator
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' | tee cert-out/source-lemma.log
+          # G0: z == (b==0); G4: (b!=0)->busy; new: (!busy)->z.
+          # Exhaustively enumerate abstract booleans z, b_nonzero, busy.
+          good=[]
+          for z in (0,1):
+            for bn in (0,1):
+              for busy in (0,1):
+                g0=(z == (not bn)); g4=((not bn) or busy); new=(busy or z)
+                if g0 and g4: good.append((z,bn,busy,new))
+                assert not (g0 and g4 and not new)
+          print('SOURCE_LEMMA_EXHAUSTIVE_PASS',len(good))
+          PY
+      - name: Sequential implementation equivalence attempt
+        shell: bash
+        run: |
+          set -euo pipefail
+          git -C /tmp/wbuart32 show 2270d473bed97748f444537dc05a39eb6bcc0f6a:rtl/txuartlite.v > /tmp/old.v
+          git -C /tmp/wbuart32 show e13a7f30d6dce7579dd90285ceb9327a0ed80bbc:rtl/txuartlite.v > /tmp/new.v
+          sed -i 's/module[[:space:]]\+txuartlite/module old_txuartlite/' /tmp/old.v
+          sed -i 's/module[[:space:]]\+txuartlite[[:space:]]*#/module new_txuartlite #/' /tmp/new.v
+          cat >/tmp/equiv.ys <<'YS'
+          read_verilog /tmp/old.v /tmp/new.v
+          equiv_make old_txuartlite new_txuartlite equiv
+          hierarchy -top equiv
+          prep -top equiv
+          equiv_simple
+          equiv_induct -seq 20
+          equiv_status
+          YS
+          set +e
+          yosys -Q -T -l cert-out/equiv/yosys-equiv.log /tmp/equiv.ys
+          rc=$?
+          set -e
+          echo "$rc" > cert-out/equiv/yosys-equiv.rc
+          grep -E 'Equivalence successfully proven|unproven|ERROR|assert' cert-out/equiv/yosys-equiv.log | tail -30 | tee cert-out/equiv/yosys-equiv.summary || true
+      - name: Native randomized differential replay from initialized RTL
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat >/tmp/tb.v <<'V'
+          `timescale 1ns/1ps
+          module tb;
+            reg clk=0, wr=0; reg [7:0] data=0; wire tx0,b0,tx1,b1; integer i; integer seed=32'h51c0ffee;
+            old_txuartlite #(.TIMING_BITS(5),.CLOCKS_PER_BAUD(8)) a(clk,wr,data,tx0,b0);
+            new_txuartlite #(.TIMING_BITS(5),.CLOCKS_PER_BAUD(8)) b(clk,wr,data,tx1,b1);
+            always #1 clk=~clk;
+            initial begin
+              for(i=0;i<20000;i=i+1) begin
+                @(negedge clk); wr=($random(seed)&7)==0; data=$random(seed);
+                @(posedge clk); #0.1;
+                if ({tx0,b0} !== {tx1,b1}) begin $display("DIFF cycle=%0d old=%b%b new=%b%b",i,tx0,b0,tx1,b1); $fatal; end
+              end
+              $display("RANDOM_DIFF_20000_PASS"); $finish;
+            end
+          endmodule
+          V
+          iverilog -g2012 -s tb -o /tmp/sim /tmp/old.v /tmp/new.v /tmp/tb.v
+          vvp /tmp/sim | tee cert-out/equiv/random-diff.log
+          grep -q RANDOM_DIFF_20000_PASS cert-out/equiv/random-diff.log
+      - name: Seal certification manifest
+        if: always()
+        run: |
+          set -euo pipefail
+          sha256sum cert-out/ir/*.json cert-out/work/independent/*.smt2 cert-out/solver/cross.txt cert-out/source-lemma.log cert-out/equiv/* > cert-out/SHA256SUMS.txt || true
+          python3 - <<'PY'
+          import json,hashlib,pathlib
+          p=pathlib.Path('cert-out')
+          out={'schema':'date-second-natural-final-cert-v1','parent':'2270d473bed97748f444537dc05a39eb6bcc0f6a','child':'e13a7f30d6dce7579dd90285ceb9327a0ed80bbc','ir_old_sha256':hashlib.sha256((p/'ir/old.json').read_bytes()).hexdigest(),'ir_new_sha256':hashlib.sha256((p/'ir/new.json').read_bytes()).hexdigest(),'independent_results':json.loads((p/'work/independent/results.json').read_text()),'cross_solver':(p/'solver/cross.txt').read_text() if (p/'solver/cross.txt').exists() else None,'source_lemma':(p/'source-lemma.log').read_text() if (p/'source-lemma.log').exists() else None,'random_diff':(p/'equiv/random-diff.log').read_text() if (p/'equiv/random-diff.log').exists() else None,'yosys_equiv_rc':(p/'equiv/yosys-equiv.rc').read_text().strip() if (p/'equiv/yosys-equiv.rc').exists() else None}
+          (p/'FINAL_CERT.json').write_text(json.dumps(out,sort_keys=True,indent=2)+'\n')
+          PY
+      - name: Upload final certification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: date-second-natural-final-cert-20260917
+          path: cert-out/
+          if-no-files-found: error
+          retention-days: 90
