@@ -1,0 +1,82 @@
+name: date-zipcpu-g1-source-20260917
+on:
+  push:
+    branches: [research/date-uart-two-axis-cert-20260917]
+    paths: [.github/workflows/date-zipcpu-g1-source-20260917.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  source-replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install and pin toolchain
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y yosys git python3
+          mkdir -p g1/sources g1/ir g1/logs
+          yosys -V | tee g1/logs/tools.txt
+          git --version | tee -a g1/logs/tools.txt
+      - name: Fetch exact historical source and perform single-edit intervention
+        run: |
+          set -euo pipefail
+          git clone -q --filter=blob:none https://github.com/ZipCPU/zipcpu.git /tmp/upstream
+          git -C /tmp/upstream rev-parse 128cab89f5edaae4699184f50c1334598ebe904e^{commit} | tee g1/logs/old-commit.txt
+          git -C /tmp/upstream rev-parse d511239e19be8fcc7f340a64554ea93699637e62^{commit} | tee g1/logs/new-commit.txt
+          git -C /tmp/upstream show 128cab89f5edaae4699184f50c1334598ebe904e:rtl/core/pipemem.v > g1/sources/old.v
+          git -C /tmp/upstream show d511239e19be8fcc7f340a64554ea93699637e62:rtl/core/pipemem.v > g1/sources/new.v
+          git -C /tmp/upstream show d511239e19be8fcc7f340a64554ea93699637e62:bench/formal/pipemem.ys > g1/sources/historical-pipemem.ys
+          git -C /tmp/upstream show d511239e19be8fcc7f340a64554ea93699637e62:rtl/ex/fwb_master.v > g1/sources/fwb_master.v
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib,difflib,json
+          p=Path('g1/sources'); old=(p/'old.v').read_bytes(); new=(p/'new.v').read_bytes()
+          o=b'`ASSUME( (i_addr == o_wb_addr)\n\t\t\t\t||(i_addr == o_wb_addr+1));'
+          n=b'`ASSUME( (i_addr[(AW+1):2] == o_wb_addr)\n\t\t\t\t||(i_addr[(AW+1):2] == o_wb_addr+1));'
+          assert old.count(o)==1 and new.count(n)==1,(old.count(o),new.count(n))
+          changed=new.replace(n,o)
+          assert changed!=new and changed.replace(o,n)==new
+          assert changed.count(o)==1
+          (p/'patched.v').write_bytes(changed)
+          lines=list(difflib.unified_diff(new.decode().splitlines(True),changed.decode().splitlines(True),fromfile='new.v',tofile='patched.v'))
+          (p/'single-edit.diff').write_text(''.join(lines))
+          (p/'source-manifest.json').write_text(json.dumps({k:hashlib.sha256((p/k).read_bytes()).hexdigest() for k in ['old.v','new.v','patched.v','historical-pipemem.ys','fwb_master.v','single-edit.diff']},indent=2)+'\n')
+          assert (p/'historical-pipemem.ys').read_text().splitlines()[:3]==['read_verilog -D PIPEMEM -formal ../../rtl/core/pipemem.v','read_verilog -D PIPEMEM -formal ../../rtl/ex/fwb_master.v','prep -top pipemem -nordff']
+          print('SINGLE_SOURCE_EDIT_AND_HISTORICAL_SCRIPT_PASS')
+          PY
+          sha256sum g1/sources/* | tee g1/logs/SOURCE_SHA256.txt
+      - name: Re-elaborate old, successor, and one-edit successor from identical historical Yosys script
+        run: |
+          set -euo pipefail
+          for side in old new patched; do
+            mkdir -p /tmp/g1-$side/bench/formal /tmp/g1-$side/rtl/core /tmp/g1-$side/rtl/ex
+            cp g1/sources/$side.v /tmp/g1-$side/rtl/core/pipemem.v
+            cp g1/sources/fwb_master.v /tmp/g1-$side/rtl/ex/fwb_master.v
+            cp g1/sources/historical-pipemem.ys /tmp/g1-$side/bench/formal/pipemem.ys
+            printf '\nwrite_json %s/g1/ir/%s.json\n' "$GITHUB_WORKSPACE" "$side" >> /tmp/g1-$side/bench/formal/pipemem.ys
+            (cd /tmp/g1-$side/bench/formal && yosys -Q -T -l "$GITHUB_WORKSPACE/g1/logs/$side.yosys.log" pipemem.ys)
+            python3 - "$side" <<'PY'
+          import json,sys
+          side=sys.argv[1]; m=json.load(open('g1/ir/'+side+'.json'))['modules']['pipemem']; cells=list(m['cells'].values())
+          counts={t:sum(c['type']==t for c in cells) for t in ('$assume','$assert','$cover','$restrict')}
+          print('IR_COUNTS',side,counts,flush=True)
+          assert counts['$assume']==(26 if side=='old' else 25)
+          assert counts['$assert']==(30 if side=='old' else 35)
+          PY
+          done
+          sha256sum g1/ir/*.json | tee g1/logs/IR_SHA256.txt
+      - name: Preserve complete inputs, outputs, failures, and hashes
+        if: always()
+        run: |
+          mkdir -p g1
+          find g1 -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > g1/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: date-zipcpu-g1-source-20260917
+          path: g1/
+          if-no-files-found: error
+          retention-days: 90
