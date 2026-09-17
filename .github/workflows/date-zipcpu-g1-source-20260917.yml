@@ -12,7 +12,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - name: Install and pin toolchain
+      - name: Install and record toolchain
         run: |
           set -euo pipefail
           sudo apt-get update -qq
@@ -20,16 +20,20 @@ jobs:
           mkdir -p g1/sources g1/ir g1/logs
           yosys -V | tee g1/logs/tools.txt
           git --version | tee -a g1/logs/tools.txt
-      - name: Fetch exact historical source and perform single-edit intervention
+      - name: Verify exact historical source and replay one replacement
         run: |
           set -euo pipefail
           git clone -q --filter=blob:none https://github.com/ZipCPU/zipcpu.git /tmp/upstream
-          git -C /tmp/upstream rev-parse 128cab89f5edaae4699184f50c1334598ebe904e^{commit} | tee g1/logs/old-commit.txt
-          git -C /tmp/upstream rev-parse d511239e19be8fcc7f340a64554ea93699637e62^{commit} | tee g1/logs/new-commit.txt
-          git -C /tmp/upstream show 128cab89f5edaae4699184f50c1334598ebe904e:rtl/core/pipemem.v > g1/sources/old.v
-          git -C /tmp/upstream show d511239e19be8fcc7f340a64554ea93699637e62:rtl/core/pipemem.v > g1/sources/new.v
-          git -C /tmp/upstream show d511239e19be8fcc7f340a64554ea93699637e62:bench/formal/pipemem.ys > g1/sources/historical-pipemem.ys
-          git -C /tmp/upstream show d511239e19be8fcc7f340a64554ea93699637e62:rtl/ex/fwb_master.v > g1/sources/fwb_master.v
+          OLD=128cab89f5edaae4699184f50c1334598ebe904e
+          NEW=d511239e19be8fcc7f340a64554ea93699637e62
+          git -C /tmp/upstream rev-parse "$OLD^{commit}" | tee g1/logs/old-commit.txt
+          git -C /tmp/upstream rev-parse "$NEW^{commit}" | tee g1/logs/new-commit.txt
+          for side in old new; do
+            if [ "$side" = old ]; then sha=$OLD; else sha=$NEW; fi
+            git -C /tmp/upstream show "$sha:rtl/core/pipemem.v" > "g1/sources/$side.v"
+            git -C /tmp/upstream show "$sha:bench/formal/pipemem.ys" > "g1/sources/$side.pipemem.ys"
+            git -C /tmp/upstream show "$sha:rtl/ex/fwb_master.v" > "g1/sources/$side.fwb_master.v"
+          done
           python3 - <<'PY'
           from pathlib import Path
           import hashlib,difflib,json
@@ -38,37 +42,46 @@ jobs:
           n=b'`ASSUME( (i_addr[(AW+1):2] == o_wb_addr)\n\t\t\t\t||(i_addr[(AW+1):2] == o_wb_addr+1));'
           assert old.count(o)==1 and new.count(n)==1,(old.count(o),new.count(n))
           changed=new.replace(n,o)
-          assert changed!=new and changed.replace(o,n)==new
-          assert changed.count(o)==1
+          assert changed!=new and changed.replace(o,n)==new and changed.count(o)==1
           (p/'patched.v').write_bytes(changed)
-          lines=list(difflib.unified_diff(new.decode().splitlines(True),changed.decode().splitlines(True),fromfile='new.v',tofile='patched.v'))
-          (p/'single-edit.diff').write_text(''.join(lines))
-          (p/'source-manifest.json').write_text(json.dumps({k:hashlib.sha256((p/k).read_bytes()).hexdigest() for k in ['old.v','new.v','patched.v','historical-pipemem.ys','fwb_master.v','single-edit.diff']},indent=2)+'\n')
-          assert (p/'historical-pipemem.ys').read_text().splitlines()[:3]==['read_verilog -D PIPEMEM -formal ../../rtl/core/pipemem.v','read_verilog -D PIPEMEM -formal ../../rtl/ex/fwb_master.v','prep -top pipemem -nordff']
-          print('SINGLE_SOURCE_EDIT_AND_HISTORICAL_SCRIPT_PASS')
+          (p/'single-edit.diff').write_text(''.join(difflib.unified_diff(new.decode().splitlines(True),changed.decode().splitlines(True),fromfile='new.v',tofile='patched.v')))
+          assert (p/'old.fwb_master.v').read_bytes()==(p/'new.fwb_master.v').read_bytes()
+          for name in ('old.pipemem.ys','new.pipemem.ys'):
+              s=(p/name).read_text()
+              assert s.splitlines()[:4]==['read_verilog -D PIPEMEM -formal ../../rtl/core/pipemem.v','read_verilog -D PIPEMEM -formal ../../rtl/ex/fwb_master.v','prep -top pipemem -nordff','opt -share_all']
+              assert s.splitlines()[-1]=='write_smt2 -wires pipemem.smt2'
+          (p/'source-manifest.json').write_text(json.dumps({f.name:hashlib.sha256(f.read_bytes()).hexdigest() for f in sorted(p.iterdir()) if f.is_file() and f.name!='source-manifest.json'},indent=2)+'\n')
+          print('SINGLE_SOURCE_EDIT_HISTORICAL_SCRIPTS_AND_HELPER_IDENTITY_PASS')
           PY
           sha256sum g1/sources/* | tee g1/logs/SOURCE_SHA256.txt
-      - name: Re-elaborate old, successor, and one-edit successor from identical historical Yosys script
+      - name: Regenerate original and one-edit formal IR with unchanged elaboration
         run: |
           set -euo pipefail
           for side in old new patched; do
             mkdir -p /tmp/g1-$side/bench/formal /tmp/g1-$side/rtl/core /tmp/g1-$side/rtl/ex
-            cp g1/sources/$side.v /tmp/g1-$side/rtl/core/pipemem.v
-            cp g1/sources/fwb_master.v /tmp/g1-$side/rtl/ex/fwb_master.v
-            cp g1/sources/historical-pipemem.ys /tmp/g1-$side/bench/formal/pipemem.ys
-            printf '\nwrite_json %s/g1/ir/%s.json\n' "$GITHUB_WORKSPACE" "$side" >> /tmp/g1-$side/bench/formal/pipemem.ys
+            cp "g1/sources/$side.v" /tmp/g1-$side/rtl/core/pipemem.v
+            if [ "$side" = old ]; then base=old; else base=new; fi
+            cp "g1/sources/$base.fwb_master.v" /tmp/g1-$side/rtl/ex/fwb_master.v
+            python3 - "$base" "$side" "$GITHUB_WORKSPACE" <<'PY'
+          import sys,pathlib
+          base,side,root=sys.argv[1:]; text=pathlib.Path(f'g1/sources/{base}.pipemem.ys').read_text()
+          assert text.endswith('write_smt2 -wires pipemem.smt2\n')
+          text=text.removesuffix('write_smt2 -wires pipemem.smt2\n')+f'write_json {root}/g1/ir/{side}.json\n'
+          pathlib.Path(f'/tmp/g1-{side}/bench/formal/pipemem.ys').write_text(text)
+          PY
             (cd /tmp/g1-$side/bench/formal && yosys -Q -T -l "$GITHUB_WORKSPACE/g1/logs/$side.yosys.log" pipemem.ys)
             python3 - "$side" <<'PY'
           import json,sys
-          side=sys.argv[1]; m=json.load(open('g1/ir/'+side+'.json'))['modules']['pipemem']; cells=list(m['cells'].values())
+          side=sys.argv[1]
+          m=json.load(open('g1/ir/'+side+'.json'))['modules']['pipemem']; cells=list(m['cells'].values())
           counts={t:sum(c['type']==t for c in cells) for t in ('$assume','$assert','$cover','$restrict')}
           print('IR_COUNTS',side,counts,flush=True)
-          assert counts['$assume']==(26 if side=='old' else 25)
-          assert counts['$assert']==(30 if side=='old' else 35)
+          assert counts['$assume']==(26 if side=='old' else 25),(side,counts)
+          assert counts['$assert']==(30 if side=='old' else 35),(side,counts)
           PY
           done
           sha256sum g1/ir/*.json | tee g1/logs/IR_SHA256.txt
-      - name: Preserve complete inputs, outputs, failures, and hashes
+      - name: Preserve all evidence even on failure
         if: always()
         run: |
           mkdir -p g1
