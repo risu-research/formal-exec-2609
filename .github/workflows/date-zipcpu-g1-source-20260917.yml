@@ -51,10 +51,10 @@ jobs:
               assert s.splitlines()[:4]==['read_verilog -D PIPEMEM -formal ../../rtl/core/pipemem.v','read_verilog -D PIPEMEM -formal ../../rtl/ex/fwb_master.v','prep -top pipemem -nordff','opt -share_all']
               assert s.splitlines()[-1]=='write_smt2 -wires pipemem.smt2'
           (p/'source-manifest.json').write_text(json.dumps({f.name:hashlib.sha256(f.read_bytes()).hexdigest() for f in sorted(p.iterdir()) if f.is_file() and f.name!='source-manifest.json'},indent=2)+'\n')
-          print('SINGLE_SOURCE_EDIT_HISTORICAL_SCRIPTS_AND_HELPER_IDENTITY_PASS')
+          print('SOURCE_EXACT_ONE_EDIT_AND_HISTORICAL_HELPER_SCRIPTS_PASS')
           PY
           sha256sum g1/sources/* | tee g1/logs/SOURCE_SHA256.txt
-      - name: Regenerate original and one-edit formal IR with unchanged elaboration
+      - name: Regenerate source-bound IR after separately recorded flatten and optimize
         run: |
           set -euo pipefail
           for side in old new patched; do
@@ -66,7 +66,7 @@ jobs:
           import sys,pathlib
           base,side,root=sys.argv[1:]; text=pathlib.Path(f'g1/sources/{base}.pipemem.ys').read_text()
           assert text.endswith('write_smt2 -wires pipemem.smt2\n')
-          text=text.removesuffix('write_smt2 -wires pipemem.smt2\n')+f'write_json {root}/g1/ir/{side}.json\n'
+          text=text.removesuffix('write_smt2 -wires pipemem.smt2\n')+f'flatten\nopt -share_all\nwrite_json {root}/g1/ir/{side}.json\n'
           pathlib.Path(f'/tmp/g1-{side}/bench/formal/pipemem.ys').write_text(text)
           PY
             (cd /tmp/g1-$side/bench/formal && yosys -Q -T -l "$GITHUB_WORKSPACE/g1/logs/$side.yosys.log" pipemem.ys)
