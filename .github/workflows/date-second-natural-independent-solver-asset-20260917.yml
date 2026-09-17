@@ -1,0 +1,28 @@
+name: date-second-natural-independent-solver-asset-20260917
+on:
+  push:
+    branches: [research/date-second-natural-20260917]
+    paths: [.github/workflows/date-second-natural-independent-solver-asset-20260917.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  pinned-cvc5:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Pin and retrieve upstream static cvc5 executable archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p verified
+          curl -L --fail --retry 3 -o verified/cvc5-Linux-x86_64-static.zip https://github.com/cvc5/cvc5/releases/download/cvc5-1.3.4/cvc5-Linux-x86_64-static.zip
+          echo 'dcdbfada0ce493ee98259c0816e0daafc561c223aadb3af298c2968e73ea39c6  verified/cvc5-Linux-x86_64-static.zip' | sha256sum -c -
+          unzip -t verified/cvc5-Linux-x86_64-static.zip
+          sha256sum verified/cvc5-Linux-x86_64-static.zip > verified/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: date-second-natural-pinned-cvc5-static-20260917
+          path: verified/
+          if-no-files-found: error
+          retention-days: 7
