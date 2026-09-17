@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import json,re,sys,os
+import json,re,sys
 from pathlib import Path
 from z3 import *
 BASE=Path(sys.argv[1] if len(sys.argv)>1 else '.')
@@ -34,9 +34,9 @@ class M:
         for i,b in enumerate(p['bits']): names[b]=(n,i)
     self.names=names; self.stateQ={}
     dffs=[(n,c) for n,c in self.cells.items() if c['type']=='$dff']
-    for j,(n,c) in enumerate(dffs):
+    for n,c in dffs:
       for i,(q,d) in enumerate(zip(c['connections']['Q'],c['connections']['D'])):
-        self.qdriver[q]=(d,j,i)
+        self.qdriver[q]=(d,n,i)
         if q in names:self.stateQ[q]=names[q]
     for n,c in self.cells.items():
       if c['type'] not in ('$dff','$assume','$assert','$cover') and 'Y' in c['connections']:
@@ -53,18 +53,22 @@ class M:
     if k in self.memo:return self.memo[k]
     if k in self.busy:raise RuntimeError(('loop',k))
     self.busy.add(k)
-    if b in self.qdriver:
-      if b in self.stateQ:
-        n,i=self.stateQ[b]; r=self.var(f'V_{safe(n)}_{i}_t{t}')
-      elif t>0:
-        r=self.v(self.qdriver[b][0],t-1)
-      else: raise RuntimeError(('anon dff at t0',self.side,b))
-    elif b in self.names:
-      n,i=self.names[b];r=self.var(f'V_{safe(n)}_{i}_t{t}')
-    elif b in self.regmap:
-      n,i=self.regmap[b];r=self.cell(n,t)[i]
-    else: raise RuntimeError(('unbound',self.side,b,t))
-    self.memo[k]=r;self.busy.remove(k);return r
+    try:
+      if b in self.qdriver:
+        if b in self.stateQ:
+          n,i=self.stateQ[b]; r=self.var(f'V_{safe(n)}_{i}_t{t}')
+        elif t>0:
+          r=self.v(self.qdriver[b][0],t-1)
+        else: raise RuntimeError(('anon dff at t0',self.side,b))
+      elif b in self.names:
+        n,i=self.names[b];r=self.var(f'V_{safe(n)}_{i}_t{t}')
+      elif b in self.regmap:
+        n,i=self.regmap[b];r=self.cell(n,t)[i]
+      else: raise RuntimeError(('unbound',self.side,b,t))
+      self.memo[k]=r
+      return r
+    finally:
+      self.busy.remove(k)
   def cell(self,n,t):
     c=self.cells[n];op=c['type'];cn=c['connections'];P=c.get('parameters',{})
     val=lambda k:cat([self.v(x,t) for x in cn[k]])
@@ -79,18 +83,19 @@ class M:
     elif op=='$logic_not': y=ext(as1(Not(bool1(val('A')))),1,yw)
     elif op in ('$reduce_bool','$reduce_or'): y=ext(as1(bool1(val('A'))),1,yw)
     elif op=='$reduce_and':
-      a=val('A'); y=ext(as1(a==BitVecVal((1<<width('A')))-1,width('A'))),1,yw)
+      a=val('A'); y=ext(as1(a==BitVecVal((1<<width('A'))-1,width('A'))),1,yw)
     elif op=='$mux': y=If(val('S')==b1(1),ext(val('B'),width('B'),yw),ext(val('A'),width('A'),yw))
     elif op in ('$add','$sub'):
       a,b=val('A'),val('B');aw,bw=width('A'),width('B');sgn=int(P.get('A_SIGNED','0'),2)==1 and int(P.get('B_SIGNED','0'),2)==1
       aa,bb=ext(a,aw,yw,sgn),ext(b,bw,yw,sgn);y=aa+bb if op=='$add' else aa-bb
     elif op=='$shiftx':
-      a,b=val('A'),val('B');aw,bw=width('A'),width('B'); assert (aw,bw,yw)==(10,4,1)
+      a,b=val('A'),val('B');aw,bw=width('A'),width('B'); assert (aw,bw,yw)==(10,4,1),(aw,bw,yw)
       x=self.var(f'X_shared_t{t}_uart_f_txbits_subcount'); y=If(ULT(b,BitVecVal(10,bw)),Extract(0,0,LShR(a,ZeroExt(aw-bw,b))),x)
     else: raise RuntimeError(('unsupported',self.side,op,n))
     return [Extract(i,i,y) for i in range(yw)]
   def form(self,c,t):
-    obs=t-1 if self.side=='new' and c['type']=='$assert' and 'v:328' in c.get('attributes',{}).get('src','') else t
+    src=c.get('attributes',{}).get('src','')
+    obs=t-1 if self.side=='new' and c['type']=='$assert' and 'v:328' in src else t
     return Or(self.v(c['connections']['EN'][0],obs)==b1(0),self.v(c['connections']['A'][0],obs)==b1(1))
   def build(self):
     A=[self.form(c,STEPS) for _,c in self.formal['$assume']];G=[self.form(c,STEPS) for _,c in self.formal['$assert']]
@@ -98,7 +103,7 @@ class M:
 
 def chk(name,q,outdir):
   s=Solver();s.add(q);r=s.check(); print(name,r)
-  p=outdir/f'{name}.smt2';p.write_text(s.to_smt2()+'\n(check-sat)\n')
+  p=outdir/f'{name}.smt2';p.write_text(s.to_smt2())
   return str(r)
 
 def main():
@@ -117,7 +122,6 @@ def main():
     results[f'G{i}_xor_G{j}']=chk(f'G{i}_xor_G{j}',Xor(Go[i],Gn[j]),out)
   results['extra_entailed']=chk('extra_entailed',And(pv,Go[0],Go[4],Not(Gn[7])),out)
   results['extra_unrestricted']=chk('extra_unrestricted',And(And(*Go),Not(Gn[7])),out)
-  # Positive controls: deleting old bitcount-bound guarantee should create an old-only challenge; adding an independent output constraint should create a new-only challenge.
   Gdrop=Go[:5]+Go[6:];Fdrop=And(*(Ao+[Not(And(*Gdrop))]))
   results['positive_loss']=chk('positive_loss',And(pv,Fo,Not(Fdrop)),out)
   artificial=Gn+[n.var('V_o_uart_tx_0_t9')==b1(0)];Fplus=And(*(An+[Not(And(*artificial))]))
