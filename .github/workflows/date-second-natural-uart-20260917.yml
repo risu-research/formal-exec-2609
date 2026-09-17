@@ -1,0 +1,64 @@
+name: date-second-natural-uart-20260917
+on:
+  push:
+    branches: [research/date-second-natural-20260917]
+    paths: [.github/workflows/date-second-natural-uart-20260917.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  original-uart-prf:
+    runs-on: ubuntu-latest
+    timeout-minutes: 24
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install openly reproducible native SBY stack
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y yosys boolector git make python3-click
+          git clone -q --depth 1 https://github.com/YosysHQ/sby.git /tmp/sby-date
+          sudo make -s -C /tmp/sby-date install
+          mkdir -p uart-native-evidence
+          (yosys -V; boolector --version; sby --version) > uart-native-evidence/tools.txt 2>&1
+      - name: Replay both immutable historical targets under their original scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone -q --filter=blob:none https://github.com/ZipCPU/wbuart32.git /tmp/wbuart32
+          for item in old:2270d473bed97748f444537dc05a39eb6bcc0f6a new:e13a7f30d6dce7579dd90285ceb9327a0ed80bbc; do
+            name="${item%%:*}"; sha="${item#*:}"
+            git -C /tmp/wbuart32 checkout -q --detach "$sha"
+            git -C /tmp/wbuart32 rev-parse HEAD > "uart-native-evidence/$name.sha"
+            sha256sum /tmp/wbuart32/bench/formal/txuartlite.sby /tmp/wbuart32/rtl/txuartlite.v > "uart-native-evidence/$name.sources.sha256"
+            set +e
+            (cd /tmp/wbuart32/bench/formal && timeout 510 sby -f txuartlite.sby prf) > "uart-native-evidence/$name.native.log" 2>&1
+            rc=$?
+            set -e
+            echo "$rc" > "uart-native-evidence/$name.exit_code"
+            if test "$rc" -eq 0 && test -f /tmp/wbuart32/bench/formal/txuartlite_prf/PASS && grep -Eq 'DONE \(PASS|Status: PASSED' "uart-native-evidence/$name.native.log"; then
+              echo GREEN_REPRODUCED > "uart-native-evidence/$name.verdict"
+            else
+              echo NOT_GREEN_REPRODUCED > "uart-native-evidence/$name.verdict"
+            fi
+            if test -f /tmp/wbuart32/bench/formal/txuartlite_prf/logfile.txt; then
+              cp /tmp/wbuart32/bench/formal/txuartlite_prf/logfile.txt "uart-native-evidence/$name.sby.log"
+            fi
+            rm -rf /tmp/wbuart32/bench/formal/txuartlite_prf
+          done
+          python3 - <<'PY'
+          import json,pathlib
+          p=pathlib.Path('uart-native-evidence'); v={n:(p/f'{n}.verdict').read_text().strip() for n in ('old','new')}
+          d={'repository':'ZipCPU/wbuart32','pair':'2270d473bed97748f444537dc05a39eb6bcc0f6a->e13a7f30d6dce7579dd90285ceb9327a0ed80bbc','selection':'POSTHOC prospectively recorded before either proof result; not frozen G6 sample','original_task':'bench/formal/txuartlite.sby prf','proof_results':v,'green_green':'CONFIRMED' if all(s=='GREEN_REPRODUCED' for s in v.values()) else 'NOT_CONFIRMED','whole_F':'NOT_RUN','case_status':'NOT_CLOSED'}
+          (p/'gate.json').write_text(json.dumps(d,indent=2,sort_keys=True)+'\n')
+          print(json.dumps(d,sort_keys=True))
+          PY
+      - name: Preserve positive and negative proof logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: date-second-natural-uart-native-proof-20260917
+          path: uart-native-evidence/
+          if-no-files-found: warn
+          retention-days: 90
