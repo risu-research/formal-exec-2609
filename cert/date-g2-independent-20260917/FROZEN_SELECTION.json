@@ -1,0 +1,14 @@
+{
+  "schema": "date-g2-prospective-independent-history-v1",
+  "frozen_on_date": "2026-09-17",
+  "population": "exploratory_X_not_H143",
+  "prior_cohort": {"n": 143, "adverse_axis": 9, "resolved_nonregressive": 4, "unresolved": 130, "exact_edge_manifest_available_here": false, "rule": "No changes to H143 denominator or original outcomes"},
+  "candidate_order_frozen_before_any_new_whole_F_query": [
+    {"id":"X-BILL-PACKET","repository":"billdmar/fifo-verification-suite","parent":"8fd43ee5973422c6cb3c9e2cb293b8f3bd9067c3","child":"2659b5831303fc1fb66d664fa2513a66e264cb7b","task":"formal/axis_pkt_fifo_bmc.sby","original_engine":"smtbmc yices","selected_task_mode":"bmc depth 14, DEPTH 8","source_change_known_before_selection":"new m_pkt_fits formal assumption; changed documentation and cover","outcome_hypothesis":null,"selection_reason":"self-contained independently maintained actual history of environment contract change; original BMC task exists in parent","green_green":"not_yet_reproduced","whole_F":"not_run","B":"not_run","admission":"exploratory; source edit was read before selection"},
+    {"id":"X-DREW-PORT","repository":"drewbabel/fifo","parent":"9ae13f188f36d82bee98e1b7578b572bb6ac500a","child":"40a7d1a17e90324cb9a274e56cb35ea5da0124ce","task":"formal/async_fifo.sby prove","original_engine":"smtbmc z3","selected_task_mode":"prove, multiclock on","source_change_known_before_selection":"reordered synchronizer formal debug ports","outcome_hypothesis":null,"selection_reason":"separately maintained small formal target with enumerated RTL dependencies, cross-project non-loss calibration candidate","green_green":"not_yet_reproduced","whole_F":"not_run","B":"not_run","admission":"exploratory; source edit was read before selection"}
+  ],
+  "not_yet_eligible": [
+    {"id":"X-PICORV32-PROVENANCE","repository":"YosysHQ/riscv-formal","path":"cores/picorv32/Makefile","blocker":"Makefile downloads unpinned YosysHQ/picorv32 master; no historical picorv32.v version pinned; do not label green-green until exact dependency source identified"}
+  ],
+  "decision_rule":"Original exact engine PASS/PASS preferred; symmetric documented engine substitution may establish only compatibility PASS/PASS. Stop before semantics if source or selected task missing. O preservation requires both directional whole-F UNSAT on matched domain; SAT requires fixed witness independent replay. B preservation requires initialized relational proof, SAT requires actual reachable witness and native RTL replay. Unknown/timeout/unsupported never becomes PASS. Retain every screened entry and preserve raw logs including errors. No inference of hardware bug from symbolic challenge loss."
+}
