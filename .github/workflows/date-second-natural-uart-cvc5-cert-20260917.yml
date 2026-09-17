@@ -1,0 +1,94 @@
+name: date-second-natural-uart-cvc5-cert-20260917
+on:
+  push:
+    branches: [research/date-second-natural-20260917]
+    paths: [.github/workflows/date-second-natural-uart-cvc5-cert-20260917.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  independent-cvc5:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: old
+            sha: 2270d473bed97748f444537dc05a39eb6bcc0f6a
+          - name: new
+            sha: e13a7f30d6dce7579dd90285ceb9327a0ed80bbc
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install second solver and original formal toolchain
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y yosys cvc5 git make python3-click
+          git clone -q --depth 1 https://github.com/YosysHQ/sby.git /tmp/sby-second-cert
+          sudo make -s -C /tmp/sby-second-cert install
+          mkdir -p cert
+          (cvc5 --version; yosys -V; sby --version; command -v yosys-smtbmc) > cert/toolchain.txt 2>&1
+      - name: Replay identical source task and verify original hashes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone -q --filter=blob:none https://github.com/ZipCPU/wbuart32.git /tmp/uart-second-cert
+          git -C /tmp/uart-second-cert checkout -q --detach '${{ matrix.sha }}'
+          test "$(git -C /tmp/uart-second-cert rev-parse HEAD)" = '${{ matrix.sha }}'
+          cd /tmp/uart-second-cert/bench/formal
+          sha256sum txuartlite.sby ../../rtl/txuartlite.v > "$GITHUB_WORKSPACE/cert/sources.sha256"
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('txuartlite.sby');s=p.read_text();assert s.count('smtbmc boolector')==1
+          import hashlib
+          assert hashlib.sha256(p.read_bytes()).hexdigest()=='0f6e4052acbae61bf84dd2d9de304ea24ca2afd43f6fba6c87474082a4860e5f'
+          p.with_name('txuartlite_cvc5.sby').write_text(s.replace('smtbmc boolector','smtbmc cvc5'))
+          PY
+          set +e
+          timeout --signal=TERM --kill-after=10s 610s sby -f txuartlite_cvc5.sby prf > "$GITHUB_WORKSPACE/cert/replay.log" 2>&1
+          rc=$?
+          set -e
+          echo "$rc" > "$GITHUB_WORKSPACE/cert/replay.exit_code"
+          if test "$rc" -eq 0 && test -f txuartlite_cvc5_prf/PASS && grep -q 'DONE (PASS, rc=0)' "$GITHUB_WORKSPACE/cert/replay.log"; then
+            echo 'PASS_CVC5_COMPATIBILITY' > "$GITHUB_WORKSPACE/cert/verdict"
+          else
+            echo 'NOT_CERTIFIED_CVC5' > "$GITHUB_WORKSPACE/cert/verdict"
+          fi
+          if test -f txuartlite_cvc5_prf/logfile.txt; then cp txuartlite_cvc5_prf/logfile.txt "$GITHUB_WORKSPACE/cert/sby.log"; fi
+          tail -15 "$GITHUB_WORKSPACE/cert/replay.log"
+      - name: Independently prove added property lemma and non-vacuity controls
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > cert/lemma.smt2 <<'SMT'
+          (set-logic QF_BV)
+          (declare-const cnt (_ BitVec 1))
+          (declare-const zero (_ BitVec 1))
+          (declare-const busy (_ BitVec 1))
+          (declare-const pv (_ BitVec 1))
+          (define-fun oldG0 () Bool (or (= pv #b0) (= zero (bvnot cnt))))
+          (define-fun oldG4 () Bool (or (= pv #b0) (= cnt #b0) (= busy #b1)))
+          (define-fun newG () Bool (or (= busy #b1) (= zero #b1)))
+          (assert (= pv #b1))
+          (assert oldG0)
+          (assert oldG4)
+          (assert (not newG))
+          (check-sat)
+          SMT
+          cvc5 --lang=smtlib2.6 cert/lemma.smt2 > cert/lemma.out 2>&1
+          test "$(tr -d '\r\n' < cert/lemma.out)" = unsat
+          sed 's/(assert (= pv #b1))/(assert (= pv #b0))/' cert/lemma.smt2 > cert/lemma_no_pv.smt2
+          cvc5 --lang=smtlib2.6 cert/lemma_no_pv.smt2 > cert/lemma_no_pv.out 2>&1
+          test "$(tr -d '\r\n' < cert/lemma_no_pv.out)" = sat
+          sha256sum cert/* > cert/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: date-second-natural-uart-cvc5-${{ matrix.name }}
+          path: cert/
+          if-no-files-found: error
+          retention-days: 90
+      - name: Enforce evidence gate
+        run: test "$(cat cert/verdict)" = 'PASS_CVC5_COMPATIBILITY'
