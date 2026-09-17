@@ -1,0 +1,64 @@
+name: date-g2-bill-ir-source-slice-20260917
+on:
+  push:
+    branches: [research/date-g2-independent-20260917]
+    paths: [.github/workflows/date-g2-bill-ir-source-slice-20260917.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  source-bound-ir:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {side: old, sha: 8fd43ee5973422c6cb3c9e2cb293b8f3bd9067c3}
+          - {side: new, sha: 2659b5831303fc1fb66d664fa2513a66e264cb7b}
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Regenerate both formal and implementation models using frozen source and task parameters
+        shell: bash
+        env:
+          SHA: ${{ matrix.sha }}
+          SIDE: ${{ matrix.side }}
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          sudo apt-get update -qq
+          sudo apt-get install -y yosys git
+          yosys -V > evidence/tool.txt
+          git clone -q --filter=blob:none https://github.com/billdmar/fifo-verification-suite.git /tmp/g2-source
+          git -C /tmp/g2-source checkout -q --detach "$SHA"
+          test "$(git -C /tmp/g2-source rev-parse HEAD)" = "$SHA"
+          cp /tmp/g2-source/rtl/axis_pkt_fifo.sv evidence/axis_pkt_fifo.original.sv
+          cp /tmp/g2-source/formal/axis_pkt_fifo_bmc.sby evidence/axis_pkt_fifo_bmc.original.sby
+          (cd /tmp/g2-source && yosys -Q -T -l "$GITHUB_WORKSPACE/evidence/formal.log" -p 'read_verilog -sv -formal -DFORMAL rtl/axis_pkt_fifo.sv; chparam -set DEPTH 8 axis_pkt_fifo; prep -top axis_pkt_fifo -flatten; write_json '"$GITHUB_WORKSPACE/evidence/formal.json")
+          (cd /tmp/g2-source && yosys -Q -T -l "$GITHUB_WORKSPACE/evidence/rtl.log" -p 'read_verilog -sv rtl/axis_pkt_fifo.sv; chparam -set DEPTH 8 axis_pkt_fifo; prep -top axis_pkt_fifo -flatten; write_json '"$GITHUB_WORKSPACE/evidence/rtl.json")
+          python3 - <<'PY'
+          import collections,hashlib,json,pathlib,os
+          p=pathlib.Path('evidence'); side=os.environ['SIDE']
+          obj={}
+          for f in ('formal','rtl'):
+            d=json.loads((p/f'{f}.json').read_text()); m=d['modules']['axis_pkt_fifo']; cells=m['cells']
+            fs={t:[{'name':n,'source':c.get('attributes',{}).get('src',''),'en':c['connections'].get('EN'),'a':c['connections'].get('A')} for n,c in cells.items() if c['type']==t] for t in ('$assume','$assert','$cover')}
+            obj[f]={'sha256':hashlib.sha256((p/f'{f}.json').read_bytes()).hexdigest(),'cells':dict(collections.Counter(c['type'] for c in cells.values())),'formal_cells':fs,'port_names':list(m['ports'])}
+          obj['id']='X-BILL-PACKET';obj['revision']=side;obj['sha']=os.environ['SHA']; obj['whole_F']='NOT_RUN';obj['behavior_equivalence']='NOT_RUN'
+          (p/'inventory.json').write_text(json.dumps(obj,sort_keys=True,indent=2)+'\n')
+          print('GENERATED_FORMAL_AND_NONFORMAL_IR',side)
+          for f in ('formal','rtl'):print(f,obj[f]['sha256'],{k:len(v) for k,v in obj[f]['formal_cells'].items()})
+          PY
+      - name: Always preserve files and inventory
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p evidence
+          find evidence -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 -r sha256sum > evidence/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: date-g2-bill-source-ir-${{ matrix.side }}
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 90
