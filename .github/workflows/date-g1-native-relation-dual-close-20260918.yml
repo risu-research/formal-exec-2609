@@ -1,0 +1,96 @@
+name: date-g1-native-relation-dual-close-20260918
+on:
+  push:
+    branches: [research/date-g2-independent-20260917]
+    paths: [.github/workflows/date-g1-native-relation-dual-close-20260918.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  dual-check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 13
+    strategy:
+      fail-fast: false
+      matrix:
+        side: [old, new]
+        depth: [2, 3, 5, 6]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Retrieve and verify original SHA-pinned authorities and install solvers
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq cvc5 unzip python3 python3-pip >/tmp/apt.log
+          python3 -m pip install --break-system-packages 'z3-solver==4.13.3.0' >/tmp/pip.log
+          mkdir -p work/{frozen,source,matrix,queries,results}
+          for spec in 'frozen 10327123106 9f7202d5d34179d61957b70fbe641180002f1237562d511927cf360e41ed92fa' 'source 10549755919 c2d037604d3bfd7a292f17361dc40c0bbbd8296ad13cb448de9f55942d96eb33' 'matrix 10549453754 4ab06e19d5f86a06e0e15c48e2c03c3d1d713bdba5966020e8b95e9d2a75f8de'; do
+            read -r name id want <<< "$spec"
+            curl --fail --silent --show-error --location --retry 3 -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' "https://api.github.com/repos/risu-research/formal-exec-2609/actions/artifacts/$id/zip" -o "work/$name.zip"
+            got="$(sha256sum work/$name.zip | cut -d' ' -f1)"; test "$got" = "$want"
+            unzip -oq "work/$name.zip" -d "work/$name"
+            echo "ARCHIVE_PASS $name $got"
+          done
+          python3 - <<'PY'
+          import z3
+          print('PY_Z3_VERSION',z3.get_version_string());assert z3.get_version_string()=='4.13.3'
+          PY
+          cvc5 --version | head -1
+          sha256sum cert/date-g2-independent-20260917/verify_native_formula_relation_20260918.py | tee work/results/replay_code_sha256.txt
+      - name: Regenerate 64 original queries and strictly check their manifest
+        env:
+          SIDE: ${{ matrix.side }}
+          DEPTH: ${{ matrix.depth }}
+        run: |
+          set -euo pipefail
+          python3 cert/date-g2-independent-20260917/verify_native_formula_relation_20260918.py --root work --output work/queries --side "$SIDE"
+          python3 - <<'PY'
+          from pathlib import Path
+          import os,json,hashlib
+          s=os.environ['SIDE']; d=int(os.environ['DEPTH'])
+          expected={('old',2):'acb8689f1c9ce5bcbfe1fa4f3b35d3bb0243707f6eea0a550574532195661dc6',('old',3):'96bd30f384faed38524d1460f5607538181917296f9096093a473d924a320652',('old',5):'a8183279150a3da69873a0b79534cc9a54f9b1579c8e4d7f5a21d11925634c01',('old',6):'85af599a217f8c83aa68d23e0fe832fef4f8411646bc6875877fda81f791126f',('new',2):'81254c979031eb3654063ceb47b6b8a1f3bfe22643591344cfa74de4adad2bbd',('new',3):'89acbcdc63a3f1955d228b6850be039a6a8fb35159625cdb8391433580277be7',('new',5):'44685a798f135e7049e4ab0c3c2201ddebedb565caa85f88e1c8ae8e2f6e697b',('new',6):'b3074f766cece27774d809e5b59749bf07d39facdf9080f484686620cd24c0cf'}
+          m=json.loads(Path('work/queries/MANIFEST.json').read_text()); a=[c for c in m['cases'] if c['side']==s and c['depth']==d]
+          assert len(a)==8,(s,d,len(a))
+          for c in a:assert hashlib.sha256((Path('work/queries')/c['name']).read_bytes()).hexdigest()==c['sha256']
+          assert next(x for x in a if x['kind']=='all')['sha256']==expected[(s,d)],'MODEL_DRIFT'
+          Path('work/results/SELECTED.json').write_text(json.dumps({'cases':a,'mapping':m['mapping'][s]},sort_keys=True,indent=2)+'\n')
+          print('MANIFEST_PASS',s,d,len(a),flush=True)
+          PY
+      - name: Require 16 independent solver verdicts per shard
+        env:
+          SIDE: ${{ matrix.side }}
+          DEPTH: ${{ matrix.depth }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import z3,subprocess,hashlib,json,time,os
+          from pathlib import Path
+          selected=json.loads(Path('work/results/SELECTED.json').read_text()); out=[]
+          for c in selected['cases']:
+            p=Path('work/queries')/c['name']; b=p.read_bytes();assert hashlib.sha256(b).hexdigest()==c['sha256']
+            for solver in ['z3_4_13','cvc5_1_1']:
+              t=time.monotonic()
+              if solver=='z3_4_13':
+                s=z3.Solver();s.set(timeout=45000);s.from_string(b.decode());obs=str(s.check());rc=0;err=''
+              else:
+                proc=subprocess.run(['cvc5','--lang','smt2',str(p)],text=True,capture_output=True,timeout=45)
+                obs=proc.stdout.strip();rc=proc.returncode;err=proc.stderr[-1500:]
+              row={'case':c['name'],'side':os.environ['SIDE'],'depth':int(os.environ['DEPTH']),'kind':c['kind'],'solver':solver,'sha256':c['sha256'],'expected':c['expected'],'observed':obs,'returncode':rc,'elapsed_sec':round(time.monotonic()-t,3),'stderr':err}
+              out.append(row);Path('work/results/VERDICTS.json').write_text(json.dumps(out,indent=2,sort_keys=True)+'\n');print('VERDICT',json.dumps(row),flush=True)
+              assert rc==0 and obs==c['expected'],'INDEPENDENT_SOLVER_DISAGREEMENT_OR_TIMEOUT'
+          assert len(out)==16
+          print('DUAL_SHARD_PASS',os.environ['SIDE'],os.environ['DEPTH'],flush=True)
+          PY
+      - name: Seal evidence even on failure
+        if: always()
+        run: |
+          find work -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 -r sha256sum > work/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: date-g1-dual-close-${{ matrix.side }}-k${{ matrix.depth }}-20260918
+          path: work/
+          retention-days: 90
