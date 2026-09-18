@@ -1,0 +1,49 @@
+{
+  "schema": "g2-independent-real-ir-dual-solver-addendum-v1",
+  "date_us_eastern": "2026-09-17",
+  "candidate": "X-BILL-PACKET",
+  "cohort": "exploratory_X_not_H143",
+  "frozen_selection_unchanged": true,
+  "original_H143_denominator_unchanged": true,
+  "original_source_ir_run": 35279448918,
+  "old_ir_sha256": "1e793fdf714a04147e6dea167b5625499206ee6157bcc60a7355842c7bb266f9",
+  "new_ir_sha256": "ef5f30c538f5e97c0a3089b4138b3ee04b2a6ad2346bcb911d21b67f74185a3d",
+  "property_cones": {
+    "scope": "full symbolic sampled-clock combinational cones of original flattened Yosys formal IR, not temporal reachability",
+    "common_assumptions": 4,
+    "common_assertions": 18,
+    "matched_symbolic_bits": 130,
+    "new_assumption": "m_pkt_fits"
+  },
+  "independent_solver_families": ["Z3 4.8.12", "cvc5 1.1.2"],
+  "same_exact_QF_BV_file_per_solver_pair": true,
+  "verified_verdicts": {
+    "loss": "SAT/SAT",
+    "gain": "UNSAT/UNSAT",
+    "shared_property_difference": "UNSAT/UNSAT",
+    "loss_with_contract_true": "UNSAT/UNSAT",
+    "loss_with_all_assertions_true": "UNSAT/UNSAT",
+    "mutant_delete_new_assumption": "SAT/SAT"
+  },
+  "original_ci": "https://github.com/risu-research/formal-exec-2609/actions/runs/35292888310",
+  "dual_solver_artifact_zip_sha256": "6dae51b8395dc478fb4a2b3c9b3dc1cd122fe5b0ad1197f84af597d271e732e6",
+  "human_readable_symbolic_witness": {
+    "wptr": 9, "rptr": 0, "commit_ptr": 0, "f_init": 0, "f_past_valid": 0, "rst_n": 1,
+    "fixed_query_sha256": "6b8d6f34685eb757239e64a01eaaeea05ee2a8026749f70146f84ccb49e5f8ff",
+    "both_solvers": "SAT/SAT",
+    "ci": "https://github.com/risu-research/formal-exec-2609/actions/runs/35293062418",
+    "artifact_zip_sha256": "f75cf11d4f42e235af525de60e6a8cb81a238fb7957224ecd7af5c9742f63220",
+    "independent_prior_ir_snapshot_evaluator": "PASS",
+    "reset_reachable": false
+  },
+  "important_limitations": [
+    "both solvers share one Python Yosys-IR-to-SMT translator, so this is not two independent translators",
+    "no reset-reachable assertion loss is shown; separate reachable input exclusion was demonstrated using native RTL",
+    "a bounded original Yices BMC PASS is not unbounded safety proof",
+    "no independent UNSAT proof-object checker has been run",
+    "Drew's equivalence remains separately proven structurally, not by this Bill-specific two-solver run"
+  ],
+  "failed_ci_retained": [35292678147, 35292819403],
+  "failure_classification": "artifact SHA256SUMS filename path prefix, not source or formal solver counterexample",
+  "next_high_value_step": "independent source-to-SMT translation equivalence and separately reachability-gated old-contract cover"
+}
