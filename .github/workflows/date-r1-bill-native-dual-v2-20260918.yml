@@ -1,0 +1,106 @@
+name: date-r1-bill-native-dual-v2-20260918
+on:
+  push:
+    branches: [research/date-g2-independent-20260917]
+    paths: [.github/workflows/date-r1-bill-native-dual-v2-20260918.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  native-reelaboration-crosscheck:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 27
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pinned-capability frontend and independent SMT engines
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq yosys z3 cvc5 python3 >/tmp/r1v2apt.log
+          mkdir -p input/frozen_native input/official input/bridge work/queries work/native work/evidence
+          { yosys -V;z3 --version;cvc5 --version;python3 --version;git rev-parse HEAD; } | tee work/evidence/tools.txt
+      - name: Fetch immutable first-run artifacts and independently frozen prior source backend
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh run download 35369017449 --repo risu-research/formal-exec-2609 -n date-r1-bill-native-source-dual-20260918 -D input/frozen_native
+          gh run download 35293627220 --repo risu-research/formal-exec-2609 -n date-g2-official-smt2-probe-v2 -D input/official
+          gh run download 35294365338 --repo risu-research/formal-exec-2609 -n date-g2-official-backend-independent-dual-solver-v1 -D input/bridge
+          test -s input/frozen_native/SOURCE_MANIFEST.json
+          test -s input/bridge/bridge/official_loss.smt2
+          test -s input/official/old.smt2
+          test -s input/official/new.smt2
+          echo '56f9a37955c2e70b727def892017ebaab5c79b6f36646f6d2b9f42d20a2de38c  input/bridge/bridge/official_loss.smt2' | sha256sum -c -
+          echo '41a3d4eac9450eab902dfdc46ddc6482adde8bda3e6e9009429ea32dd5b39173  input/official/old.smt2' | sha256sum -c -
+          echo '3158f8608207c1f5aed5cc077a477cfe89749740cb2e6bb7b7128d275b176b91  input/official/new.smt2' | sha256sum -c -
+          cp -a input/frozen_native/variants work/variants
+          cp input/frozen_native/SOURCE_MANIFEST.json work/
+          python3 - <<'PY'
+          import pathlib,hashlib,json
+          r=pathlib.Path('input/frozen_native'); d=json.loads((r/'SOURCE_MANIFEST.json').read_text()); expected={'old':'5d04f2ebefd2ddf92b16083de2ce27bb87cb1bb4c0c13c5f195c7c3276ac6c79','new':'50d76d26563a7a8ef4f500f8e2c40228b215f5eb9cccaf34ef568b0801963039','hybrid':'3d08d64a0f505811069e04659020d2bc66212ebd018ddd8747b3ae0427e3f8e2','no_cover':'f7c5da8122ca4e6cf02e45c6a39044ddc2817cdd2dc89974beb8391912192d42','restore_both':'6a59ed45af2e8994c6cbf6c4d1a264c01ed2632d0cc4dc9f3b503e487326943e'}
+          for k,h in expected.items():
+           assert hashlib.sha256((r/'native'/f'{k}.smt2').read_bytes()).hexdigest()==h
+           assert hashlib.sha256((r/'variants'/k/'rtl/axis_pkt_fifo.sv').read_bytes()).hexdigest()==d['source_sha256'][k]
+          print('FIVE_FIRST_RUN_ORIGINAL_NATIVE_SHA_AND_SOURCE_VERIFIED')
+          PY
+      - name: Independently re-elaborate all five native source models byte for byte
+        shell: bash
+        run: |
+          set -euo pipefail
+          for cell in old new hybrid no_cover restore_both;do
+            yosys -Q -T -l "work/native/$cell.log" -p "read_verilog -formal -sv -DFORMAL work/variants/$cell/rtl/axis_pkt_fifo.sv; chparam -set DEPTH 8 axis_pkt_fifo; prep -top axis_pkt_fifo; write_json work/native/$cell.json; write_smt2 -wires -mem work/native/$cell.smt2" > "work/native/$cell.stdout" 2>&1
+            cmp "work/native/$cell.smt2" "input/frozen_native/native/$cell.smt2"
+            cmp "work/native/$cell.json" "input/frozen_native/native/$cell.json"
+            echo "R1_FIVE_SOURCE_IR_BYTE_REGEN_PASS $cell $(sha256sum work/native/$cell.smt2)" | tee -a work/evidence/native_byte_check.txt
+          done
+      - name: Construct full historical and source-restored whole-F, independent property-vectors and controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile cert/date-g2-independent-20260917/r1_bill_native_comparator_v2_20260918.py
+          python3 cert/date-g2-independent-20260917/r1_bill_native_comparator_v2_20260918.py --source work --bridge input/bridge/bridge --official input/official --output work/queries | tee work/evidence/queries_ready.txt
+          test "$(find work/queries -maxdepth 1 -name '*.smt2' | wc -l)" -eq 15
+      - name: Recheck all source-grounded directions and nontrivial negative controls on Z3 and cvc5
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import subprocess,pathlib,json,hashlib,time
+          root=pathlib.Path('work');queries=json.loads((root/'queries/QUERIES.json').read_text());out=root/'results';out.mkdir(exist_ok=True);summary={}
+          assert len(queries)==15
+          for name,row in sorted(queries.items()):
+           file=root/'queries'/f'{name}.smt2';assert hashlib.sha256(file.read_bytes()).hexdigest()==row['sha256']
+           summary[name]={'sha256':row['sha256'],'expected':row['expected']}
+           for engine,cmd in (('z3',['z3','-smt2',str(file)]),('cvc5',['cvc5','--lang','smt2',str(file)])):
+            start=time.monotonic()
+            try:res=subprocess.run(cmd,text=True,capture_output=True,timeout=110)
+            except subprocess.TimeoutExpired as exc:
+             (out/f'{name}.{engine}.timeout').write_text(repr(exc)+'\n');raise
+            (out/f'{name}.{engine}.stdout').write_text(res.stdout);(out/f'{name}.{engine}.stderr').write_text(res.stderr)
+            verdict=res.stdout.strip().splitlines()[0] if res.stdout.strip() else 'EMPTY'
+            summary[name][engine]={'verdict':verdict,'returncode':res.returncode,'seconds':round(time.monotonic()-start,3)}
+            print('R1_V2_NATIVE',name,engine,verdict,'expected',row['expected'],flush=True)
+            assert res.returncode==0 and verdict==row['expected'] and '(error' not in res.stdout+res.stderr,(name,engine,res.returncode,verdict,res.stderr[:500])
+          (out/'DUAL_VERDICTS.json').write_text(json.dumps(summary,indent=2,sort_keys=True)+'\n')
+          print('R1_V2_SOURCE_REGENERATED_15_QUERY_30_SOLVER_PASS',flush=True)
+          PY
+      - name: Seal all source, formal, native SMT2, query and solver evidence even if any assertion fails
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/evidence
+          sha256sum cert/date-g2-independent-20260917/r1_bill_native_source_replay_20260918.py cert/date-g2-independent-20260917/r1_bill_native_comparator_v2_20260918.py > work/evidence/source_code_sha256.txt
+          cp input/official/old.smt2 input/official/new.smt2 input/bridge/bridge/official_loss.smt2 work/evidence/ 2>/dev/null || true
+          find work -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 -r sha256sum > work/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: date-r1-bill-native-v2-certified-20260918
+          path: work/
+          if-no-files-found: error
+          retention-days: 90
