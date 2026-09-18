@@ -27,9 +27,9 @@ jobs:
           set -euo pipefail
           for side in old new; do
             gh run download 35279448918 --repo risu-research/formal-exec-2609 -n date-g2-bill-source-ir-$side -D $side
-            (cd "$side" && sed 's@^evidence/@@' SHA256SUMS.txt | sha256sum -c)
+            (cd "$side" && sed 's@evidence/@@g' SHA256SUMS.txt | sha256sum -c)
             cp "$side/axis_pkt_fifo.original.sv" "$side/axis_pkt_fifo.sv"
-            (cd "$side" && yosys -Q -T -l ../evidence/${side}_yosys.log -p 'read_verilog -formal -sv -DFORMAL axis_pkt_fifo.sv; chparam -set DEPTH 8 axis_pkt_fifo; prep -top axis_pkt_fifo; write_smt2 -wires -mem -verbose ../evidence/'"$side"'.smt2')
+            (cd "$side" && yosys -Q -T -l ../evidence/${side}_yosys.log -p 'read_verilog -formal -sv -DFORMAL axis_pkt_fifo.sv; chparam -set DEPTH 8 axis_pkt_fifo; prep -top axis_pkt_fifo; write_smt2 -wires -mem ../evidence/'"$side"'.smt2')
             test -s "evidence/$side.smt2"
             grep -E '^; yosys-smt2-(module|register|input|wire|assert|assume)' "evidence/$side.smt2" | head -90 > "evidence/${side}_smt_tags.txt" || true
             grep -E 'define-fun .*(axis_pkt_fifo_[aun]|axis_pkt_fifo_n )' "evidence/$side.smt2" | head -90 > "evidence/${side}_smt_functions.txt" || true
@@ -43,7 +43,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: date-g2-official-smt2-probe
+          name: date-g2-official-smt2-probe-v2
           path: evidence/
           if-no-files-found: error
           retention-days: 90
