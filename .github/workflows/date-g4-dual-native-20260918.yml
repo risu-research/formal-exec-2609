@@ -1,0 +1,102 @@
+name: date-g4-dual-native-20260918
+on:
+  push:
+    branches: [research/date-g2-independent-20260917]
+    paths: [.github/workflows/date-g4-dual-native-20260918.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  dual-native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        o: [0, 1]
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      G4_ZIP: work/authority.zip
+      G4_OUT: work/queries
+      O: ${{ matrix.o }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install independent engines and retrieve SHA-pinned original Yosys compilation
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq cvc5 python3-pip >/tmp/g4apt.log
+          python3 -m pip install --break-system-packages 'z3-solver==4.13.3.0' >/tmp/g4pip.log
+          mkdir -p work/queries work/results
+          curl -fLsS --retry 3 -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github+json' https://api.github.com/repos/risu-research/formal-exec-2609/actions/artifacts/10555617048/zip -o work/authority.zip
+          printf '%s  %s\n' 5b0068501754052c134a6f56f04642e63fccb4f38c859c97ba4d6f3fa50788eb work/authority.zip | sha256sum -c -
+          test "$(git hash-object cert/date-g2-independent-20260917/derive_g4_b_native_20260918.py)" = '4f883490c572e2df9f7a7ecf7e4a00f869009365'
+          python3 - <<'PY'
+          import z3,subprocess
+          assert z3.get_version_string()=='4.13.3'
+          assert '1.1.2' in subprocess.check_output(['cvc5','--version'],text=True)
+          print('SOLVERS',z3.get_version_string(),subprocess.check_output(['cvc5','--version'],text=True).strip())
+          PY
+      - name: Reconstruct canonical 26 queries and verify exact precommitted content hashes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 cert/date-g2-independent-20260917/derive_g4_b_native_20260918.py
+          python3 - <<'PY'
+          import json,hashlib,pathlib
+          q=pathlib.Path('work/queries');m=json.loads((q/'MANIFEST.json').read_text()); rows=m['queries']
+          assert len(rows)==26
+          data='\n'.join(f"{r['name']} {r['sha256']} {r['expected']}" for r in rows)+'\n'
+          expected='8c8a6c823e8ee763950f9139495f2423c8933dc7a6bdd848c8a47692edacbb40'
+          assert hashlib.sha256(data.encode()).hexdigest()==expected,'PRECOMMITTED_QUERY_SET_MISMATCH'
+          for r in rows:
+            raw=(q/r['name']).read_bytes()
+            assert hashlib.sha256(raw).hexdigest()==r['sha256'] and len(raw)==r['bytes']
+          print('PRECOMMITTED_NATIVE_G4_26_OK',expected)
+          PY
+      - name: Cross-check both solvers and fail closed on any discrepancy
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,hashlib,pathlib,subprocess,time,os,collections,z3
+          q=pathlib.Path('work/queries');m=json.loads((q/'MANIFEST.json').read_text());side='O'+os.environ['O']+'_'
+          rows=[r for r in m['queries'] if r['name'].startswith(side)]
+          assert len(rows)==13
+          versions={'z3':z3.get_version_string(),'cvc5':subprocess.check_output(['cvc5','--version'],text=True).strip()}
+          assert versions['z3']=='4.13.3' and '1.1.2' in versions['cvc5']
+          out=pathlib.Path('work/results')/f'VERDICTS_O{os.environ["O"]}.json';got=[]
+          for r in rows:
+            f=q/r['name'];raw=f.read_bytes();assert hashlib.sha256(raw).hexdigest()==r['sha256']
+            for engine in ('z3_4_13_3','cvc5_1_1_2'):
+              t=time.monotonic();res='ERROR';returncode=None;stderr='';error=''
+              try:
+                if engine.startswith('z3'):
+                  s=z3.Solver();s.set(timeout=180000);s.from_string(raw.decode());res=str(s.check());returncode=0
+                  if res=='unknown':error=s.reason_unknown()
+                else:
+                  p=subprocess.run(['cvc5','--lang','smt2',str(f)],capture_output=True,text=True,timeout=180)
+                  res=p.stdout.strip();returncode=p.returncode;stderr=p.stderr[-1200:]
+              except Exception as exc:error=repr(exc)
+              got.append({'name':r['name'],'sha256':r['sha256'],'engine':engine,'expected':r['expected'],'observed':res,'returncode':returncode,'stderr':stderr,'error':error,'seconds':round(time.monotonic()-t,3)})
+              out.write_text(json.dumps({'versions':versions,'rows':got},sort_keys=True,indent=2)+'\n')
+              print('G4_DUAL_VERDICT',r['name'],engine,res,'expected',r['expected'],flush=True)
+              assert returncode==0 and res==r['expected'],'FAIL_CLOSED_'+r['name']+'_'+engine
+          assert len(got)==26
+          print('G4_DUAL_CERTIFIED_O',os.environ['O'],collections.Counter((r['engine'],r['observed']) for r in got),flush=True)
+          PY
+      - name: Seal all inputs, regenerated queries, and verdicts even on failure
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          find work -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 -r sha256sum > work/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: date-g4-dual-native-O${{ matrix.o }}-20260918
+          path: work/
+          retention-days: 90
+          if-no-files-found: error
