@@ -1,0 +1,50 @@
+name: date-g2-unbounded-safety-probe-20260917
+on:
+  push:
+    branches: [research/date-g2-independent-20260917]
+    paths: [.github/workflows/date-g2-unbounded-safety-probe-20260917.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  native-official-rtl-induction:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install upstream Yosys induction engine and Z3
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq yosys z3
+      - name: Verify independent historical official SMT2
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p official evidence
+          gh run download 35293627220 --repo risu-research/formal-exec-2609 -n date-g2-official-smt2-probe-v2 -D official
+          (cd official && sed 's@evidence/@@g' SHA256SUMS.txt | sha256sum -c --status)
+          echo '41a3d4eac9450eab902dfdc46ddc6482adde8bda3e6e9009429ea32dd5b39173  official/old.smt2' | sha256sum -c
+          yosys-smtbmc -h | head -40 > evidence/smtbmc_options.txt
+          yosys -V > evidence/yosys_version.txt
+          z3 -version > evidence/z3_version.txt
+      - name: Actual temporal induction of all 18 original assertions
+        run: |
+          set +e
+          timeout 300 yosys-smtbmc -i -t 18 -s z3 -m axis_pkt_fifo official/old.smt2 > evidence/induction.stdout 2> evidence/induction.stderr
+          code=$?
+          echo "$code" > evidence/induction.exitcode
+          tail -60 evidence/induction.stdout
+          if [ "$code" -eq 0 ] && grep -q 'Status: PASSED' evidence/induction.stdout; then echo 'UNBOUNDED_INDUCTION_PROVED' | tee evidence/induction.classification; else echo 'NOT_PROVED_OR_INDUCTION_STEP_FAILED; not an initialized counterexample' | tee evidence/induction.classification; fi
+      - name: Preserve complete input and all outcomes
+        if: always()
+        run: |
+          mkdir -p evidence
+          cp official/old.smt2 evidence/ 2>/dev/null || true
+          find evidence -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 -r sha256sum > evidence/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: date-g2-original-unbounded-induction-probe
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 90
