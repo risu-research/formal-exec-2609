@@ -85,3 +85,49 @@ jobs:
           path: evidence/
           if-no-files-found: warn
           retention-days: 90
+
+  r3_prospective_native_sby:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install native formal tools and record exact versions
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y git make yosys z3 boolector
+          git clone --filter=blob:none --depth=1 https://github.com/YosysHQ/sby.git /tmp/date-r3-sby
+          make -C /tmp/date-r3-sby install PREFIX=/tmp/date-r3-tools
+          echo '/tmp/date-r3-tools/bin' >> "$GITHUB_PATH"
+      - name: Download original H143 authority and source checkout
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p g6-r1 g6-r2 prospect
+          gh run download 35026104546 --repo risu-research/formal-exec-2609 --name g6-r1-exact-historical-inventory-evidence --dir g6-r1
+          gh run download 35026795230 --repo risu-research/formal-exec-2609 --name g6-r2-blind-semantic-classification-evidence --dir g6-r2
+          git -c protocol.version=2 clone --filter=blob:none --single-branch --no-checkout https://github.com/ZipCPU/zipcpu.git zipcpu
+          echo "runner_commit=$GITHUB_SHA" > prospect/runner-meta.txt
+          git -C /tmp/date-r3-sby rev-parse HEAD >> prospect/runner-meta.txt
+      - name: Execute prospectively selected unchanged original SBY on both source revisions
+        run: |
+          set -euo pipefail
+          python3 research/date-r3-task-replay-20260918/prospective_replay.py --zipcpu zipcpu --r1 g6-r1/g6-r1-inventory.json --r2 g6-r2/g6-r2-results.json --out prospect --sby sby | tee prospect/console.log
+          cp research/date-r3-task-replay-20260918/prospective_replay.py prospect/REPLAY_SOURCE.py
+          cp research/date-r3-task-replay-20260918/PROSPECTIVE_TASK_SELECTION.json prospect/PREREGISTERED_SELECTION.json
+          cp g6-r1/g6-r1-inventory.json prospect/ORIGINAL_R1.json
+          cp g6-r2/g6-r2-results.json prospect/ORIGINAL_R2.json
+          python3 - <<'PY'
+          import hashlib,pathlib
+          root=pathlib.Path('prospect');files=sorted(p for p in root.rglob('*') if p.is_file() and p.name!='SHA256SUMS.txt')
+          (root/'SHA256SUMS.txt').write_text(''.join(hashlib.sha256(p.read_bytes()).hexdigest()+'  '+str(p.relative_to(root))+'\n' for p in files))
+          print('CAPSULE_FILES',len(files))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: date-r3-prospective-native-sby-capsule
+          path: prospect/
+          if-no-files-found: warn
+          retention-days: 90
