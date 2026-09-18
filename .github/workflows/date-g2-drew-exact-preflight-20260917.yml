@@ -1,0 +1,84 @@
+name: date-g2-drew-exact-preflight-20260917
+on:
+  push:
+    branches: [research/date-g2-independent-20260917]
+    paths: [.github/workflows/date-g2-drew-exact-preflight-20260917.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  exact-prove:
+    runs-on: ubuntu-latest
+    timeout-minutes: 26
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {side: old, sha: 9ae13f188f36d82bee98e1b7578b572bb6ac500a}
+          - {side: new, sha: 40a7d1a17e90324cb9a274e56cb35ea5da0124ce}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify frozen historical provenance
+        env:
+          SIDE: ${{ matrix.side }}
+          SHA: ${{ matrix.sha }}
+        run: |
+          python3 - <<'PY'
+          import json,os
+          f=json.load(open('cert/date-g2-independent-20260917/FROZEN_SELECTION.json'))
+          c=next(x for x in f['candidate_order_frozen_before_any_new_whole_F_query'] if x['id']=='X-DREW-PORT')
+          assert c['repository']=='drewbabel/fifo' and c['task']=='formal/async_fifo.sby prove' and c['original_engine']=='smtbmc z3'
+          assert c['parent' if os.environ['SIDE']=='old' else 'child']==os.environ['SHA']
+          print('FROZEN_SELECTION_MATCH',c['id'],os.environ['SIDE'],os.environ['SHA'])
+          PY
+      - name: Install exact-engine toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y yosys z3 git make python3-click
+          git clone -q --depth 1 https://github.com/YosysHQ/sby.git /tmp/g2-sby
+          sudo make -s -C /tmp/g2-sby install
+          mkdir -p evidence
+          { yosys -V; z3 --version; sby --version; git -C /tmp/g2-sby rev-parse HEAD; } > evidence/tools.txt
+      - name: Run original prove task at pinned historical SHA
+        shell: bash
+        env:
+          SIDE: ${{ matrix.side }}
+          SHA: ${{ matrix.sha }}
+        run: |
+          set -euo pipefail
+          git clone -q --filter=blob:none https://github.com/drewbabel/fifo.git /tmp/g2-drew
+          git -C /tmp/g2-drew checkout -q --detach "$SHA"
+          test "$(git -C /tmp/g2-drew rev-parse HEAD)" = "$SHA"
+          cp /tmp/g2-drew/formal/async_fifo.sby evidence/original.sby
+          sha256sum /tmp/g2-drew/rtl/{synchronizer,fifomem,rptr_empty,wptr_full,async_fifo}.sv > evidence/rtl_SHA256SUMS.txt
+          grep -q '^prove$' evidence/original.sby
+          grep -q '^smtbmc z3$' evidence/original.sby
+          set +e
+          (cd /tmp/g2-drew && timeout 900 sby -f formal/async_fifo.sby prove) > evidence/solver.log 2>&1
+          code=$?
+          set -e
+          echo "$code" > evidence/exit_code.txt
+          root=/tmp/g2-drew/formal/async_fifo_prove
+          if [ -f "$root/status" ]; then cp "$root/status" evidence/status.txt; fi
+          if [ -f "$root/logfile.txt" ]; then cp "$root/logfile.txt" evidence/sby.log; fi
+          if [ "$code" -eq 0 ] && [ -f "$root/PASS" ] && grep -q 'DONE (PASS' evidence/solver.log; then
+            echo EXACT_ENGINE_PASS > evidence/verdict.txt
+          else
+            echo NOT_ESTABLISHED > evidence/verdict.txt
+          fi
+          printf '%s\n' "$SIDE $SHA $(cat evidence/verdict.txt)" > evidence/summary.txt
+          cat evidence/summary.txt
+      - name: Seal evidence even if execution fails
+        if: always()
+        run: |
+          mkdir -p evidence
+          find evidence -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 -r sha256sum > evidence/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: date-g2-drew-exact-${{ matrix.side }}
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 90
