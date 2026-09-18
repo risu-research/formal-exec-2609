@@ -1,0 +1,93 @@
+name: date-g2-final-clock9-yices-qf-v2-20260917
+on:
+  push:
+    branches: [research/date-g2-independent-20260917]
+    paths: [.github/workflows/date-g2-final-clock9-yices-qf-v2-20260917.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  verified-yices-logic-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        logic: [QF_AUFBV, ALL]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install SHA-pinned independent SRI Yices and Microsoft Z3
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq z3 curl
+          mkdir -p evidence /tmp/g2-yices
+          curl -fLsS --retry 3 --retry-delay 2 https://github.com/SRI-CSL/yices2/releases/download/yices-2.7.0/yices-2.7.0-x86_64-pc-linux-gnu-static-gmp.tar.gz -o /tmp/g2-yices.tar.gz
+          echo '49566b6f817692820538df78fe406878400d79810631c9372b2495bc81d3e00a  /tmp/g2-yices.tar.gz' | sha256sum --check
+          tar -xzf /tmp/g2-yices.tar.gz -C /tmp/g2-yices
+          binary=$(find /tmp/g2-yices -type f -name yices-smt2 | head -1)
+          test -n "$binary"
+          sudo install -m 755 "$binary" /usr/local/bin/yices-smt2
+          ldpath=$(dirname "$(find /tmp/g2-yices -type f -name 'libyices.so*' | head -1 || true)")
+          if [ "$ldpath" != . ]; then echo "$ldpath" | sudo tee /etc/ld.so.conf.d/g2-yices.conf; sudo ldconfig; fi
+          yices-smt2 --version > evidence/yices_version.txt
+          sha256sum "$binary" /tmp/g2-yices.tar.gz > evidence/yices_binary_sha256.txt
+          z3 --version > evidence/z3_version.txt
+      - name: Verify all original evidence hashes and change only solver logic metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LOGIC: ${{ matrix.logic }}
+        run: |
+          set -euo pipefail
+          mkdir -p source
+          gh run download 35304343972 --repo risu-research/formal-exec-2609 -n date-g2-pktcount-clock-9 -D source
+          (cd source && sed 's@evidence/@@g' SHA256SUMS.txt | sha256sum -c --status)
+          cp source/packet_count_fail_at_state_09.smt2 evidence/
+          cp source/packet_depth_manifest.json source/verdict.json evidence/
+          python3 - <<'PY'
+          import hashlib,json,os,pathlib
+          d=pathlib.Path('evidence');a=(d/'packet_count_fail_at_state_09.smt2').read_bytes();m=json.loads((d/'packet_depth_manifest.json').read_text())
+          assert hashlib.sha256(a).hexdigest()==m['disjuncts']['9']=='74b51dbd5c659509602f0b412e9e6ba6eff5055acbf546a76e59117f31c887ab'
+          assert json.loads((d/'verdict.json').read_text())['cvc5']['verdict']=='UNKNOWN_TIMEOUT'
+          assert b'(set-logic ' not in a and b'(forall ' not in a and b'(exists ' not in a
+          header=('(set-logic '+os.environ['LOGIC']+')\n').encode();b=header+a
+          assert b[len(header):]==a
+          (d/'logic_only.smt2').write_bytes(b)
+          (d/'logic_manifest.json').write_text(json.dumps({'original_sha256':hashlib.sha256(a).hexdigest(),'logic_only_sha256':hashlib.sha256(b).hexdigest(),'header':header.decode().strip(),'original_constraints_byte_identical':True},indent=2)+'\n')
+          print('ORIGINAL_SMT2_IMMUTABLE_AND_SOLVER_LOGIC_HEADER_ONLY',os.environ['LOGIC'])
+          PY
+      - name: Independently solve original same exact constraints with pinned Yices and Z3
+        run: |
+          python3 - <<'PY'
+          import json,pathlib,subprocess,time,hashlib
+          d=pathlib.Path('evidence');src=d/'packet_count_fail_at_state_09.smt2';tag=d/'logic_only.smt2';out={}
+          for name,cmd in [('z3-original',['z3','-smt2',str(src)]),('z3-logic',['z3','-smt2',str(tag)]),('yices-logic',['yices-smt2',str(tag)])]:
+            start=time.monotonic()
+            try:
+              r=subprocess.run(cmd,text=True,capture_output=True,timeout=530)
+              (d/(name+'.stdout')).write_text(r.stdout);(d/(name+'.stderr')).write_text(r.stderr)
+              verdict=r.stdout.strip().splitlines()[0] if r.stdout.strip() else 'NO_VERDICT'
+              out[name]={'verdict':verdict,'exit':r.returncode,'seconds':round(time.monotonic()-start,3)}
+            except subprocess.TimeoutExpired as exc:
+              out[name]={'verdict':'UNKNOWN_TIMEOUT','exit':None,'seconds':530}
+              (d/(name+'.stderr')).write_text(str(exc))
+            print('YICES_QF_EXACT_FORMULA',name,out[name],flush=True)
+            (d/'all_verdicts.json').write_text(json.dumps(out,indent=2)+'\n')
+          assert all(row['verdict']=='unsat' and row['exit']==0 for row in out.values())
+          # Alias for local verifier; requires same exact verified source plus explicit logic metadata.
+          (d/'yices_z3_verdict.json').write_text(json.dumps({'z3':out['z3-original'],'yices':out['yices-logic']},indent=2)+'\n')
+          print('LAST_CLOCK_INDEPENDENT_Z3_AND_YICES_UNSAT_PROVED',flush=True)
+          PY
+      - name: Preserve all exact evidence on success or failure
+        if: always()
+        run: |
+          mkdir -p evidence
+          find evidence -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 -r sha256sum > evidence/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: date-g2-clock9-yices-logic-${{ matrix.logic }}
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 90
