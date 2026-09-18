@@ -1,0 +1,95 @@
+name: date-g2-independent-reachability-cvc5-20260917
+on:
+  push:
+    branches: [research/date-g2-independent-20260917]
+    paths: [.github/workflows/date-g2-independent-reachability-cvc5-20260917.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  initialized-contract-exclusion:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install independent solver families
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y z3 cvc5
+          mkdir -p official previous reach evidence
+          { z3 --version; cvc5 --version; } > evidence/tool_versions.txt
+      - name: Verify official old source SMT2 and all 54 previously dual-solver-checked backend equivalence queries
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh run download 35293627220 --repo risu-research/formal-exec-2609 -n date-g2-official-smt2-probe-v2 -D official
+          gh run download 35294365338 --repo risu-research/formal-exec-2609 -n date-g2-official-backend-independent-dual-solver-v1 -D previous
+          (cd official && sed 's@evidence/@@g' SHA256SUMS.txt | sha256sum -c --status)
+          (cd previous && sed 's@^evidence/@@g' SHA256SUMS.txt | sha256sum -c --status)
+          test "$(sha256sum official/old.smt2 | cut -d' ' -f1)" = 41a3d4eac9450eab902dfdc46ddc6482adde8bda3e6e9009429ea32dd5b39173
+          python3 - <<'PY'
+          import pathlib,json,hashlib
+          p=pathlib.Path('previous');d=json.loads((p/'bridge_verdicts.json').read_text());assert len(d)==54
+          for name,row in d.items():
+           raw=(p/'bridge'/(name+'.smt2')).read_bytes()
+           assert hashlib.sha256(raw).hexdigest()==row['query_sha256']
+           for solver in ('z3','cvc5'):
+            v=row[solver];assert v['verdict']==row['expected'] and v['returncode']==0,(name,solver)
+            assert (p/'bridge'/(name+'.'+solver+'.stdout')).read_text().strip().splitlines()[0]==row['expected']
+            assert '(error' not in (p/'bridge'/(name+'.'+solver+'.stderr')).read_text()
+          print('ALL_54_BACKEND_QUERIES_BOTH_SOLVERS_PASS_PRIOR_ARTIFACT_INDEPENDENTLY_CHECKED')
+          PY
+          cp previous/bridge_verdicts.json evidence/verified_54_backend_verdicts.json
+      - name: Regenerate full initialized source-derived state exploration
+        run: |
+          set -euo pipefail
+          python3 cert/date-g2-independent-20260917/reachability_official.py --official official/old.smt2 --out reach > evidence/reach_meta_stdout.txt
+          cp reach/reachability_meta.json evidence/
+      - name: Check contract exclusion minimal k=9 in both solvers and finite safety in Z3, never hide slow cvc5 result
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import subprocess,json,time,pathlib,hashlib,shutil
+          d=pathlib.Path('reach');out=pathlib.Path('evidence/reach');out.mkdir(parents=True)
+          meta=json.loads((d/'reachability_meta.json').read_text());result={}
+          # SAT witness first; UNSAT cases k0..8 follow, each in two independent solvers.
+          names=['old_contract_exclusion_depth9']+[f'old_contract_exclusion_depth{k}' for k in range(9)]+['old_any_assertion_failure_up_to_depth9']
+          for name in names:
+           f=d/(name+'.smt2');raw=f.read_bytes();assert hashlib.sha256(raw).hexdigest()==meta['query_sha256'][name]
+           shutil.copyfile(f,out/f.name)
+           expect='sat' if name=='old_contract_exclusion_depth9' else 'unsat'
+           row={'expected':expect,'sha256':hashlib.sha256(raw).hexdigest()}
+           solvers=[('z3',['z3','-smt2',str(f)])]
+           if name!='old_any_assertion_failure_up_to_depth9':solvers.append(('cvc5',['cvc5','--lang','smt2','--produce-models',str(f)]))
+           for solver,cmd in solvers:
+            t=time.monotonic()
+            try:r=subprocess.run(cmd,capture_output=True,text=True,timeout=120)
+            except subprocess.TimeoutExpired as exc:
+             (out/(name+'.'+solver+'.stderr')).write_text('TIMEOUT_120_SECONDS_NOT_PROOF\n'+str(exc));raise
+            (out/(name+'.'+solver+'.stdout')).write_text(r.stdout)
+            (out/(name+'.'+solver+'.stderr')).write_text(r.stderr)
+            got=r.stdout.strip().splitlines()[0] if r.stdout.strip() else 'EMPTY'
+            row[solver]={'verdict':got,'returncode':r.returncode,'seconds':round(time.monotonic()-t,3)}
+            assert r.returncode==0 and got==expect and '(error' not in r.stdout+r.stderr,(name,solver,got,r.stderr[:300])
+           if name=='old_any_assertion_failure_up_to_depth9':row['cvc5']={'verdict':'UNKNOWN_TIMEOUT_IN_PRIOR_90_SECOND_ATTEMPT','prior_failed_run':35294365338,'scope':'not claimed as UNSAT'}
+           result[name]=row
+           print('EXPLICIT_VERDICT',name,row,flush=True)
+          (out/'verdicts.json').write_text(json.dumps(result,sort_keys=True,indent=2)+'\n')
+          print('ALL_INITIALIZED_CONTRACT_COVERS_BOTH_SOLVERS_PASS_FINITE_SAFETY_Z3_ONLY')
+          PY
+      - name: Preserve hashes and errors
+        if: always()
+        run: |
+          mkdir -p evidence
+          sha256sum cert/date-g2-independent-20260917/reachability_official.py > evidence/reach_script_sha256.txt
+          find evidence -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 -r sha256sum > evidence/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: date-g2-initialized-contract-cover-dual-solver-v2
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 90
