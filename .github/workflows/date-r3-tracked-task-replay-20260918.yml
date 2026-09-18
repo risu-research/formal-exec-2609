@@ -1,0 +1,54 @@
+name: DATE R3 original tracked task reconstruction
+on:
+  push:
+    paths:
+      - 'research/date-r3-task-replay-20260918/replay.py'
+      - '.github/workflows/date-r3-tracked-task-replay-20260918.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Retrieve actual frozen G6 R1 and R2 artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p g6-r1 g6-r2 evidence
+          gh run download 35026104546 --repo risu-research/formal-exec-2609 --name g6-r1-exact-historical-inventory-evidence --dir g6-r1
+          gh run download 35026795230 --repo risu-research/formal-exec-2609 --name g6-r2-blind-semantic-classification-evidence --dir g6-r2
+          echo '2f5caabda7625524a790be6ec94d07e5fda02a9a5eaca9875fe8add858c88161  g6-r1/g6-r1-inventory.json' | sha256sum -c -
+          echo '00cc74ac08a15a785eaf7caa601181c16d8a2ee152b735b3e87ae9a3bb981af1  g6-r2/g6-r2-results.json' | sha256sum -c -
+      - name: Acquire original first-parent historical Git objects
+        run: |
+          set -euo pipefail
+          git -c protocol.version=2 clone --filter=blob:none --single-branch --no-checkout https://github.com/ZipCPU/zipcpu.git zipcpu
+          git -c protocol.version=2 clone --filter=blob:none --single-branch --no-checkout https://github.com/SymbioticEDA/riscv-formal.git riscv-formal
+      - name: Execute exact tracked task source and available-SBY replay
+        run: |
+          set -euo pipefail
+          python3 research/date-r3-task-replay-20260918/replay.py | tee evidence/runner.log
+          cp research/date-r3-task-replay-20260918/replay.py evidence/REPLAY_SOURCE.py
+          cp g6-r1/g6-r1-inventory.json evidence/ORIGINAL_G6_R1.json
+          cp g6-r2/g6-r2-results.json evidence/ORIGINAL_G6_R2.json
+          printf '%s\n' "$GITHUB_SHA" > evidence/runner-commit.txt
+          find evidence -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > evidence/SHA256SUMS.txt
+          python3 - <<'PY'
+          import hashlib,pathlib
+          for ln in pathlib.Path('evidence/SHA256SUMS.txt').read_text().splitlines():
+              expected,filename=ln.split('  ',1)
+              assert hashlib.sha256(pathlib.Path(filename).read_bytes()).hexdigest()==expected
+          print('SHA256_MANIFEST_PASS')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: date-r3-tracked-task-replay-evidence
+          path: evidence/
+          if-no-files-found: warn
+          retention-days: 90
