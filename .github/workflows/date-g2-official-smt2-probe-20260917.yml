@@ -1,0 +1,49 @@
+name: date-g2-official-smt2-probe-20260917
+on:
+  push:
+    branches: [research/date-g2-independent-20260917]
+    paths: [.github/workflows/date-g2-official-smt2-probe-20260917.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  official-backend:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install upstream backend
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y yosys
+          mkdir -p evidence old new
+          yosys -V | tee evidence/yosys_version.txt
+      - name: Recover hash-pinned original source, regenerate independent official backend
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          for side in old new; do
+            gh run download 35279448918 --repo risu-research/formal-exec-2609 -n date-g2-bill-source-ir-$side -D $side
+            (cd "$side" && sed 's@^evidence/@@' SHA256SUMS.txt | sha256sum -c)
+            cp "$side/axis_pkt_fifo.original.sv" "$side/axis_pkt_fifo.sv"
+            (cd "$side" && yosys -Q -T -l ../evidence/${side}_yosys.log -p 'read_verilog -formal -sv -DFORMAL axis_pkt_fifo.sv; chparam -set DEPTH 8 axis_pkt_fifo; prep -top axis_pkt_fifo; write_smt2 -wires -mem -verbose ../evidence/'"$side"'.smt2')
+            test -s "evidence/$side.smt2"
+            grep -E '^; yosys-smt2-(module|register|input|wire|assert|assume)' "evidence/$side.smt2" | head -90 > "evidence/${side}_smt_tags.txt" || true
+            grep -E 'define-fun .*(axis_pkt_fifo_[aun]|axis_pkt_fifo_n )' "evidence/$side.smt2" | head -90 > "evidence/${side}_smt_functions.txt" || true
+          done
+          sha256sum evidence/*.smt2 > evidence/smt2_sha256.txt
+      - name: Preserve artifacts even on failure
+        if: always()
+        run: |
+          mkdir -p evidence
+          find evidence -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 -r sha256sum > evidence/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: date-g2-official-smt2-probe
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 90
