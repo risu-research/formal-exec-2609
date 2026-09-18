@@ -1,0 +1,77 @@
+name: date-g1-same-ir-dual-export-v3-20260918
+on:
+  push:
+    branches: [research/date-g2-independent-20260917]
+    paths: [.github/workflows/date-g1-same-ir-dual-export-v3-20260918.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  same-ir-dual-export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dependencies and exact 2026-09-17 original source archive
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq && sudo apt-get install -y yosys
+          mkdir -p evidence/old evidence/new evidence/patched evidence/reference
+          gh run download 35275901145 -R risu-research/formal-exec-2609 -n date-zipcpu-g1-source-20260917 -D evidence/reference
+          yosys -V | tee evidence/version.txt
+      - name: Regenerate source->original JSON, then SAME in-memory IR->native SMT2
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib,shutil,json
+          src=Path('evidence/reference/sources');root=Path('evidence');expected=json.loads((src/'source-manifest.json').read_text())
+          for n,h in expected.items():assert hashlib.sha256((src/n).read_bytes()).hexdigest()==h,n
+          for side in ('old','new','patched'):
+            d=root/side
+            for suffix in ('rtl/core','rtl/ex','bench/formal'):(d/suffix).mkdir(parents=True,exist_ok=True)
+            shutil.copyfile(src/(side+'.v'),d/'rtl/core/pipemem.v')
+            shutil.copyfile(src/(('old' if side=='old' else 'new')+'.fwb_master.v'),d/'rtl/ex/fwb_master.v')
+            original=(src/(('old' if side=='old' else 'new')+'.pipemem.ys')).read_text()
+            assert original.count('write_smt2 -wires pipemem.smt2')==1
+            (d/'bench/formal/original.ys').write_text(original)
+            (d/'bench/formal/dual.ys').write_text(original.replace('write_smt2 -wires pipemem.smt2','flatten\nopt -share_all\nwrite_json source_ir.json\ndffunmap\nwrite_smt2 -wires source_ir.smt2'))
+          print('SOURCE PASS all exact original sources/recipes')
+          PY
+          for side in old new patched; do
+            d="evidence/$side/bench/formal"
+            (cd "$d" && yosys -Q -T -s dual.ys > dual.stdout 2> dual.stderr)
+            test -s "$d/source_ir.json" && test -s "$d/source_ir.smt2"
+            if cmp -s "$d/source_ir.json" "evidence/reference/ir/$side.json"; then echo "$side same-IR JSON BYTE-IDENTICAL" | tee -a evidence/identical.txt; else echo "$side JSON MISMATCH: DO NOT CERTIFY" | tee -a evidence/identical.txt; exit 1; fi
+            sha256sum "$d/source_ir.json" "$d/source_ir.smt2" >> evidence/dual_hashes.txt
+          done
+      - name: Fail-closed comparison and cross-export mutation control
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib,json
+          root=Path('evidence'); expected={'old':'6514165245434d493f5ba54a045b5d3ef8cb111152e499fab15609ecf54705bd','new':'4bb3f46644df37123677cd1c57e78506a87285bbf789be754c27a4e9e12d667e','patched':'6ba92a65e2a4da6c10b4467893e4e20cdb544dde68abfe414764412e46ed459b'}
+          statuses={}
+          for side,want in expected.items():
+            p=root/side/'bench/formal/source_ir.json';b=p.read_bytes();assert hashlib.sha256(b).hexdigest()==want,(side,'JSON mismatch')
+            s=root/side/'bench/formal/source_ir.smt2';assert s.stat().st_size>1000
+            tampered=b+b' ';assert hashlib.sha256(tampered).hexdigest()!=want
+            statuses[side]={'json_sha256':want,'smt2_sha256':hashlib.sha256(s.read_bytes()).hexdigest(),'json_perturbation_rejected':True}
+          (root/'dual_export_audit.json').write_text(json.dumps(statuses,indent=2,sort_keys=True)+'\n')
+          print('DUAL EXPORT PASS 3/3 exact historical JSON bytes; native SMT2 exported after dffunmap from same IR')
+          PY
+      - name: Preserve logs, SHA manifests even upon failure
+        if: always()
+        run: |
+          find evidence -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 -r sha256sum > evidence/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: date-g1-same-ir-dual-export-v3-20260918
+          path: evidence/
+          retention-days: 90
+          if-no-files-found: error
