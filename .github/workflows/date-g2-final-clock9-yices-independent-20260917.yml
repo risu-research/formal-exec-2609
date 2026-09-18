@@ -1,0 +1,82 @@
+name: date-g2-final-clock9-yices-independent-20260917
+on:
+  push:
+    branches: [research/date-g2-independent-20260917]
+    paths: [.github/workflows/date-g2-final-clock9-yices-independent-20260917.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  unchanged-source-third-solver:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pinned independent Yices 2.7 and Z3
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq z3 curl
+          mkdir -p evidence /tmp/g2-yices
+          url=https://github.com/SRI-CSL/yices2/releases/download/yices-2.7.0/yices-2.7.0-x86_64-pc-linux-gnu-static-gmp.tar.gz
+          curl -fLsS --retry 3 --retry-delay 2 "$url" -o /tmp/g2-yices.tar.gz
+          echo '49566b6f817692820538df78fe406878400d79810631c9372b2495bc81d3e00a  /tmp/g2-yices.tar.gz' | sha256sum --check
+          tar -xzf /tmp/g2-yices.tar.gz -C /tmp/g2-yices
+          binary=$(find /tmp/g2-yices -type f -name yices-smt2 | head -1)
+          test -n "$binary"
+          sudo install -m 755 "$binary" /usr/local/bin/yices-smt2
+          ldpath=$(dirname "$(find /tmp/g2-yices -type f -name 'libyices.so*' | head -1 || true)")
+          if [ "$ldpath" != . ]; then echo "$ldpath" | sudo tee /etc/ld.so.conf.d/g2-yices.conf; sudo ldconfig; fi
+          yices-smt2 --version > evidence/yices_version.txt
+          sha256sum "$binary" /tmp/g2-yices.tar.gz > evidence/yices_binary_sha256.txt
+          z3 --version > evidence/z3_version.txt
+      - name: Download SHA-pinned EXACT official k9 UNSAT query without changing one byte
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p src
+          gh run download 35304343972 --repo risu-research/formal-exec-2609 -n date-g2-pktcount-clock-9 -D src
+          (cd src && sed 's@evidence/@@g' SHA256SUMS.txt | sha256sum -c --status)
+          cp src/packet_count_fail_at_state_09.smt2 evidence/
+          cp src/packet_depth_manifest.json src/verdict.json evidence/
+          python3 - <<'PY'
+          import json,pathlib,hashlib
+          d=pathlib.Path('evidence');s=(d/'packet_count_fail_at_state_09.smt2').read_bytes();m=json.loads((d/'packet_depth_manifest.json').read_text())
+          assert hashlib.sha256(s).hexdigest()==m['disjuncts']['9']=='74b51dbd5c659509602f0b412e9e6ba6eff5055acbf546a76e59117f31c887ab'
+          assert json.loads((d/'verdict.json').read_text())['cvc5']['verdict']=='UNKNOWN_TIMEOUT'
+          print('YICES_INPUT_EXACT_SOURCE_HASH_VERIFIED')
+          PY
+      - name: Cross-check exact source query with independent SRI Yices 2.7 and MS Z3
+        run: |
+          python3 - <<'PY'
+          import pathlib,subprocess,json,time
+          d=pathlib.Path('evidence');src=str(d/'packet_count_fail_at_state_09.smt2');rows={}
+          for s,cmd in [('z3',['z3','-smt2',src]),('yices',['yices-smt2',src])]:
+            t=time.monotonic()
+            try:
+              r=subprocess.run(cmd,capture_output=True,text=True,timeout=560)
+              (d/(s+'.stdout')).write_text(r.stdout);(d/(s+'.stderr')).write_text(r.stderr)
+              v=r.stdout.strip().splitlines()[0] if r.stdout.strip() else 'NO_VERDICT'
+              rows[s]={'verdict':v,'exit':r.returncode,'seconds':round(time.monotonic()-t,2)}
+            except subprocess.TimeoutExpired as e:
+              rows[s]={'verdict':'UNKNOWN_TIMEOUT','exit':None,'seconds':560}
+              (d/(s+'.stderr')).write_text(str(e))
+            print('PINNED_ORIGINAL_CLOCK9',s,rows[s],flush=True)
+          (d/'yices_z3_verdict.json').write_text(json.dumps(rows,indent=2)+'\n')
+          assert all(r['verdict']=='unsat' and r['exit']==0 for r in rows.values()),'Never label unknown/sat as certified UNSAT'
+          print('CLOCK9_Z3_YICES_INDEPENDENT_UNSAT_PASS',flush=True)
+          PY
+      - name: Always record complete evidence
+        if: always()
+        run: |
+          mkdir -p evidence
+          find evidence -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 -r sha256sum > evidence/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: date-g2-clock9-independent-pinned-yices
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 90
