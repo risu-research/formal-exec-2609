@@ -1,0 +1,125 @@
+name: date-g1-native-source-smt2-20260918
+on:
+  push:
+    branches: [research/date-g2-independent-20260917]
+    paths: [.github/workflows/date-g1-native-source-smt2-20260918.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  source-native-smt2:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 22
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install historical-compatible Yosys and retrieve sealed original sources
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y yosys z3 cvc5 git python3
+          mkdir -p evidence/input evidence/build
+          gh run download 35275901145 --repo risu-research/formal-exec-2609 -n date-zipcpu-g1-source-replay -D evidence/input
+          find evidence/input -maxdepth 3 -type f | sort > evidence/input_file_list.txt
+          yosys -V | tee evidence/yosys_version.txt
+          z3 --version | tee evidence/z3_version.txt
+          cvc5 --version | tee evidence/cvc5_version.txt
+      - name: Check exact old/child provenance and create single-edit counterfactual
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib,subprocess,difflib,json,shutil
+          root=Path('evidence');inp=root/'input'; src=inp/'sources'
+          if not src.is_dir():
+            raise RuntimeError('unexpected artifact layout; fail closed: '+str(list(inp.rglob('*'))[:30]))
+          expected={'old.v':'1d07d3e7fc3816f8af1c3f5f4c1a6f0c97e30de60fc9722e2a76d73b83a9bf96','new.v':'7238c0ff1c735c8dd467ec0ba9c3acc6a91ddd7bd1cc8268a3d4cffca0d61abc','patched.v':'497772ade03bd0bcfd282b2518d45516572b8252b20e75f64aadb967edc00800','old.fwb_master.v':'b8938883120bf392af64d5166d3381a825597ba44d75467681436382897f9b9d','new.fwb_master.v':'b8938883120bf392af64d5166d3381a825597ba44d75467681436382897f9b9d','old.pipemem.ys':'637f74ef7b3091cac0ea9d81895f40c9c82d5a0b2fb192c5b39a42ebe177b254','new.pipemem.ys':'637f74ef7b3091cac0ea9d81895f40c9c82d5a0b2fb192c5b39a42ebe177b254'}
+          for name,want in expected.items():
+            p=src/name
+            assert p.is_file(),name
+            assert hashlib.sha256(p.read_bytes()).hexdigest()==want,name
+          old=src/'new.v';s=old.read_text();p=src/'patched.v'
+          x=('`ASSUME( (i_addr[(AW+1):2] == o_wb_addr)', '||(i_addr[(AW+1):2] == o_wb_addr+1));')
+          y=('`ASSUME( (i_addr == o_wb_addr)','||(i_addr == o_wb_addr+1));')
+          for a,b in zip(x,y):
+            assert s.count(a)==1,(a,s.count(a))
+            s=s.replace(a,b,1)
+          assert s.encode()==p.read_bytes(),'one-edit diff drifted'
+          assert subprocess.check_output(['git','hash-object',str(old)],text=True).strip()=='60f5c6c75e2f396ccb7391d6ea1c3c6f55fec22b'
+          assert subprocess.check_output(['git','hash-object',str(src/'old.v')],text=True).strip()=='fa4542fe97cd9b7c7051251405dfa5ef1baa1273'
+          for side in ['old','new','patched']:
+            b=root/'build'/side
+            for d in ['rtl/core','rtl/ex','bench/formal']: (b/d).mkdir(parents=True,exist_ok=True)
+            shutil.copy(src/f'{side}.v',b/'rtl/core/pipemem.v')
+            shutil.copy(src/('old' if side=='old' else 'new')+'.fwb_master.v',b/'rtl/ex/fwb_master.v')
+            shutil.copy(src/('old' if side=='old' else 'new')+'.pipemem.ys',b/'bench/formal/pipemem.ys')
+            recipe=(b/'bench/formal/pipemem.ys').read_text()
+            assert 'read_verilog -D PIPEMEM -formal' in recipe and recipe.count('write_smt2 -wires pipemem.smt2')==1
+            (b/'bench/formal/pipemem.compat.ys').write_text(recipe.replace('write_smt2 -wires pipemem.smt2','dffunmap\nwrite_smt2 -wires pipemem.smt2\nwrite_json pipemem_native.json'))
+          (root/'source_provenance.json').write_text(json.dumps({'historical_old':'128cab89f5edaae4699184f50c1334598ebe904e','historical_child':'d511239e19be8fcc7f340a64554ea93699637e62','target':'bench/formal/pipemem.ys','edits':'exact two equalities in the ONE original assumption','source_sha256':expected},indent=2,sort_keys=True)+'\n')
+          print('PROVENANCE_PASS; original target and unique edit verified')
+          PY
+      - name: Attempt literal upstream Yosys script and log any unsupported backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          for side in old new patched; do
+            b="evidence/build/$side/bench/formal"
+            (cd "$b" && yosys -Q -T -s pipemem.ys > literal.stdout 2> literal.stderr) && outcome=PASS || outcome=FAIL
+            echo "$side original-literal=$outcome" | tee -a evidence/literal_summary.txt
+          done
+      - name: Regenerate native SMT2 and JSON from ALL three full original source trees
+        shell: bash
+        run: |
+          set -euo pipefail
+          for side in old new patched; do
+            b="evidence/build/$side/bench/formal"
+            (cd "$b" && yosys -Q -T -s pipemem.compat.ys > compat.stdout 2> compat.stderr)
+            test -s "$b/pipemem.smt2"
+            test -s "$b/pipemem_native.json"
+            echo "$side native-SMT2-and-JSON-PASS" | tee -a evidence/compat_summary.txt
+            sha256sum "$b/pipemem.smt2" "$b/pipemem_native.json" >> evidence/native_hashes.txt
+          done
+      - name: Source and generated-format negative controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import json,hashlib,subprocess
+          root=Path('evidence/build')
+          original=(root/'new/rtl/core/pipemem.v').read_text();patched=(root/'patched/rtl/core/pipemem.v').read_text()
+          a='i_addr[(AW+1):2]';b='i_addr'
+          assert original.count(a)==2 and patched.count(a)==0
+          assert original.count('`ASSUME( (i_addr[(AW+1):2] == o_wb_addr)')==1
+          assert patched.count('`ASSUME( (i_addr == o_wb_addr)')==1
+          assert hashlib.sha256(original.encode()).hexdigest()=='7238c0ff1c735c8dd467ec0ba9c3acc6a91ddd7bd1cc8268a3d4cffca0d61abc'
+          assert hashlib.sha256(patched.encode()).hexdigest()=='497772ade03bd0bcfd282b2518d45516572b8252b20e75f64aadb967edc00800'
+          negatives={
+            'wrong_slice_width':patched.replace('i_addr == o_wb_addr','i_addr[(AW+1):1] == o_wb_addr',1),
+            'wrong_past_valid':patched.replace('f_past_valid','f_past_invalid',1),
+            'wrong_assertion':patched.replace('`ASSERT(', '`ASSUME(',1),
+            'wrong_mapping':patched.replace('o_wb_addr+1','o_wb_addr+2',1),
+          }
+          def edit_ok(text):return hashlib.sha256(text.encode()).hexdigest()=='497772ade03bd0bcfd282b2518d45516572b8252b20e75f64aadb967edc00800'
+          assert all(not edit_ok(text) for text in negatives.values())
+          (Path('evidence')/'negative_controls.json').write_text(json.dumps({k:{'rejected':not edit_ok(v),'mutant_sha256':hashlib.sha256(v.encode()).hexdigest()} for k,v in negatives.items()},indent=2,sort_keys=True)+'\n')
+          print('PASS: all four source-mutation negative controls rejected; never treated as solver proofs')
+          PY
+      - name: Seal all inputs, native outputs, logs, including failures
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p evidence
+          find evidence -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 -r sha256sum > evidence/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: date-g1-native-source-smt2-20260918
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 90
