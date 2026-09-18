@@ -1,0 +1,20 @@
+name: date-g4-dispatch-fixed-source-20260918
+on:
+  push:
+    branches: [research/date-g2-independent-20260917]
+    paths: [.github/workflows/date-g4-dispatch-fixed-source-20260918.yml]
+  workflow_dispatch:
+permissions:
+  actions: write
+  contents: read
+jobs:
+  dispatch:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Start original G4 suite using corrected generator on branch HEAD
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh workflow run date-g4-orthogonal-factorial-20260918.yml --repo risu-research/formal-exec-2609 --ref research/date-g2-independent-20260917
+          echo G4_DISPATCH_REQUESTED_FIXED_SOURCE
