@@ -78,11 +78,15 @@ jobs:
           vvp evidence/native.out > evidence/replay.log 2>&1
           grep -q 'REACHABLE_ENVIRONMENT_LOSS PASS' evidence/replay.log
           grep -q 'NATIVE_RTL_OLD_NEW_OUTPUT_AND_POINTER_REPLAY PASS' evidence/replay.log
+          cp evidence/native_trace.csv evidence/native_trace_success.csv
+          test "$(wc -l < evidence/native_trace_success.csv)" -ge 12
           iverilog -g2012 -s tb -o evidence/mutant.out evidence/old.original.sv evidence/new.mutant.sv evidence/tb.sv > evidence/compile_mutant.log 2>&1
           if vvp evidence/mutant.out > evidence/mutant.log 2>&1; then
             echo 'MUTANT_UNDETECTED' >&2
             exit 1
           fi
+          cp evidence/native_trace.csv evidence/native_trace_mutant.csv
+          cp evidence/native_trace_success.csv evidence/native_trace.csv
           grep -q 'NATIVE_RTL_OUTPUT_DIVERGENCE' evidence/mutant.log
           echo 'MUTANT_DETECTED PASS' > evidence/mutation_verdict.txt
           cat evidence/replay.log evidence/mutation_verdict.txt
