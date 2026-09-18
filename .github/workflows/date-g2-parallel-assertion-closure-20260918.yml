@@ -1,0 +1,71 @@
+name: date-g2-parallel-assertion-closure-20260918
+on:
+  push:
+    branches: [research/date-g2-independent-20260917]
+    paths: [.github/workflows/date-g2-parallel-assertion-closure-20260918.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  independent-per-depth:
+    strategy:
+      fail-fast: false
+      max-parallel: 10
+      matrix:
+        depth: [0,1,2,3,4,5,6,7,8,9]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Install solvers
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y z3 cvc5 python3
+      - name: Check prior evidence and independently split at this depth
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPTH: ${{ matrix.depth }}
+        run: |
+          set -euo pipefail
+          mkdir -p prior evidence
+          gh run download 35294645105 --repo risu-research/formal-exec-2609 -n date-g2-initialized-contract-cover-dual-solver-v3 -D prior
+          (cd prior && sed 's@evidence/@@g' SHA256SUMS.txt | sha256sum -c --status)
+          python3 - <<'PY'
+          import pathlib,subprocess,hashlib,json,os,time
+          depth=int(os.environ['DEPTH']);assert 0<=depth<=9
+          p=pathlib.Path('prior/reach/old_any_assertion_failure_up_to_depth9.smt2');src=p.read_text()
+          assert hashlib.sha256(p.read_bytes()).hexdigest()==json.loads(pathlib.Path('prior/reachability_meta.json').read_text())['query_sha256']['old_any_assertion_failure_up_to_depth9']
+          marker='(assert (or (not (|axis_pkt_fifo_a| |q0|))'
+          assert src.count(marker)==1 and src.rstrip().endswith('(check-sat)')
+          base=src.split(marker)[0]
+          assert base.count('(assert (|axis_pkt_fifo_t|')==9 and base.count('(assert (|axis_pkt_fifo_u|')==10
+          out=pathlib.Path('evidence');results={}
+          for aid in range(18):
+           name=f'k{depth:02d}_a{aid:02d}';q=base+f'(assert (not (|axis_pkt_fifo_a {aid}| |q{depth}|)))\n(check-sat)\n';f=out/(name+'.smt2');f.write_text(q)
+           row={'sha256':hashlib.sha256(q.encode()).hexdigest()}
+           for solver,cmd in [('z3',['z3','-smt2',str(f)]),('cvc5',['cvc5','--lang','smt2',str(f)])]:
+            start=time.monotonic()
+            try:
+             r=subprocess.run(cmd,capture_output=True,text=True,timeout=60)
+             verdict=r.stdout.strip().splitlines()[0] if r.stdout.strip() else 'EMPTY'
+             if r.returncode or '(error' in r.stdout+r.stderr:verdict='ERROR'
+             row[solver]={'verdict':verdict,'seconds':round(time.monotonic()-start,2),'stderr':r.stderr[:600]}
+            except subprocess.TimeoutExpired as e:row[solver]={'verdict':'UNKNOWN_TIMEOUT','seconds':round(time.monotonic()-start,2),'stderr':str(e)[:600]}
+           results[name]=row
+           print(name,row['z3']['verdict'],row['cvc5']['verdict'],flush=True)
+          (out/'verdicts.json').write_text(json.dumps(results,indent=2,sort_keys=True)+'\n')
+          count=sum(row['z3']['verdict']=='unsat' and row['cvc5']['verdict']=='unsat' for row in results.values())
+          (out/'SUMMARY.txt').write_text(f'depth={depth}; paired UNSAT={count}/18; any UNKNOWN remains unproved; finite depth <=9 only\n')
+          if count!=18:raise SystemExit('NOT_CLOSED; see evidence')
+          PY
+      - name: Seal even on failure
+        if: always()
+        run: |
+          find evidence -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 -r sha256sum > evidence/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: date-g2-split-depth-${{ matrix.depth }}
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 90
