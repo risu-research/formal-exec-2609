@@ -1,0 +1,59 @@
+name: date-g2-last-qf-aufbv-eager-20260918
+on:
+  push:
+    branches: [research/date-g2-independent-20260917]
+    paths: [.github/workflows/date-g2-last-qf-aufbv-eager-20260918.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  exact-query:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 13
+    steps:
+      - name: Install cvc5
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y cvc5 python3
+      - name: Verify original query and add only correct SMT-LIB logic selection
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p prior evidence
+          gh run download 35306779235 --repo risu-research/formal-exec-2609 -n date-g2-split-depth-9 -D prior
+          (cd prior && sed 's@evidence/@@g' SHA256SUMS.txt | sha256sum -c --status)
+          python3 - <<'PY'
+          import pathlib,json,hashlib,subprocess,time
+          src=pathlib.Path('prior/k09_a12.smt2');ref=json.loads(pathlib.Path('prior/verdicts.json').read_text())['k09_a12']
+          assert ref['z3']['verdict']=='unsat' and ref['cvc5']['verdict']=='UNKNOWN_TIMEOUT'
+          assert hashlib.sha256(src.read_bytes()).hexdigest()==ref['sha256']
+          old=src.read_text();assert '(set-logic ' not in old and '(forall ' not in old and '(exists ' not in old
+          assert '(Array ' in old and '(declare-sort ' in old
+          original=pathlib.Path('evidence/original_k09_a12.smt2');original.write_text(old)
+          transformed=pathlib.Path('evidence/k09_a12_QF_AUFBV.smt2');transformed.write_text('(set-logic QF_AUFBV)\n'+old)
+          cmd=['cvc5','--lang','smt2','--bitblast=eager',str(transformed)]
+          start=time.monotonic()
+          try:
+           p=subprocess.run(cmd,capture_output=True,text=True,timeout=540)
+           v=p.stdout.strip().splitlines()[0] if p.stdout.strip() else 'EMPTY'
+           if p.returncode or v not in ('sat','unsat','unknown') or '(error' in p.stdout+p.stderr:v='ERROR'
+           result={'verdict':v,'seconds':round(time.monotonic()-start,3),'stdout':p.stdout,'stderr':p.stderr,'returncode':p.returncode}
+          except subprocess.TimeoutExpired as e:result={'verdict':'UNKNOWN_TIMEOUT','seconds':round(time.monotonic()-start,3),'stdout':'','stderr':str(e),'returncode':None}
+          result.update({'original_sha256':ref['sha256'],'retyped_sha256':hashlib.sha256(transformed.read_bytes()).hexdigest(),'transformation':'prepend sole set-logic QF_AUFBV; no formula changes','command':cmd})
+          pathlib.Path('evidence/RESULT.json').write_text(json.dumps(result,indent=2)+'\n')
+          print('FINAL_AUFBV_EAGER',result['verdict'],result['seconds'],flush=True)
+          if result['verdict']!='unsat':raise SystemExit('UNRESOLVED')
+          PY
+      - name: Seal evidence even on failure
+        if: always()
+        run: |
+          find evidence -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 -r sha256sum > evidence/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: date-g2-last-a12-cvc5-QF_AUFBV-eager
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 90
