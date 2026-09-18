@@ -1,0 +1,35 @@
+{
+  "schema": "g2-post-run-certification-v1",
+  "date": "2026-09-17",
+  "population": "exploratory_X_not_H143",
+  "original_143_sample_denominator_changed": false,
+  "frozen_selection": "cert/date-g2-independent-20260917/FROZEN_SELECTION.json",
+  "X-BILL-PACKET": {
+    "parent": "8fd43ee5973422c6cb3c9e2cb293b8f3bd9067c3",
+    "child": "2659b5831303fc1fb66d664fa2513a66e264cb7b",
+    "original_task": "formal/axis_pkt_fifo_bmc.sby",
+    "original_engine": "smtbmc yices",
+    "original_depth_14_BMC": "PASS/PASS",
+    "symmetric_z3_compatibility_BMC": "PASS/PASS",
+    "whole_F_structural_symbolic": "LOSS SAT; GAIN UNSAT",
+    "symbolic_assertion_loss_snapshot": "wptr=9,rptr=0,commit_ptr=0; unreachable from reset",
+    "reachable_input_exclusion": "8 non-TLAST beats accepted after reset, wptr=8, commit_ptr=0; newly excluded by m_pkt_fits",
+    "native_RTL_behavior": "non-FORMAL source token identity; old/new output and pointer replay agreement; mutant detected",
+    "scope": "BMC is bounded; reachable assertion loss NOT established; fully independent flattened whole-F dual-solver miter NOT established",
+    "original_engine_CI": "https://github.com/risu-research/formal-exec-2609/actions/runs/35291589179",
+    "native_replay_CI": "https://github.com/risu-research/formal-exec-2609/actions/runs/35291244639"
+  },
+  "X-DREW-PORT": {
+    "parent": "9ae13f188f36d82bee98e1b7578b572bb6ac500a",
+    "child": "40a7d1a17e90324cb9a274e56cb35ea5da0124ce",
+    "original_task": "formal/async_fifo.sby prove",
+    "original_engine": "smtbmc z3",
+    "original_multiclock_k_induction": "PASS/PASS",
+    "whole_F_structural": "LOSS UNSAT; GAIN UNSAT via exact source equivalence modulo named formal debug port permutation",
+    "native_RTL_behavior": "non-FORMAL implementation source identical",
+    "scope": "separately generated flattened whole-F dual-solver miter NOT established",
+    "original_engine_CI": "https://github.com/risu-research/formal-exec-2609/actions/runs/35290939034",
+    "source_equivalence_CI": "https://github.com/risu-research/formal-exec-2609/actions/runs/35291513934"
+  },
+  "X-PICORV32-PROVENANCE": "not admitted: upstream historical RTL version not pinned"
+}
