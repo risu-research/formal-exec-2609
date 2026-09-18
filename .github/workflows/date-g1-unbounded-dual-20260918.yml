@@ -1,0 +1,102 @@
+name: date-g1-unbounded-dual-20260918
+on:
+  push:
+    paths:
+      - '.github/workflows/date-g1-unbounded-dual-20260918.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  dual-check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    strategy:
+      fail-fast: false
+      matrix:
+        side: [old, new]
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      SIDE: ${{ matrix.side }}
+      G1_INPUT: work/input_archives
+      G1_OUT: work/queries
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download immutable native Yosys authorities and install independent solvers
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq cvc5 unzip python3 python3-pip >/tmp/g1apt.log
+          python3 -m pip install --break-system-packages 'z3-solver==4.13.3.0' >/tmp/g1pip.log
+          mkdir -p work/{input_archives,queries,results}
+          for entry in 'frozen_upstream 10327123106 9f7202d5d34179d61957b70fbe641180002f1237562d511927cf360e41ed92fa' 'source_same_ir 10549755919 c2d037604d3bfd7a292f17361dc40c0bbbd8296ad13cb448de9f55942d96eb33'; do
+            read -r name id expected <<< "$entry"
+            curl --fail --silent --show-error --location --retry 3 -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github+json' "https://api.github.com/repos/risu-research/formal-exec-2609/actions/artifacts/${id}/zip" -o "work/input_archives/${name}.zip"
+            actual="$(sha256sum "work/input_archives/${name}.zip" | cut -d' ' -f1)"
+            test "$actual" = "$expected"
+            echo "PINNED_ARCHIVE_OK $name $actual"
+          done
+          git hash-object cert/date-g2-independent-20260917/derive_g1_unbounded_core_20260918.py | grep -x '88855debcc0e4cbd04601249f85edd4979bd42b2'
+          git hash-object cert/date-g2-independent-20260917/derive_g1_counterfactual_b_20260918.py | grep -x 'c6217e2b5d0cc97d89894546e717870a0c231f1d'
+          python3 - <<'PY'
+          import z3
+          print('Z3', z3.get_version_string()); assert z3.get_version_string() == '4.13.3'
+          PY
+          cvc5 --version | head -1
+      - name: Regenerate and hash-check unchanged 51 formula queries
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 cert/date-g2-independent-20260917/derive_g1_unbounded_core_20260918.py
+          python3 cert/date-g2-independent-20260917/derive_g1_counterfactual_b_20260918.py
+          printf '%s  %s\n' '0992317e18a0ac68b1c95e5d5989702bcaa19ea12e9d1e10139c7ba3007cb733' work/queries/CORE_MANIFEST.json 'ee9a5c3afaa876687a7c7a7629e87f00a8464243d811d19d5c5c96bd3c49f68a' work/queries/COUNTERFACTUAL_MANIFEST.json | sha256sum -c -
+      - name: Check all native-state induction cases with both exact-result solvers
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,hashlib,time,subprocess,os,collections,pathlib,z3,sys
+          root=pathlib.Path('work'); q=root/'queries'; side=os.environ['SIDE']
+          core=json.loads((q/'CORE_MANIFEST.json').read_text());cf=json.loads((q/'COUNTERFACTUAL_MANIFEST.json').read_text())
+          checks=[r for r in core['queries'] if r['name'].startswith(side+'_')]
+          assert len(checks)==23, (side,len(checks))
+          if side=='new': checks+=cf['checks']
+          assert len(checks)==(28 if side=='new' else 23)
+          versions={'z3':z3.get_version_string(),'cvc5':subprocess.check_output(['cvc5','--version'],text=True).strip()}
+          assert versions['z3']=='4.13.3' and '1.1.2' in versions['cvc5'],versions
+          rows=[]; out=root/'results'/('VERDICTS_'+side+'.json')
+          for item in checks:
+            f=q/item['name']; raw=f.read_bytes(); assert hashlib.sha256(raw).hexdigest()==item['sha256']
+            for solver in ['z3_4_13_3','cvc5_1_1_2']:
+              start=time.monotonic();obs='TIMEOUT';rc=None;stderr='';err=''
+              try:
+                if solver.startswith('z3'):
+                  s=z3.Solver();s.set(timeout=180000);s.from_string(raw.decode());obs=str(s.check());rc=0
+                  if obs=='unknown':err=s.reason_unknown()
+                else:
+                  p=subprocess.run(['cvc5','--lang','smt2',str(f)],capture_output=True,text=True,timeout=180)
+                  obs=p.stdout.strip();rc=p.returncode;stderr=p.stderr[-1500:]
+              except subprocess.TimeoutExpired as e:err='cvc5 timeout after 180 seconds';stderr=str(e)
+              except Exception as e:err=repr(e)
+              row={'side':side,'name':item['name'],'sha256':item['sha256'],'solver':solver,'expected':item['expected'],'observed':obs,'returncode':rc,'error':err,'stderr':stderr,'elapsed_sec':round(time.monotonic()-start,3)}
+              rows.append(row);out.write_text(json.dumps({'versions':versions,'rows':rows},indent=2,sort_keys=True)+'\n')
+              print('G1_VERDICT',item['name'],solver,obs,'expected',item['expected'],'seconds',row['elapsed_sec'],flush=True)
+              assert rc==0 and obs==item['expected'], 'FAIL_CLOSED_'+item['name']+'_'+solver
+          assert len(rows)==(56 if side=='new' else 46)
+          print('G1_UNBOUNDED_DUAL_SHARD_PASS',side,len(checks),len(rows),collections.Counter(r['observed'] for r in rows),flush=True)
+          PY
+      - name: Seal all results even after failure
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          find work -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 -r sha256sum > work/SHA256SUMS.txt
+      - name: Publish replay inputs and independent verdicts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: date-g1-unbounded-dual-${{ matrix.side }}-20260918
+          path: work/
+          retention-days: 90
+          if-no-files-found: error
