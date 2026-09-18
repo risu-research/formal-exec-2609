@@ -1,0 +1,72 @@
+name: date-g2-finish-pktcount-10clock-20260917
+on:
+  push:
+    branches: [research/date-g2-independent-20260917]
+    paths: [.github/workflows/date-g2-finish-pktcount-10clock-20260917.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  each-original-clock-snapshot:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 9
+    strategy:
+      fail-fast: false
+      matrix:
+        clock: [0,1,2,3,4,5,6,7,8,9]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install independent solver implementations
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq cvc5 z3
+      - name: Authenticate original immutable SMT2, then build exact per-state disjunct
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p input generated evidence
+          gh run download 35294645105 --repo risu-research/formal-exec-2609 -n date-g2-initialized-contract-cover-dual-solver-v3 -D input
+          (cd input && sed 's@evidence/@@g' SHA256SUMS.txt | sha256sum -c --status)
+          python3 cert/date-g2-independent-20260917/finish_pktcount_depth_split.py input/reach/old_any_assertion_failure_up_to_depth9.smt2 input/reachability_meta.json generated | tee evidence/origin_sha.txt
+          cp generated/packet_depth_manifest.json evidence/
+          cp input/reach/old_any_assertion_failure_up_to_depth9.smt2 input/reachability_meta.json evidence/
+          z3 --version > evidence/z3_version.txt
+          cvc5 --version | head -1 > evidence/cvc5_version.txt
+      - name: Require matching UNSAT from two solvers for unchanged historical step predicate
+        env:
+          CLOCK: ${{ matrix.clock }}
+        run: |
+          python3 - <<'PY'
+          import hashlib,json,os,pathlib,subprocess,time
+          k=int(os.environ['CLOCK']);out=pathlib.Path('evidence');src=pathlib.Path('generated')/f'packet_count_fail_at_state_{k:02d}.smt2'
+          q=src.read_bytes();f=out/src.name;f.write_bytes(q)
+          meta=json.loads((out/'packet_depth_manifest.json').read_text())
+          assert hashlib.sha256(q).hexdigest()==meta['disjuncts'][str(k)]
+          row={'clock':k,'query_sha256':hashlib.sha256(q).hexdigest()}
+          for solver,cmd in [('z3',['z3','-smt2',str(f)]),('cvc5',['cvc5','--lang','smt2','--no-incremental',str(f)])]:
+            start=time.monotonic()
+            try:
+              p=subprocess.run(cmd,capture_output=True,text=True,timeout=215)
+              v=p.stdout.strip().splitlines()[0] if p.stdout.strip() else 'NO_VERDICT'
+              (out/(solver+'.stdout')).write_text(p.stdout);(out/(solver+'.stderr')).write_text(p.stderr)
+              row[solver]={'verdict':v,'returncode':p.returncode,'seconds':round(time.monotonic()-start,2)}
+            except subprocess.TimeoutExpired as e:
+              row[solver]={'verdict':'UNKNOWN_TIMEOUT','returncode':None,'seconds':215}
+              (out/(solver+'.stderr')).write_text(str(e))
+            print('CLOCK',k,solver,row[solver],flush=True)
+          (out/'verdict.json').write_text(json.dumps(row,indent=2)+'\n')
+          assert all(row[x]['verdict']=='unsat' and row[x]['returncode']==0 for x in ('z3','cvc5')),'Never promote UNKNOWN or SAT to PASS'
+          print('EXACT_ORIGINAL_PKTCOUNT_CLOCK_UNSAT_BOTH_SOLVERS',k,flush=True)
+          PY
+      - name: Always seal full success or failure record
+        if: always()
+        run: |
+          mkdir -p evidence
+          find evidence -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 -r sha256sum > evidence/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: date-g2-pktcount-clock-${{ matrix.clock }}
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 90
