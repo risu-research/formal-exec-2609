@@ -1,0 +1,101 @@
+name: date-g2-bill-native-replay-20260917
+on:
+  push:
+    branches: [research/date-g2-independent-20260917]
+    paths: [.github/workflows/date-g2-bill-native-replay-20260917.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native-replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Get exact historical source, verify frozen selection, install independent RTL simulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          d=json.load(open('cert/date-g2-independent-20260917/FROZEN_SELECTION.json'))
+          c=next(x for x in d['candidate_order_frozen_before_any_new_whole_F_query'] if x['id']=='X-BILL-PACKET')
+          assert c['repository']=='billdmar/fifo-verification-suite'
+          assert c['parent']=='8fd43ee5973422c6cb3c9e2cb293b8f3bd9067c3'
+          assert c['child']=='2659b5831303fc1fb66d664fa2513a66e264cb7b'
+          assert c['task']=='formal/axis_pkt_fifo_bmc.sby'
+          PY
+          sudo apt-get update -qq
+          sudo apt-get install -y git iverilog
+          mkdir -p evidence
+          iverilog -V > evidence/tool.txt 2>&1
+          git clone -q --filter=blob:none https://github.com/billdmar/fifo-verification-suite.git /tmp/g2-upstream
+          git -C /tmp/g2-upstream checkout -q --detach 8fd43ee5973422c6cb3c9e2cb293b8f3bd9067c3
+          cp /tmp/g2-upstream/rtl/axis_pkt_fifo.sv evidence/old.original.sv
+          git -C /tmp/g2-upstream checkout -q --detach 2659b5831303fc1fb66d664fa2513a66e264cb7b
+          cp /tmp/g2-upstream/rtl/axis_pkt_fifo.sv evidence/new.original.sv
+          sha256sum evidence/{old,new}.original.sv > evidence/source_SHA256SUMS.txt
+      - name: Independent semantic-source identity audit outside FORMAL
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import pathlib,re
+          p=pathlib.Path('evidence')
+          pat=re.compile(r'"(?:\\.|[^"\\])*"|/\*[\s\S]*?\*/|//[^\n]*')
+          def tokenize(s):
+            s=pat.sub(lambda m:m.group() if m.group().startswith('"') else ' ',s)
+            return re.findall(r"(?:[0-9]+'[a-zA-Z][a-zA-Z0-9_xXzZ?]+|[a-zA-Z_$][\w$]*|\d+|\S)",s)
+          def impl(s):
+            assert len(re.findall(r'(?m)^`ifdef FORMAL$',s))==1
+            assert len(re.findall(r'(?m)^`endif // FORMAL$',s))==1
+            a,b=re.split(r'(?m)^`ifdef FORMAL$',s,maxsplit=1)
+            _,c=re.split(r'(?m)^`endif // FORMAL$',b,maxsplit=1)
+            return a+c
+          a=tokenize(impl((p/'old.original.sv').read_text()))
+          b=tokenize(impl((p/'new.original.sv').read_text()))
+          assert a==b,(len(a),len(b))
+          (p/'source_identity.txt').write_text(f'NONFORMAL_TOKEN_IDENTITY PASS tokens={len(a)}\n')
+          print((p/'source_identity.txt').read_text())
+          PY
+      - name: Native behavioral witness, output equivalence, and mutation sensitivity
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp cert/date-g2-independent-20260917/G2_packet_fifo_replay_tb.sv evidence/tb.sv
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('evidence/new.original.sv')
+          s=p.read_text()
+          old='module axis_pkt_fifo #('
+          assert s.count(old)==1
+          Path('evidence/new.renamed.sv').write_text(s.replace(old,'module axis_pkt_fifo_new #(',1))
+          old='assign s_axis_tready = !full;'
+          assert s.count(old)==1
+          Path('evidence/new.mutant.sv').write_text(s.replace('module axis_pkt_fifo #(','module axis_pkt_fifo_new #(',1).replace(old,'assign s_axis_tready = full;',1))
+          PY
+          iverilog -g2012 -s tb -o evidence/native.out evidence/old.original.sv evidence/new.renamed.sv evidence/tb.sv > evidence/compile.log 2>&1
+          vvp evidence/native.out > evidence/replay.log 2>&1
+          grep -q 'REACHABLE_ENVIRONMENT_LOSS PASS' evidence/replay.log
+          grep -q 'NATIVE_RTL_OLD_NEW_OUTPUT_AND_POINTER_REPLAY PASS' evidence/replay.log
+          iverilog -g2012 -s tb -o evidence/mutant.out evidence/old.original.sv evidence/new.mutant.sv evidence/tb.sv > evidence/compile_mutant.log 2>&1
+          if vvp evidence/mutant.out > evidence/mutant.log 2>&1; then
+            echo 'MUTANT_UNDETECTED' >&2
+            exit 1
+          fi
+          grep -q 'NATIVE_RTL_OUTPUT_DIVERGENCE' evidence/mutant.log
+          echo 'MUTANT_DETECTED PASS' > evidence/mutation_verdict.txt
+          cat evidence/replay.log evidence/mutation_verdict.txt
+      - name: Seal replay evidence even on failure
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p evidence
+          find evidence -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 -r sha256sum > evidence/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: date-g2-bill-native-replay
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 90
