@@ -1,0 +1,65 @@
+name: date-g2-four-timeouts-retry-20260918
+on:
+  push:
+    branches: [research/date-g2-independent-20260917]
+    paths: [.github/workflows/date-g2-four-timeouts-retry-20260918.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  four-exact-unknowns:
+    strategy:
+      fail-fast: false
+      matrix:
+        case: [k08_a12,k09_a00,k09_a12,k09_a13]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 13
+    steps:
+      - name: Install independent solvers
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y z3 cvc5 python3
+      - name: Check exact original failed query and retry
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CASE: ${{ matrix.case }}
+        run: |
+          set -euo pipefail
+          mkdir -p prior evidence
+          case "$CASE" in k08_a12) depth=8;; k09_a00|k09_a12|k09_a13) depth=9;; *) exit 19;; esac
+          gh run download 35306779235 --repo risu-research/formal-exec-2609 -n "date-g2-split-depth-${depth}" -D prior
+          (cd prior && sed 's@evidence/@@g' SHA256SUMS.txt | sha256sum -c --status)
+          python3 - <<'PY'
+          import json,hashlib,os,subprocess,time,pathlib
+          case=os.environ['CASE'];path=pathlib.Path('prior')/(case+'.smt2');rows=json.loads(pathlib.Path('prior/verdicts.json').read_text());row=rows[case]
+          assert row['z3']['verdict']=='unsat' and row['cvc5']['verdict']=='UNKNOWN_TIMEOUT'
+          assert hashlib.sha256(path.read_bytes()).hexdigest()==row['sha256']
+          pathlib.Path('evidence/'+case+'.smt2').write_bytes(path.read_bytes())
+          results={}
+          for mode,args in [('eager',['--bitblast=eager']),('default',[])]:
+           st=time.monotonic()
+           try:
+            p=subprocess.run(['cvc5','--lang','smt2',*args,str(path)],capture_output=True,text=True,timeout=165)
+            verdict=p.stdout.strip().splitlines()[0] if p.stdout.strip() else 'EMPTY'
+            if p.returncode or verdict not in ('sat','unsat','unknown') or '(error' in p.stdout+p.stderr:verdict='ERROR'
+            data={'verdict':verdict,'seconds':round(time.monotonic()-st,3),'stdout':p.stdout,'stderr':p.stderr,'returncode':p.returncode}
+           except subprocess.TimeoutExpired as e:data={'verdict':'UNKNOWN_TIMEOUT','seconds':round(time.monotonic()-st,3),'stdout':'','stderr':str(e),'returncode':None}
+           results[mode]=data
+           print(case,mode,data['verdict'],data['seconds'],flush=True)
+           if data['verdict']=='unsat':break
+          pathlib.Path('evidence/RESULT.json').write_text(json.dumps({'case':case,'query_sha256':row['sha256'],'results':results},indent=2)+'\n')
+          if not any(v['verdict']=='unsat' for v in results.values()):raise SystemExit('UNRESOLVED_'+case)
+          print('CVC5_CLOSED_'+case)
+          PY
+      - name: Seal regardless of status
+        if: always()
+        run: |
+          find evidence -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 -r sha256sum > evidence/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: date-g2-four-retry-${{ matrix.case }}
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 90
