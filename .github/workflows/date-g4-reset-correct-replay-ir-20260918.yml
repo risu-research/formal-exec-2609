@@ -1,0 +1,73 @@
+name: date-g4-reset-correct-replay-ir-20260918
+on:
+  push:
+    branches: [research/date-g2-independent-20260917]
+    paths: [.github/workflows/date-g4-reset-correct-replay-ir-20260918.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  replay-ir:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Immutable original source, corrected initialized trace, formal IR
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq yosys iverilog >/tmp/aptg4.log
+          git clone -q --filter=blob:none https://github.com/billdmar/fifo-verification-suite.git /tmp/g4-bill
+          git -C /tmp/g4-bill checkout -q --detach 8fd43ee5973422c6cb3c9e2cb293b8f3bd9067c3
+          test "$(git -C /tmp/g4-bill rev-parse HEAD)" = 8fd43ee5973422c6cb3c9e2cb293b8f3bd9067c3
+          mkdir -p work/evidence work/ir
+          python3 cert/date-g2-independent-20260917/derive_g4_factorial_20260918.py > work/evidence/source_generation.log
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('work/factorial/tb_factorial.sv');s=p.read_text()
+          old='  #1;\n  if (sready !== 4\'b1111) $fatal(1,"reset readiness");\n  #5; // reset sampled at first posedge\n'
+          new='  #6; // inspect after synchronous reset was sampled at first posedge t5\n  if (sready !== 4\'b1111) $fatal(1,"post-reset readiness");\n'
+          assert s.count(old)==1
+          p.write_text(s.replace(old,new,1))
+          print('PRE_RESET_INVALID_OBSERVATION_REMOVED; RTL/SBY AND FOUR CELL SOURCES UNCHANGED')
+          PY
+          iverilog -g2012 -s tb -o work/evidence/tb.vvp work/factorial/sim_O0_B0.sv work/factorial/sim_O0_B1.sv work/factorial/sim_O1_B0.sv work/factorial/sim_O1_B1.sv work/factorial/tb_factorial.sv
+          vvp work/evidence/tb.vvp | tee work/evidence/replay.log
+          grep -q 'G4_INITIALIZED_WITNESS_PASS' work/evidence/replay.log
+          grep -q 'G4_OTHER_PORTS_MATCH_PASS' work/evidence/replay.log
+          { yosys -V;iverilog -V | head -2;git -C /tmp/g4-bill rev-parse HEAD; } > work/evidence/tools.txt 2>&1
+      - name: Official formal Yosys SMT2 and JSON for exact four cells plus negative control
+        shell: bash
+        run: |
+          set -euo pipefail
+          for cell in O0_B0 O0_B1 O1_B0 O1_B1 BAD_TREADY_CONTROL;do
+            yosys -Q -T -l "work/ir/$cell.log" -p "read_verilog -formal -sv -DFORMAL work/factorial/$cell/rtl/axis_pkt_fifo.sv; chparam -set DEPTH 8 axis_pkt_fifo; prep -top axis_pkt_fifo; write_json work/ir/$cell.json; write_smt2 -wires -mem work/ir/$cell.smt2" > "work/ir/$cell.stdout" 2>&1
+          done
+          python3 - <<'PY'
+          from pathlib import Path
+          import json,re,hashlib
+          counts={}
+          for p in sorted(Path('work/ir').glob('*.smt2')):
+            t=p.read_text()
+            counts[p.stem]={'assertions':len(re.findall(r'^\(define-fun \|axis_pkt_fifo_a \d+\|',t,re.M)),'assumptions':len(re.findall(r'^\(define-fun \|axis_pkt_fifo_u \d+\|',t,re.M)),'covers':len(re.findall(r'^\(define-fun \|axis_pkt_fifo_c \d+\|',t,re.M)),'sha256':hashlib.sha256(p.read_bytes()).hexdigest()}
+          Path('work/evidence/FORMAL_COUNTS.json').write_text(json.dumps(counts,indent=2,sort_keys=True)+'\n');print('G4_FORMAL_COUNTS',counts,flush=True)
+          assert set(counts)=={'O0_B0','O0_B1','O1_B0','O1_B1','BAD_TREADY_CONTROL'}
+          for k,v in counts.items():
+            assert v['assertions']==18,(k,v)
+            assert v['assumptions']==(5 if k.startswith('O1_') else 4),(k,v)
+            assert v['covers']==6,(k,v)
+          PY
+      - name: Integrity and archive regardless of failure
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p work
+          find work -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 -r sha256sum > work/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: date-g4-corrected-replay-full-ir-20260918
+          path: work/
+          if-no-files-found: error
+          retention-days: 90
