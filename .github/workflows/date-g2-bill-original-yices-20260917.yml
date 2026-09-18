@@ -1,0 +1,91 @@
+name: date-g2-bill-original-yices-20260917
+on:
+  push:
+    branches: [research/date-g2-independent-20260917]
+    paths: [.github/workflows/date-g2-bill-original-yices-20260917.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  exact-yices:
+    runs-on: ubuntu-latest
+    timeout-minutes: 26
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {side: old, sha: 8fd43ee5973422c6cb3c9e2cb293b8f3bd9067c3}
+          - {side: new, sha: 2659b5831303fc1fb66d664fa2513a66e264cb7b}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Frozen provenance and binary solver installation
+        shell: bash
+        env:
+          SIDE: ${{ matrix.side }}
+          SHA: ${{ matrix.sha }}
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          python3 - <<'PY'
+          import json,os
+          d=json.load(open('cert/date-g2-independent-20260917/FROZEN_SELECTION.json'))
+          c=next(x for x in d['candidate_order_frozen_before_any_new_whole_F_query'] if x['id']=='X-BILL-PACKET')
+          assert c['repository']=='billdmar/fifo-verification-suite' and c['original_engine']=='smtbmc yices' and c['task']=='formal/axis_pkt_fifo_bmc.sby'
+          assert c['parent' if os.environ['SIDE']=='old' else 'child']==os.environ['SHA']
+          PY
+          sudo apt-get update -qq
+          sudo apt-get install -y yosys curl git
+          git clone -q --depth 1 https://github.com/YosysHQ/sby.git /tmp/g2-sby
+          sudo make -s -C /tmp/g2-sby install
+          url=https://github.com/SRI-CSL/yices2/releases/download/yices-2.7.0/yices-2.7.0-x86_64-pc-linux-gnu-static-gmp.tar.gz
+          curl -fLsS --retry 3 --retry-delay 2 "$url" -o /tmp/g2-yices.tar.gz
+          echo '49566b6f817692820538df78fe406878400d79810631c9372b2495bc81d3e00a  /tmp/g2-yices.tar.gz' | sha256sum --check
+          mkdir -p /tmp/g2-yices
+          tar -xzf /tmp/g2-yices.tar.gz -C /tmp/g2-yices
+          find /tmp/g2-yices -type f -name yices-smt2 -print > evidence/yices_binary_locations.txt
+          binary=$(find /tmp/g2-yices -type f -name yices-smt2 | head -1)
+          test -n "$binary"
+          sudo install -m 755 "$binary" /usr/local/bin/yices-smt2
+          ldpath=$(dirname "$(find /tmp/g2-yices -type f -name 'libyices.so*' | head -1 || true)")
+          if [ "$ldpath" != . ]; then echo "$ldpath" | sudo tee /etc/ld.so.conf.d/g2-yices.conf; sudo ldconfig; fi
+          { yices-smt2 --version; yosys -V; sby --version; git -C /tmp/g2-sby rev-parse HEAD; } > evidence/tools.txt 2>&1
+          sha256sum /tmp/g2-yices.tar.gz > evidence/yices_distribution_sha256.txt
+      - name: Original unchanged Yices depth-14 BMC
+        shell: bash
+        env:
+          SIDE: ${{ matrix.side }}
+          SHA: ${{ matrix.sha }}
+        run: |
+          set -euo pipefail
+          git clone -q --filter=blob:none https://github.com/billdmar/fifo-verification-suite.git /tmp/g2-bill
+          git -C /tmp/g2-bill checkout -q --detach "$SHA"
+          test "$(git -C /tmp/g2-bill rev-parse HEAD)" = "$SHA"
+          cp /tmp/g2-bill/formal/axis_pkt_fifo_bmc.sby evidence/original.sby
+          sha256sum /tmp/g2-bill/rtl/axis_pkt_fifo.sv > evidence/source_sha256.txt
+          grep -q '^smtbmc yices$' evidence/original.sby
+          grep -q '^mode bmc$' evidence/original.sby
+          grep -q '^depth 14$' evidence/original.sby
+          set +e
+          (cd /tmp/g2-bill && timeout 900 sby -f formal/axis_pkt_fifo_bmc.sby) > evidence/solver.log 2>&1
+          code=$?
+          set -e
+          echo "$code" > evidence/exit_code.txt
+          if [ "$code" = 0 ] && grep -q 'DONE (PASS' evidence/solver.log && grep -qi 'yices' evidence/solver.log; then
+            echo ORIGINAL_YICES_BMC_PASS > evidence/verdict.txt
+          else
+            echo NOT_ESTABLISHED > evidence/verdict.txt
+          fi
+          printf '%s\n' "$SIDE $SHA $(cat evidence/verdict.txt)" > evidence/summary.txt
+          cat evidence/summary.txt
+      - name: Evidence integrity even on unsuccessful run
+        if: always()
+        run: |
+          mkdir -p evidence
+          find evidence -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 -r sha256sum > evidence/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: date-g2-bill-original-yices-${{ matrix.side }}
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 90
