@@ -1,0 +1,69 @@
+name: date-g1-solver-runtime-pilot-20260918
+on:
+  push:
+    branches: [research/date-g2-independent-20260917]
+    paths: [.github/workflows/date-g1-solver-runtime-pilot-20260918.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  solver-pilot:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 13
+    steps:
+      - uses: actions/checkout@v4
+      - name: Restore exact inputs and independent solvers
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq z3 cvc5 unzip python3 python3-pip >/tmp/apt.log
+          python3 -m pip install --break-system-packages 'z3-solver==4.13.3.0' >/tmp/pip.log
+          mkdir -p work/{frozen,source,matrix,queries,results}
+          for spec in 'frozen 10327123106 9f7202d5d34179d61957b70fbe641180002f1237562d511927cf360e41ed92fa' 'source 10549755919 c2d037604d3bfd7a292f17361dc40c0bbbd8296ad13cb448de9f55942d96eb33' 'matrix 10549453754 4ab06e19d5f86a06e0e15c48e2c03c3d1d713bdba5966020e8b95e9d2a75f8de'; do
+            read -r name id want <<< "$spec"
+            curl --fail --silent --show-error --location --retry 3 -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' "https://api.github.com/repos/risu-research/formal-exec-2609/actions/artifacts/$id/zip" -o work/$name.zip
+            test "$(sha256sum work/$name.zip | cut -d' ' -f1)" = "$want"
+            unzip -oq work/$name.zip -d work/$name
+            echo "ARCHIVE_PASS $name"
+          done
+          python3 cert/date-g2-independent-20260917/verify_native_formula_relation_20260918.py --root work --output work/queries --side old
+          python3 - <<'PY'
+          import z3
+          print('PY_Z3_VERSION',z3.get_version_string())
+          assert z3.get_version_string()=='4.13.3'
+          PY
+          cvc5 --version | head -1
+      - name: Pilot raw original and logic-explicit cvc5 on exact hashed queries
+        run: |
+          python3 - <<'PY'
+          import json,hashlib,subprocess,time
+          from pathlib import Path
+          m=json.loads(Path('work/queries/MANIFEST.json').read_text());rows=[]
+          for kind in ['base','all','past_not_zero','active']:
+            c=next(x for x in m['cases'] if x['side']=='old' and x['depth']==2 and x['kind']==kind)
+            b=(Path('work/queries')/c['name']).read_bytes();assert hashlib.sha256(b).hexdigest()==c['sha256']
+            for variant in ['raw','logic_qf_aufbv']:
+              p=Path('work/results')/(kind+'_'+variant+'.smt2');p.write_bytes((b'(set-logic QF_AUFBV)\n' if variant!='raw' else b'')+b)
+              for solver in ['z3_4_13','cvc5_1_1']:
+                t=time.monotonic();cmd=(['python3','-c','import z3,sys; s=z3.Solver();s.set(timeout=45000);s.from_string(open(sys.argv[1]).read());print(s.check())',str(p)] if solver=='z3_4_13' else ['cvc5','--lang','smt2',str(p)])
+                try:
+                  r=subprocess.run(cmd,capture_output=True,text=True,timeout=48)
+                  observed=r.stdout.strip();code=r.returncode;err=r.stderr[-1000:]
+                except subprocess.TimeoutExpired:
+                  observed='TIMEOUT';code=-1;err=''
+                row={'case':c['name'],'original_sha256':c['sha256'],'variant':variant,'variant_sha256':hashlib.sha256(p.read_bytes()).hexdigest(),'solver':solver,'expected':c['expected'],'observed':observed,'returncode':code,'seconds':round(time.monotonic()-t,3),'stderr':err}
+                rows.append(row);Path('work/results/PILOT.json').write_text(json.dumps(rows,indent=2)+'\n');print('PILOT',json.dumps(row),flush=True)
+          PY
+      - name: Seal audit trail
+        if: always()
+        run: |
+          find work -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 -r sha256sum > work/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: date-g1-solver-runtime-pilot-20260918
+          path: work/
+          retention-days: 90
