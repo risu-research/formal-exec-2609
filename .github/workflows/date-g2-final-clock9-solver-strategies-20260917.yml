@@ -1,0 +1,81 @@
+name: date-g2-final-clock9-solver-strategies-20260917
+on:
+  push:
+    branches: [research/date-g2-independent-20260917]
+    paths: [.github/workflows/date-g2-final-clock9-solver-strategies-20260917.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  unchanged-official-k9:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 14
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {name: eager-cadical, flags: '--bitblast=eager --bv-sat-solver=cadical'}
+          - {name: eager-cryptominisat, flags: '--bitblast=eager --bv-sat-solver=cryptominisat'}
+          - {name: lazy-cryptominisat, flags: '--bitblast=lazy --bv-sat-solver=cryptominisat'}
+          - {name: lazy-ackermann, flags: '--bitblast=lazy --ackermann --unconstrained-simp'}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install independent cvc5 1.1.2 and Z3
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq cvc5 z3
+      - name: Recover previously hashed EXACT official SMT2 with its original timeout for audit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p source evidence
+          gh run download 35304343972 --repo risu-research/formal-exec-2609 -n date-g2-pktcount-clock-9 -D source
+          (cd source && sed 's@evidence/@@g' SHA256SUMS.txt | sha256sum -c --status)
+          cp source/packet_count_fail_at_state_09.smt2 evidence/unchanged_clock9.smt2
+          cp source/verdict.json evidence/previous_timeout_verdict.json
+          cp source/packet_depth_manifest.json evidence/
+          python3 - <<'PY'
+          import json,pathlib,hashlib
+          e=pathlib.Path('evidence');q=(e/'unchanged_clock9.smt2').read_bytes();m=json.loads((e/'packet_depth_manifest.json').read_text())
+          assert hashlib.sha256(q).hexdigest()==m['disjuncts']['9']
+          r=json.loads((e/'previous_timeout_verdict.json').read_text())
+          assert r['clock']==9 and r['z3']['verdict']=='unsat' and r['cvc5']['verdict']=='UNKNOWN_TIMEOUT'
+          print('IMMUTABLE_FAILED_CVC5_BENCHMARK_VERIFIED',hashlib.sha256(q).hexdigest())
+          PY
+          cvc5 --version | head -1 > evidence/cvc5_version.txt
+          z3 --version > evidence/z3_version.txt
+      - name: Attempt EXACT same bytes, alternate solver preprocessing and bitblasting
+        env:
+          MODE: ${{ matrix.name }}
+          FLAGS: ${{ matrix.flags }}
+        run: |
+          python3 - <<'PY'
+          import os,pathlib,subprocess,time,json,hashlib,shlex
+          out=pathlib.Path('evidence');q=out/'unchanged_clock9.smt2'
+          cmd=['cvc5','--lang','smt2','--no-incremental']+shlex.split(os.environ['FLAGS'])+[str(q)]
+          start=time.monotonic();row={'mode':os.environ['MODE'],'command':cmd,'sha256':hashlib.sha256(q.read_bytes()).hexdigest()}
+          try:
+            p=subprocess.run(cmd,capture_output=True,text=True,timeout=595)
+            (out/'new.stdout').write_text(p.stdout);(out/'new.stderr').write_text(p.stderr)
+            v=p.stdout.strip().splitlines()[0] if p.stdout.strip() else 'NO_VERDICT'
+            row.update(verdict=v,exit=p.returncode,seconds=round(time.monotonic()-start,2))
+          except subprocess.TimeoutExpired as ex:
+            row.update(verdict='UNKNOWN_TIMEOUT',exit=None,seconds=595)
+            (out/'new.stderr').write_text(str(ex))
+          (out/'new_verdict.json').write_text(json.dumps(row,indent=2)+'\n')
+          print('FINAL_K9',row,flush=True)
+          assert row['verdict']=='unsat' and row['exit']==0,'Not certified: preserve timeout or error, no silently substituted claim'
+          print('FINAL_K9_CVC5_UNSAT_PASS',flush=True)
+          PY
+      - name: Seal full evidence on both success and failure
+        if: always()
+        run: |
+          mkdir -p evidence
+          find evidence -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 -r sha256sum > evidence/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: date-g2-final-k9-${{ matrix.name }}
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 90
