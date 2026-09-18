@@ -1,0 +1,60 @@
+name: date-g2-targeted-cvc5-20260918
+on:
+  push:
+    branches: [research/date-g2-independent-20260917]
+    paths: [.github/workflows/date-g2-targeted-cvc5-20260918.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  target:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 16
+    steps:
+      - name: Install cvc5 and independent z3
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y cvc5 z3 python3
+          cvc5 --version; z3 --version
+      - name: Pin exact failed split SMT2 and retry using different bitblast modes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p prior evidence
+          gh run download 35306779235 --repo risu-research/formal-exec-2609 -n date-g2-split-depth-8 -D prior
+          (cd prior && sha256sum -c --status SHA256SUMS.txt)
+          python3 - <<'PY'
+          from pathlib import Path
+          import json,hashlib,subprocess,time
+          src=Path('prior/k08_a12.smt2'); prior=json.loads(Path('prior/verdicts.json').read_text())['k08_a12']
+          assert hashlib.sha256(src.read_bytes()).hexdigest()==prior['sha256']
+          assert prior['z3']['verdict']=='unsat' and prior['cvc5']['verdict']=='UNKNOWN_TIMEOUT'
+          Path('evidence/k08_a12.smt2').write_bytes(src.read_bytes())
+          out={}
+          for name,cmd in [('cvc5_eager',['cvc5','--lang','smt2','--bitblast=eager',str(src)]),('cvc5_default_extended',['cvc5','--lang','smt2',str(src)])]:
+           t=time.monotonic()
+           try:
+            r=subprocess.run(cmd,capture_output=True,text=True,timeout=240)
+            verdict=r.stdout.strip().splitlines()[0] if r.stdout.strip() else 'EMPTY'
+            if r.returncode or '(error' in r.stdout+r.stderr:verdict='ERROR'
+            o={'verdict':verdict,'seconds':round(time.monotonic()-t,2),'exit':r.returncode,'stderr':r.stderr,'stdout':r.stdout}
+           except subprocess.TimeoutExpired as e:o={'verdict':'UNKNOWN_TIMEOUT','seconds':round(time.monotonic()-t,2),'exit':None,'stderr':str(e),'stdout':''}
+           out[name]=o;print(name,o['verdict'],o['seconds'],flush=True)
+           if o['verdict']=='unsat':break
+          Path('evidence/target_verdicts.json').write_text(json.dumps(out,indent=2)+'\n')
+          if not any(o['verdict']=='unsat' for o in out.values()):raise SystemExit('k08_a12 remains unresolved')
+          print('CVC5_K8_A12_UNSAT_CLOSED')
+          PY
+      - name: Seal evidence
+        if: always()
+        run: |
+          find evidence -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 -r sha256sum > evidence/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: date-g2-cvc5-targeted-k8-a12
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 90
