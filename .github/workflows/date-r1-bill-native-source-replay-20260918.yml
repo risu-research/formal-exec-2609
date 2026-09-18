@@ -1,0 +1,163 @@
+name: date-r1-bill-native-source-replay-20260918
+on:
+  push:
+    branches: [research/date-g2-independent-20260917]
+    paths: [.github/workflows/date-r1-bill-native-source-replay-20260918.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  source-native-dual:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reconstruct pinned historical upstream source and install two solvers
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq yosys z3 cvc5 python3 git >/tmp/r1apt.log
+          mkdir -p work/native work/evidence prior
+          git clone -q --filter=blob:none https://github.com/billdmar/fifo-verification-suite.git /tmp/r1-old
+          git -C /tmp/r1-old checkout -q --detach 8fd43ee5973422c6cb3c9e2cb293b8f3bd9067c3
+          git clone -q --filter=blob:none https://github.com/billdmar/fifo-verification-suite.git /tmp/r1-new
+          git -C /tmp/r1-new checkout -q --detach 2659b5831303fc1fb66d664fa2513a66e264cb7b
+          test "$(git -C /tmp/r1-old rev-parse HEAD)" = 8fd43ee5973422c6cb3c9e2cb293b8f3bd9067c3
+          test "$(git -C /tmp/r1-new rev-parse HEAD)" = 2659b5831303fc1fb66d664fa2513a66e264cb7b
+          { git -C /tmp/r1-old rev-parse HEAD;git -C /tmp/r1-new rev-parse HEAD;yosys -V;z3 --version;cvc5 --version;python3 --version; } > work/evidence/tools.txt
+          python3 cert/date-g2-independent-20260917/r1_bill_native_source_replay_20260918.py prepare --old /tmp/r1-old --new /tmp/r1-new --out work | tee work/evidence/source_provenance.log
+      - name: Re-elaborate five real source variants separately using upstream formal-target frontend
+        shell: bash
+        run: |
+          set -euo pipefail
+          for cell in old new hybrid no_cover restore_both;do
+            yosys -Q -T -l "work/native/$cell.log" -p "read_verilog -formal -sv -DFORMAL work/variants/$cell/rtl/axis_pkt_fifo.sv; chparam -set DEPTH 8 axis_pkt_fifo; prep -top axis_pkt_fifo; write_json work/native/$cell.json; write_smt2 -wires -mem work/native/$cell.smt2" > "work/native/$cell.stdout" 2>&1
+            test -s "work/native/$cell.smt2"
+            echo "NATIVE_REELAB_PASS $cell $(sha256sum work/native/$cell.smt2)" | tee -a work/evidence/native.log
+          done
+      - name: Acquire byte-pinned earlier original official source-to-SMT bridge
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh run download 35294365338 --repo risu-research/formal-exec-2609 -n date-g2-official-backend-independent-dual-solver-v1 -D prior
+          test -s prior/bridge/official_loss.smt2
+          echo '56f9a37955c2e70b727def892017ebaab5c79b6f36646f6d2b9f42d20a2de38c  prior/bridge/official_loss.smt2' | sha256sum -c -
+          sha256sum prior/bridge/official_loss.smt2 > work/evidence/frozen_prior_query_sha256.txt
+      - name: Generate source-derived hybrid native F, 22-condition equivalence and controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 cert/date-g2-independent-20260917/r1_bill_native_source_replay_20260918.py analyze --out work --prior prior/bridge --expected-prior-sha 56f9a37955c2e70b727def892017ebaab5c79b6f36646f6d2b9f42d20a2de38c | tee work/evidence/query_build.log
+      - name: Both independent solvers must agree with every original and regenerated query
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import subprocess,pathlib,json,hashlib,time,sys
+          root=pathlib.Path('work');queries=json.loads((root/'QUERIES.json').read_text());out=root/'results';out.mkdir(exist_ok=True);summary={}
+          for name,row in sorted(queries.items()):
+           file=root/'queries'/f'{name}.smt2';assert hashlib.sha256(file.read_bytes()).hexdigest()==row['sha256']
+           summary[name]={'sha256':row['sha256'],'expected':row['expected']}
+           for engine,cmd in (('z3',['z3','-smt2',str(file)]),('cvc5',['cvc5','--lang','smt2',str(file)])):
+            start=time.monotonic();res=subprocess.run(cmd,text=True,capture_output=True,timeout=110)
+            (out/f'{name}.{engine}.stdout').write_text(res.stdout);(out/f'{name}.{engine}.stderr').write_text(res.stderr)
+            verdict=res.stdout.strip().splitlines()[0] if res.stdout.strip() else 'EMPTY'
+            summary[name][engine]={'verdict':verdict,'returncode':res.returncode,'seconds':round(time.monotonic()-start,3)}
+            print('R1_NATIVE',name,engine,verdict,'expected',row['expected'],flush=True)
+            assert res.returncode==0 and verdict==row['expected'] and '(error' not in (res.stdout+res.stderr),(name,engine,res.returncode,verdict,res.stderr[:500])
+          (out/'DUAL_VERDICTS.json').write_text(json.dumps(summary,indent=2,sort_keys=True)+'\n')
+          assert len(summary)==9
+          print('R1_SOURCE_REGENERATED_WHOLE_F_DUAL_SOLVER_PASS',len(summary)*2,flush=True)
+          PY
+      - name: Seal source, query, negative checks and all native evidence even on failure
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/evidence
+          sha256sum cert/date-g2-independent-20260917/r1_bill_native_source_replay_20260918.py > work/evidence/runner_sha256.txt
+          find work -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 -r sha256sum > work/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: date-r1-bill-native-source-dual-20260918
+          path: work/
+          if-no-files-found: error
+          retention-days: 90
+  original-yices:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        cell: [old, new, hybrid, no_cover, restore_both]
+    env:
+      CELL: ${{ matrix.cell }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pin source and original Yices 2.7.0 engine; regenerate exact child minus source tokens
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq yosys curl git make >/tmp/r1apt.log
+          git clone -q --filter=blob:none https://github.com/billdmar/fifo-verification-suite.git /tmp/r1-old
+          git -C /tmp/r1-old checkout -q --detach 8fd43ee5973422c6cb3c9e2cb293b8f3bd9067c3
+          git clone -q --filter=blob:none https://github.com/billdmar/fifo-verification-suite.git /tmp/r1-new
+          git -C /tmp/r1-new checkout -q --detach 2659b5831303fc1fb66d664fa2513a66e264cb7b
+          mkdir -p work/evidence
+          python3 cert/date-g2-independent-20260917/r1_bill_native_source_replay_20260918.py prepare --old /tmp/r1-old --new /tmp/r1-new --out work > work/evidence/source_provenance.log
+          git clone -q https://github.com/YosysHQ/sby.git /tmp/r1-sby
+          git -C /tmp/r1-sby checkout -q --detach b1a1e98cba941ec8433f8dc27f416cd7bb7f14be
+          sudo make -s -C /tmp/r1-sby install
+          curl -fLsS --retry 3 --retry-delay 2 'https://github.com/SRI-CSL/yices2/releases/download/yices-2.7.0/yices-2.7.0-x86_64-pc-linux-gnu-static-gmp.tar.gz' -o /tmp/r1-yices.tar.gz
+          echo '49566b6f817692820538df78fe406878400d79810631c9372b2495bc81d3e00a  /tmp/r1-yices.tar.gz' | sha256sum -c -
+          mkdir -p /tmp/r1-yices;tar -xzf /tmp/r1-yices.tar.gz -C /tmp/r1-yices
+          binary=$(find /tmp/r1-yices -type f -name yices-smt2 | head -1);test -n "$binary"
+          sudo install -m 755 "$binary" /usr/local/bin/yices-smt2
+          ldpath=$(dirname "$(find /tmp/r1-yices -type f -name 'libyices.so*' | head -1 || true)")
+          if [ "$ldpath" != . ];then echo "$ldpath" | sudo tee /etc/ld.so.conf.d/r1-yices.conf;sudo ldconfig;fi
+          { yices-smt2 --version;yosys -V;sby --version;git -C /tmp/r1-sby rev-parse HEAD; } > work/evidence/tools.txt 2>&1
+      - name: Run the unchanged original SBY task on independently source-edited RTL
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp -a "work/variants/$CELL/." /tmp/r1-new/
+          sha256sum "/tmp/r1-new/rtl/axis_pkt_fifo.sv" > work/evidence/actual_source_sha256.txt
+          set +e
+          (cd /tmp/r1-new && timeout 960 sby -f formal/axis_pkt_fifo_bmc.sby) > work/evidence/original_yices.log 2>&1
+          rc=$?
+          set -e
+          echo "$rc" > work/evidence/returncode.txt
+          export R1_RC="$rc"
+          python3 - <<'PY'
+          import pathlib,os,json
+          t=pathlib.Path('work/evidence/original_yices.log').read_text(errors='replace');rc=int(os.environ['R1_RC']);cell=os.environ['CELL']
+          state='PASS' if rc==0 and 'DONE (PASS' in t and 'yices' in t.lower() else 'FAIL' if rc!=0 and 'DONE (FAIL' in t else 'UNRESOLVED'
+          row={'cell':cell,'observed':state,'returncode':rc,'task':'unchanged upstream formal/axis_pkt_fifo_bmc.sby','engine':'pinned Yices 2.7.0'}
+          pathlib.Path('work/evidence/VERDICT.json').write_text(json.dumps(row,indent=2)+'\n')
+          print('R1_ORIGINAL_YICES',row,flush=True)
+          assert state=='PASS',(cell,row,t[-1500:])
+          PY
+      - name: Preserve full original task statuses and raw logs irrespective of outcome
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p work/evidence/sby_run
+          if test -d /tmp/r1-new/formal/axis_pkt_fifo_bmc;then
+            cp /tmp/r1-new/formal/axis_pkt_fifo_bmc/status* work/evidence/sby_run/ 2>/dev/null || true
+            cp /tmp/r1-new/formal/axis_pkt_fifo_bmc/logfile.txt work/evidence/sby_run/ 2>/dev/null || true
+            find /tmp/r1-new/formal/axis_pkt_fifo_bmc \( -name '*.vcd' -o -name '*.yw' \) | head -6 | while read -r file;do cp "$file" work/evidence/sby_run/;done
+          fi
+          find work -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 -r sha256sum > work/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: date-r1-bill-yices-${{ matrix.cell }}-20260918
+          path: work/
+          if-no-files-found: error
+          retention-days: 90
