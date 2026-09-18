@@ -1,0 +1,119 @@
+name: date-g2-official-backend-crosscheck-20260917
+on:
+  push:
+    branches: [research/date-g2-independent-20260917]
+    paths: [.github/workflows/date-g2-official-backend-crosscheck-20260917.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  independent-backend-and-reachability:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 22
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install two independent SMT solver families
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y z3 cvc5 python3
+          mkdir -p input/old input/new official prior generated bridge reach evidence
+          { z3 --version; cvc5 --version; python3 --version; } | tee evidence/tool_versions.txt
+      - name: Verify frozen provenance, both IRs, official backend and six original queries
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh run download 35279448918 --repo risu-research/formal-exec-2609 -n date-g2-bill-source-ir-old -D input/old
+          gh run download 35279448918 --repo risu-research/formal-exec-2609 -n date-g2-bill-source-ir-new -D input/new
+          gh run download 35293627220 --repo risu-research/formal-exec-2609 -n date-g2-official-smt2-probe-v2 -D official
+          gh run download 35292888310 --repo risu-research/formal-exec-2609 -n date-g2-bill-real-ir-dual-solver-v3 -D prior
+          for sd in old new; do (cd "input/$sd" && sed 's@evidence/@@g' SHA256SUMS.txt | sha256sum -c --status); done
+          (cd official && sed 's@evidence/@@g' SHA256SUMS.txt | sha256sum -c --status)
+          (cd prior && sed 's@evidence/@@g' SHA256SUMS.txt | sha256sum -c --status)
+          test "$(sha256sum input/old/formal.json | cut -d' ' -f1)" = 1e793fdf714a04147e6dea167b5625499206ee6157bcc60a7355842c7bb266f9
+          test "$(sha256sum input/new/formal.json | cut -d' ' -f1)" = ef5f30c538f5e97c0a3089b4138b3ee04b2a6ad2346bcb911d21b67f74185a3d
+          test "$(sha256sum official/old.smt2 | cut -d' ' -f1)" = 41a3d4eac9450eab902dfdc46ddc6482adde8bda3e6e9009429ea32dd5b39173
+          test "$(sha256sum official/new.smt2 | cut -d' ' -f1)" = 3158f8608207c1f5aed5cc077a477cfe89749740cb2e6bb7b7128d275b176b91
+          cp cert/date-g2-independent-20260917/FROZEN_SELECTION.json evidence/frozen_selection.json
+          python3 - <<'PY'
+          import json
+          d=json.load(open('evidence/frozen_selection.json'));r=d['candidate_order_frozen_before_any_new_whole_F_query'][0]
+          assert d['population']=='exploratory_X_not_H143' and d['prior_cohort']['n']==143
+          assert (r['id'],r['parent'],r['child'])==('X-BILL-PACKET','8fd43ee5973422c6cb3c9e2cb293b8f3bd9067c3','2659b5831303fc1fb66d664fa2513a66e264cb7b')
+          print('FROZEN_PROVENANCE_AND_PINNED_SOURCES_PASS')
+          PY
+      - name: Rebuild the six exact historical SMT-LIB queries, reject any byte difference
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 cert/date-g2-independent-20260917/flat_ir_dual_solver.py --root input --out generated > evidence/original_translator_meta.txt
+          python3 - <<'PY'
+          import pathlib,json,hashlib,shutil
+          p=pathlib.Path('prior');g=pathlib.Path('generated')
+          meta=json.loads((p/'meta.json').read_text()); fresh=json.loads((g/'meta.json').read_text())
+          assert meta['query_sha256']==fresh['query_sha256'] and len(meta['query_sha256'])==6
+          out=pathlib.Path('evidence/historical_smt2');out.mkdir()
+          for name,expected in meta['query_sha256'].items():
+           assert (p/(name+'.smt2')).read_bytes()==(g/(name+'.smt2')).read_bytes()
+           assert hashlib.sha256((g/(name+'.smt2')).read_bytes()).hexdigest()==expected
+           shutil.copyfile(g/(name+'.smt2'),out/(name+'.smt2'))
+          print('ALL_SIX_PREVIOUS_SOLVER_INPUTS_BYTE_IDENTICAL')
+          PY
+      - name: Independently compare every official property to frozen JSON property; build formal BMC reachability queries
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 cert/date-g2-independent-20260917/official_smt2_bridge.py --root input --official official --translator cert/date-g2-independent-20260917/flat_ir_dual_solver.py --out bridge > evidence/bridge_meta_stdout.txt
+          python3 cert/date-g2-independent-20260917/reachability_official.py --official official/old.smt2 --out reach > evidence/reachability_meta_stdout.txt
+          cp bridge/bridge_meta.json reach/reachability_meta.json evidence/
+      - name: Z3 and cvc5 check each identical independently generated query and controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import pathlib,subprocess,json,time,hashlib,shutil
+          out=pathlib.Path('evidence');result={}
+          for category,dirname in [('bridge','bridge'),('reach','reach')]:
+           d=pathlib.Path(dirname);files=sorted(d.glob('*.smt2'));assert len(files)==54 if category=='bridge' else len(files)==11,(category,len(files))
+           dst=out/category;dst.mkdir(exist_ok=True)
+           result[category]={}
+           for f in files:
+            name=f.stem
+            if category=='bridge':
+             expected=('sat' if name.startswith('negative_') or name in ('official_loss','official_new_contract_false') else 'unsat')
+            else:
+             expected=('sat' if name=='old_contract_exclusion_depth9' else 'unsat')
+            shutil.copyfile(f,dst/f.name)
+            row={'query_sha256':hashlib.sha256(f.read_bytes()).hexdigest(),'expected':expected}
+            for solver,cmd in [('z3',['z3','-smt2',str(f)]),('cvc5',['cvc5','--lang','smt2','--produce-models',str(f)])]:
+             t=time.monotonic()
+             try:r=subprocess.run(cmd,capture_output=True,text=True,timeout=90)
+             except subprocess.TimeoutExpired as e:
+              (dst/f'{name}.{solver}.stderr').write_text(str(e));raise
+             (dst/f'{name}.{solver}.stdout').write_text(r.stdout);(dst/f'{name}.{solver}.stderr').write_text(r.stderr)
+             verdict=r.stdout.strip().splitlines()[0] if r.stdout.strip() else 'EMPTY'
+             row[solver]={'verdict':verdict,'returncode':r.returncode,'seconds':round(time.monotonic()-t,3)}
+             assert r.returncode==0 and verdict==expected and '(error' not in r.stdout+r.stderr,(category,name,solver,row[solver],r.stderr[:300])
+            result[category][name]=row
+            print(category,name,row['z3']['verdict'],row['cvc5']['verdict'],flush=True)
+           (out/(category+'_verdicts.json')).write_text(json.dumps(result[category],indent=2,sort_keys=True)+'\n')
+          print('INDEPENDENT_BACKEND_AND_INITIAL_REACHABILITY_DUAL_SOLVER_PASS',len(result['bridge']),len(result['reach']))
+          PY
+      - name: Preserve evidence even if test fails
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p evidence
+          sha256sum cert/date-g2-independent-20260917/official_smt2_bridge.py cert/date-g2-independent-20260917/reachability_official.py cert/date-g2-independent-20260917/flat_ir_dual_solver.py > evidence/translator_scripts_sha256.txt
+          find evidence -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 -r sha256sum > evidence/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: date-g2-official-backend-independent-dual-solver-v1
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 90
