@@ -1,0 +1,96 @@
+name: date-g1-native-source-smt2-v2-20260918
+on:
+  push:
+    branches: [research/date-g2-independent-20260917]
+    paths: [.github/workflows/date-g1-native-source-smt2-v2-20260918.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  native-source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Get frozen original source evidence and tools
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y yosys z3 cvc5
+          mkdir -p evidence/input evidence/build
+          gh run download 35275901145 --repo risu-research/formal-exec-2609 -n date-zipcpu-g1-source-20260917 -D evidence/input
+          yosys -V | tee evidence/yosys_version.txt
+          z3 --version | tee evidence/z3_version.txt
+          cvc5 --version | tee evidence/cvc5_version.txt
+      - name: Verify upstream blobs and uniquely patched source; create original target trees
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib,subprocess,shutil,json
+          p=Path('evidence/input/sources'); root=Path('evidence/build')
+          expected=json.loads((p/'source-manifest.json').read_text())
+          for name,digest in expected.items():
+            q=p/name
+            assert q.is_file() and hashlib.sha256(q.read_bytes()).hexdigest()==digest,name
+          orig=(p/'new.v').read_text(); patched=(p/'patched.v').read_text()
+          old=('`ASSUME( (i_addr[(AW+1):2] == o_wb_addr)', '||(i_addr[(AW+1):2] == o_wb_addr+1));')
+          new=('`ASSUME( (i_addr == o_wb_addr)','||(i_addr == o_wb_addr+1));')
+          for before,after in zip(old,new):
+            assert orig.count(before)==1,before
+            orig=orig.replace(before,after,1)
+          assert orig==patched,'not exactly the two declared equality edits'
+          for side in ('old','new','patched'):
+            b=root/side
+            for folder in ('rtl/core','rtl/ex','bench/formal'): (b/folder).mkdir(parents=True,exist_ok=True)
+            shutil.copyfile(p/(side+'.v'),b/'rtl/core/pipemem.v')
+            shutil.copyfile(p/(('old' if side=='old' else 'new')+'.fwb_master.v'),b/'rtl/ex/fwb_master.v')
+            recipe=(p/(('old' if side=='old' else 'new')+'.pipemem.ys')).read_text()
+            assert recipe.count('write_smt2 -wires pipemem.smt2')==1
+            (b/'bench/formal/pipemem.ys').write_text(recipe)
+            (b/'bench/formal/compat.ys').write_text(recipe.replace('write_smt2 -wires pipemem.smt2','dffunmap\nwrite_smt2 -wires pipemem.smt2\nwrite_json native.json'))
+          assert subprocess.check_output(['git','hash-object',str(p/'old.v')],text=True).strip()=='fa4542fe97cd9b7c7051251405dfa5ef1baa1273'
+          assert subprocess.check_output(['git','hash-object',str(p/'new.v')],text=True).strip()=='60f5c6c75e2f396ccb7391d6ea1c3c6f55fec22b'
+          print('SOURCE_PASS original two git blobs; exact unique two-expression replacement; all 9 original source files SHA256')
+          PY
+      - name: Try unchanged original target and symmetrically dffunmapped native SMT2
+        run: |
+          set -euo pipefail
+          for side in old new patched; do
+            b="evidence/build/$side/bench/formal"
+            (cd "$b" && yosys -Q -T -s pipemem.ys > literal.stdout 2> literal.stderr) && status=PASS || status=FAIL
+            echo "$side unchanged-script $status" | tee -a evidence/unchanged_script_status.txt
+            (cd "$b" && yosys -Q -T -s compat.ys > compat.stdout 2> compat.stderr)
+            test -s "$b/pipemem.smt2" && test -s "$b/native.json"
+            echo "$side compatible-smt2 PASS" | tee -a evidence/native_status.txt
+            sha256sum "$b/pipemem.smt2" "$b/native.json" >> evidence/native_sha256.txt
+          done
+      - name: Four source-integrity mutation controls
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib,json
+          orig=(Path('evidence/input/sources')/'patched.v').read_text()
+          mutants={'wrong_width':orig.replace('i_addr == o_wb_addr','i_addr[(AW+1):1] == o_wb_addr',1),'wrong_mapping':orig.replace('o_wb_addr+1','o_wb_addr+2',1),'wrong_past_valid':orig.replace('f_past_valid','f_past_invalid',1),'wrong_assertion':orig.replace('`ASSERT(','`ASSUME(',1)}
+          want='497772ade03bd0bcfd282b2518d45516572b8252b20e75f64aadb967edc00800'
+          result={k:{'sha256':hashlib.sha256(v.encode()).hexdigest(),'source_integrity_rejected':hashlib.sha256(v.encode()).hexdigest()!=want} for k,v in mutants.items()}
+          assert len(result)==4 and all(x['source_integrity_rejected'] for x in result.values())
+          Path('evidence/negative_controls.json').write_text(json.dumps(result,indent=2,sort_keys=True)+'\n')
+          print('PASS four source-integrity negatives; not semantic solver proofs')
+          PY
+      - name: Seal outputs and failure logs
+        if: always()
+        run: |
+          mkdir -p evidence
+          find evidence -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 -r sha256sum > evidence/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: date-g1-native-source-smt2-v2-20260918
+          path: evidence/
+          retention-days: 90
+          if-no-files-found: error
