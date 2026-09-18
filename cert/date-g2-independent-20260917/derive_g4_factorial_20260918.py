@@ -11,7 +11,7 @@ h=lambda v:hashlib.sha256(v).hexdigest()
 assert h(a)=='148a851add9dd29671b1f493cd01af54ab87ad6fa5a97a2511ebd8cfbca46475'
 assert h(sby)=='84a723e9a63e85a29ffb6b8c7598c114781053c6f30e258a1c2c1e0350f788d0'
 s=a.decode(); anchor='    // -------------------------------------------------------------------------\n    // GROUP 1 — AXI master protocol compliance (stable-until-accepted, no spurious).'
-assume='''    // Original historical successor's environment contract, without cover edit.
+assume='''    // Source-bound intervention: original successor's m_pkt_fits (no new covers).
     always @(posedge clk) begin
         if (rst_n) m_pkt_fits: assume ((wptr - commit_ptr) < DEPTH[ADDR_WIDTH:0]);
     end
