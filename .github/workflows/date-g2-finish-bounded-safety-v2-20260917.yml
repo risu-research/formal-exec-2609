@@ -1,0 +1,81 @@
+name: date-g2-finish-bounded-safety-v2-20260917
+on:
+  push:
+    branches: [research/date-g2-independent-20260917]
+    paths: [.github/workflows/date-g2-finish-bounded-safety-v2-20260917.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  original-formula-exact-disjunction:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 22
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {first: 0, last: 4}
+          - {first: 5, last: 9}
+          - {first: 10, last: 13}
+          - {first: 14, last: 17}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install independently developed SMT solvers
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq cvc5 z3
+      - name: Pin original identical official safety query and derive lossless OR partition
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p input queries evidence
+          gh run download 35294645105 --repo risu-research/formal-exec-2609 -n date-g2-initialized-contract-cover-dual-solver-v3 -D input
+          (cd input && sed 's@evidence/@@g' SHA256SUMS.txt | sha256sum -c --status)
+          python3 cert/date-g2-independent-20260917/finish_safety_split.py input/reach/old_any_assertion_failure_up_to_depth9.smt2 queries input/reachability_meta.json | tee evidence/source_sha.txt
+          cp input/reach/old_any_assertion_failure_up_to_depth9.smt2 input/reachability_meta.json evidence/
+          cp queries/decomposition.json evidence/
+          cvc5 --version | head -1 | tee evidence/cvc5_version.txt
+          z3 --version | tee evidence/z3_version.txt
+      - name: Re-solve entire original bounded-safety formula using exact property decomposition
+        env:
+          FIRST: ${{ matrix.first }}
+          LAST: ${{ matrix.last }}
+        run: |
+          python3 - <<'PY'
+          import glob,hashlib,json,os,pathlib,subprocess,time
+          out=pathlib.Path('evidence');rows=[]
+          for idx in range(int(os.environ['FIRST']),int(os.environ['LAST'])+1):
+            paths=glob.glob('queries/'+str(idx).zfill(2)+'_*.smt2');assert len(paths)==1,paths
+            p=pathlib.Path(paths[0]);q=p.read_bytes();name=p.stem
+            (out/p.name).write_bytes(q)
+            row={'id':idx,'property':name,'sha256':hashlib.sha256(q).hexdigest()}
+            for solver,cmd in [('z3',['z3','-smt2',str(p)]),('cvc5',['cvc5','--lang','smt2','--no-incremental',str(p)])]:
+              st=time.monotonic()
+              try:
+                r=subprocess.run(cmd,text=True,capture_output=True,timeout=190)
+                (out/(name+'.'+solver+'.stdout')).write_text(r.stdout)
+                (out/(name+'.'+solver+'.stderr')).write_text(r.stderr)
+                v=r.stdout.strip().splitlines()[0] if r.stdout.strip() else 'NO_VERDICT'
+                row[solver]={'verdict':v,'exit':r.returncode,'seconds':round(time.monotonic()-st,2)}
+              except subprocess.TimeoutExpired as ex:
+                (out/(name+'.'+solver+'.stderr')).write_text('TIMEOUT 190 seconds: '+str(ex))
+                row[solver]={'verdict':'UNKNOWN_TIMEOUT','exit':None,'seconds':190}
+              print(name,solver,row[solver],flush=True)
+            rows.append(row)
+            (out/'verdicts.json').write_text(json.dumps(rows,indent=2)+'\n')
+          assert len(rows)==int(os.environ['LAST'])-int(os.environ['FIRST'])+1
+          assert all(r['z3']['verdict']=='unsat' and r['cvc5']['verdict']=='unsat' and r['z3']['exit']==r['cvc5']['exit']==0 for r in rows),'UNKNOWN or SAT must never be called PASS'
+          print('FULL_PARTITION_PASS',len(rows),flush=True)
+          PY
+      - name: Preserve complete success and failure evidence
+        if: always()
+        run: |
+          mkdir -p evidence
+          find evidence -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 -r sha256sum > evidence/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: date-g2-bounded-safety-v2-${{ matrix.first }}-${{ matrix.last }}
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 90
