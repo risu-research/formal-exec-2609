@@ -1,0 +1,82 @@
+name: date-g2-finish-bounded-safety-20260918
+on:
+  push:
+    branches: [research/date-g2-independent-20260917]
+    paths: [.github/workflows/date-g2-finish-bounded-safety-20260918.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  bounded-safety-split:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - name: Install Z3 and cvc5
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y z3 cvc5 python3
+          z3 --version; cvc5 --version
+      - name: Fetch pinned prior evidence and check hashes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p prior evidence
+          gh run download 35294645105 --repo risu-research/formal-exec-2609 -n date-g2-initialized-contract-cover-dual-solver-v3 -D prior
+          (cd prior && sed 's@evidence/@@g' SHA256SUMS.txt | sha256sum -c --status)
+          test "$(sha256sum prior/reach/old_any_assertion_failure_up_to_depth9.smt2 | cut -d' ' -f1)" = "$(python3 -c 'import json;print(json.load(open("prior/reachability_meta.json"))["query_sha256"]["old_any_assertion_failure_up_to_depth9"])')"
+      - name: Split by independent assertion and depth; do not upgrade unknown
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import pathlib,subprocess,hashlib,json,re,time
+          src=pathlib.Path('prior/reach/old_any_assertion_failure_up_to_depth9.smt2').read_text()
+          assert src.count('(check-sat)')==1
+          assert src.rstrip().endswith('(check-sat)')
+          pre=src.rsplit('(assert (or (not (|axis_pkt_fifo_a| |q0|))',1)[0]
+          assert '(assert (|axis_pkt_fifo_i| |q0|))' in pre
+          assert pre.count('(assert (|axis_pkt_fifo_t|')==9
+          assert pre.count('(assert (|axis_pkt_fifo_u|')==10
+          out=pathlib.Path('evidence');cases=out/'queries';cases.mkdir(parents=True)
+          # Same exact initialized, 9-transition, 10-assumption base for every check.
+          # Each query negates ONE of the 18 official assertions at ONE of 10 states.
+          results={};unknown=[]
+          for depth in range(10):
+           for aid in range(18):
+            name=f'k{depth:02d}_assert{aid:02d}'
+            text=pre+f'(assert (not (|axis_pkt_fifo_a {aid}| |q{depth}|)))\n(check-sat)\n'
+            path=cases/(name+'.smt2');path.write_text(text)
+            row={'sha256':hashlib.sha256(text.encode()).hexdigest(),'depth':depth,'assertion':aid}
+            for solver,cmd,limit in [('z3',['z3','-smt2',str(path)],35),('cvc5',['cvc5','--lang','smt2',str(path)],55)]:
+             t=time.monotonic()
+             try:
+              p=subprocess.run(cmd,capture_output=True,text=True,timeout=limit)
+              verdict=p.stdout.strip().splitlines()[0] if p.stdout.strip() else 'EMPTY'
+              if p.returncode or verdict not in ['sat','unsat','unknown'] or '(error' in p.stdout+p.stderr:verdict='ERROR'
+              detail={'verdict':verdict,'seconds':round(time.monotonic()-t,3),'returncode':p.returncode,'stderr':p.stderr[:1200]}
+             except subprocess.TimeoutExpired as e:
+              detail={'verdict':'UNKNOWN_TIMEOUT','seconds':round(time.monotonic()-t,3),'returncode':None,'stderr':str(e)[:1200]}
+             row[solver]=detail
+             if detail['verdict']!='unsat':unknown.append({'case':name,'solver':solver,'detail':detail})
+            results[name]=row
+            if aid==17:print('DEPTH',depth,'UNKNOWN_OR_SAT',len(unknown),flush=True)
+          (out/'split_safety_results.json').write_text(json.dumps(results,indent=2,sort_keys=True)+'\n')
+          (out/'incomplete_or_sat.json').write_text(json.dumps(unknown,indent=2)+'\n')
+          (out/'SUMMARY.txt').write_text('frozen model: same official initial+9 transitions+10 old assumptions; 180 independent single-assertion single-state checks\n'+'Z3 UNSAT: '+str(sum(x['z3']['verdict']=='unsat' for x in results.values()))+'/180\n'+'cvc5 UNSAT: '+str(sum(x['cvc5']['verdict']=='unsat' for x in results.values()))+'/180\n'+'non-UNSAT cases: '+str(len(unknown))+'\n'+'No UNKNOWN is a proof. Finite k<=9 only.\n')
+          print((out/'SUMMARY.txt').read_text(),flush=True)
+          if unknown:raise SystemExit('SAFETY_NOT_CLOSED: see incomplete_or_sat.json')
+          print('INDEPENDENT_CVC5_AND_Z3_K9_ALL_18_ASSERTIONS_PASS')
+          PY
+      - name: Seal evidence even after failure
+        if: always()
+        run: |
+          find evidence -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 -r sha256sum > evidence/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: date-g2-per-assertion-cvc5-bounded-safety-20260918
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 90
