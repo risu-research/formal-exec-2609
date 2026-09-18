@@ -1,0 +1,91 @@
+name: date-g2-bill-real-ir-dual-solver-v2-20260917
+on:
+  push:
+    branches: [research/date-g2-independent-20260917]
+    paths: [.github/workflows/date-g2-bill-real-ir-dual-solver-v2-20260917.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  real-ir-dual-solver:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 22
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install independent solver families
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y z3 cvc5 python3 git
+          mkdir -p evidence input/old input/new cert
+          { z3 --version; cvc5 --version; python3 --version; } > evidence/tool_versions.txt
+      - name: Verify unmodified original Yosys IR artifacts and frozen pair
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh run download 35279448918 --repo risu-research/formal-exec-2609 -n date-g2-bill-source-ir-old -D input/old
+          gh run download 35279448918 --repo risu-research/formal-exec-2609 -n date-g2-bill-source-ir-new -D input/new
+          for side in old new; do
+            (cd input/$side && sed 's@^evidence/@@' SHA256SUMS.txt | sha256sum --check --status)
+            test -s input/$side/formal.json
+            test -s input/$side/inventory.json
+            echo "$side original artifact hash manifest PASS" | tee -a evidence/ir_integrity.txt
+          done
+          test "$(sha256sum input/old/formal.json | cut -d' ' -f1)" = 1e793fdf714a04147e6dea167b5625499206ee6157bcc60a7355842c7bb266f9
+          test "$(sha256sum input/new/formal.json | cut -d' ' -f1)" = ef5f30c538f5e97c0a3089b4138b3ee04b2a6ad2346bcb911d21b67f74185a3d
+          cp cert/date-g2-independent-20260917/FROZEN_SELECTION.json evidence/frozen_selection.json
+          python3 - <<'PY'
+          import json
+          d=json.load(open('evidence/frozen_selection.json'))
+          r=d['candidate_order_frozen_before_any_new_whole_F_query'][0]
+          assert r['id']=='X-BILL-PACKET' and r['parent']=='8fd43ee5973422c6cb3c9e2cb293b8f3bd9067c3' and r['child']=='2659b5831303fc1fb66d664fa2513a66e264cb7b'
+          print('FROZEN_PROVENANCE_PASS')
+          PY
+      - name: Compile both independently loaded Yosys property cones
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 cert/date-g2-independent-20260917/flat_ir_dual_solver.py --root input --out cert > evidence/translator_meta_stdout.txt
+          cp cert/meta.json evidence/meta.json
+          sha256sum cert/date-g2-independent-20260917/flat_ir_dual_solver.py > evidence/translator_sha256.txt
+      - name: Require matching answers from Z3 and cvc5 on same exact QF_BV files
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,pathlib,subprocess,hashlib,time
+          p=pathlib.Path('cert');out=pathlib.Path('evidence');meta=json.loads((p/'meta.json').read_text())
+          expected={'gain':'unsat','loss':'sat','shared_property_difference':'unsat','loss_with_contract_true':'unsat','loss_with_all_assertions_true':'unsat','mutant_delete_new_assumption':'sat'}
+          result={}
+          for name,exp in expected.items():
+            f=p/(name+'.smt2');assert hashlib.sha256(f.read_bytes()).hexdigest()==meta['query_sha256'][name]
+            one={}
+            for solver,command in [('z3',['z3','-smt2',str(f)]),('cvc5',['cvc5','--lang','smt2','--produce-models',str(f)])]:
+              t=time.time();r=subprocess.run(command,text=True,capture_output=True,timeout=80)
+              (out/f'{name}.{solver}.stdout').write_text(r.stdout)
+              (out/f'{name}.{solver}.stderr').write_text(r.stderr)
+              verdict=r.stdout.strip().splitlines()[0] if r.stdout.strip() else 'EMPTY'
+              assert r.returncode==0 and verdict==exp and '(error' not in (r.stdout+r.stderr),(name,solver,r.returncode,r.stdout[:500],r.stderr[:500])
+              one[solver]={'status':verdict,'seconds':round(time.time()-t,3)}
+            result[name]=one
+            print(name,one,flush=True)
+          (out/'dual_solver_verdict.json').write_text(json.dumps(result,sort_keys=True,indent=2)+'\n')
+          PY
+      - name: Seal failure or success, never silently promote failure
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p evidence
+          cp cert/*.smt2 evidence/ 2>/dev/null || true
+          find evidence -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 -r sha256sum > evidence/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: date-g2-bill-real-ir-dual-solver-v2
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 90
