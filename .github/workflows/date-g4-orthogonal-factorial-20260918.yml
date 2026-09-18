@@ -1,0 +1,146 @@
+name: date-g4-orthogonal-factorial-20260918
+on:
+  push:
+    branches: [research/date-g2-independent-20260917]
+    paths: [.github/workflows/date-g4-orthogonal-factorial-20260918.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  original-engine:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        cell: [O0_B0, O0_B1, O1_B0, O1_B1, BAD_TREADY_CONTROL]
+    env:
+      CELL: ${{ matrix.cell }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pin parent, preserve original task, install exact original engine
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/evidence
+          git clone -q --filter=blob:none https://github.com/billdmar/fifo-verification-suite.git /tmp/g4-bill
+          git -C /tmp/g4-bill checkout -q --detach 8fd43ee5973422c6cb3c9e2cb293b8f3bd9067c3
+          test "$(git -C /tmp/g4-bill rev-parse HEAD)" = 8fd43ee5973422c6cb3c9e2cb293b8f3bd9067c3
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq yosys curl git make >/tmp/g4-apt.log
+          git clone -q --depth 1 https://github.com/YosysHQ/sby.git /tmp/g4-sby
+          sudo make -s -C /tmp/g4-sby install
+          curl -fLsS --retry 3 --retry-delay 2 'https://github.com/SRI-CSL/yices2/releases/download/yices-2.7.0/yices-2.7.0-x86_64-pc-linux-gnu-static-gmp.tar.gz' -o /tmp/g4-yices.tar.gz
+          echo '49566b6f817692820538df78fe406878400d79810631c9372b2495bc81d3e00a  /tmp/g4-yices.tar.gz' | sha256sum -c -
+          mkdir -p /tmp/g4-yices;tar -xzf /tmp/g4-yices.tar.gz -C /tmp/g4-yices
+          binary=$(find /tmp/g4-yices -type f -name yices-smt2 | head -1);test -n "$binary"
+          sudo install -m 755 "$binary" /usr/local/bin/yices-smt2
+          ldpath=$(dirname "$(find /tmp/g4-yices -type f -name 'libyices.so*' | head -1 || true)")
+          if [ "$ldpath" != . ]; then echo "$ldpath" | sudo tee /etc/ld.so.conf.d/g4-yices.conf;sudo ldconfig;fi
+          { yices-smt2 --version; yosys -V; sby --version;git -C /tmp/g4-sby rev-parse HEAD; } > work/evidence/tools.txt 2>&1
+          python3 cert/date-g2-independent-20260917/derive_g4_factorial_20260918.py > work/evidence/precommitted_sources.log
+          python3 - <<'PY'
+          import os,json,hashlib,pathlib
+          d=json.loads(pathlib.Path('work/factorial/SOURCE_MANIFEST.json').read_text());c=os.environ['CELL'];p=pathlib.Path('work/factorial')/c
+          assert hashlib.sha256((p/'rtl/axis_pkt_fifo.sv').read_bytes()).hexdigest()==d['cells'][c]['source_sha256']
+          assert hashlib.sha256((p/'formal/axis_pkt_fifo_bmc.sby').read_bytes()).hexdigest()==d['original_sby_sha256']
+          assert b'smtbmc yices' in (p/'formal/axis_pkt_fifo_bmc.sby').read_bytes()
+          print('G4_ORIGINAL_TASK_AND_SOURCE_HASH_PASS',c,d['cells'][c],flush=True)
+          PY
+      - name: Execute original unchanged depth-14 SBY with original Yices engine
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp "work/factorial/$CELL/rtl/axis_pkt_fifo.sv" /tmp/g4-bill/rtl/axis_pkt_fifo.sv
+          cp /tmp/g4-bill/formal/axis_pkt_fifo_bmc.sby work/evidence/original.sby
+          sha256sum /tmp/g4-bill/rtl/axis_pkt_fifo.sv > work/evidence/actual_rtl.sha256
+          set +e
+          (cd /tmp/g4-bill && timeout 960 sby -f formal/axis_pkt_fifo_bmc.sby) > work/evidence/original_yices.log 2>&1
+          rc=$?
+          set -e
+          echo "$rc" > work/evidence/returncode.txt
+          cat work/evidence/original_yices.log | tail -28
+          export G4_RC="$rc"
+          python3 - <<'PY'
+          import pathlib,os,json
+          p=pathlib.Path('work/evidence/original_yices.log');t=p.read_text(errors='replace');rc=int(os.environ['G4_RC']);c=os.environ['CELL']
+          pass_=rc==0 and 'DONE (PASS' in t and 'yices' in t.lower()
+          fail_=rc!=0 and 'DONE (FAIL' in t and 'yices' in t.lower()
+          status='PASS' if pass_ else 'FAIL' if fail_ else 'UNRESOLVED'
+          j={'cell':c,'observed':status,'exit_code':rc,'original_engine':'yices-smt2 2.7.0 pinned archive','task':'unaltered formal/axis_pkt_fifo_bmc.sby depth 14','negative_control_expected_fail':c=='BAD_TREADY_CONTROL','original_task_complete':True,'has_named_tready_trace':'a_tready_iff_room' in t}
+          (pathlib.Path('work/evidence')/'VERDICT.json').write_text(json.dumps(j,indent=2,sort_keys=True)+'\n')
+          print('G4_BMC_VERDICT',j,flush=True)
+          expected='FAIL' if c=='BAD_TREADY_CONTROL' else 'PASS'
+          assert status==expected,(c,status,expected)
+          PY
+      - name: Archive original-engine traces and evidence irrespective of outcome
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if test -d /tmp/g4-bill/formal/axis_pkt_fifo_bmc; then
+            mkdir -p work/evidence/sby_run
+            cp /tmp/g4-bill/formal/axis_pkt_fifo_bmc/status* work/evidence/sby_run/ 2>/dev/null || true
+            cp /tmp/g4-bill/formal/axis_pkt_fifo_bmc/logfile.txt work/evidence/sby_run/ 2>/dev/null || true
+            find /tmp/g4-bill/formal/axis_pkt_fifo_bmc -name '*.vcd' -o -name '*.yw' | head -6 | while read -r f;do cp "$f" work/evidence/sby_run/;done
+          fi
+          find work -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 -r sha256sum > work/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: date-g4-original-yices-${{ matrix.cell }}-20260918
+          path: work/
+          if-no-files-found: error
+          retention-days: 90
+  replay-and-ir:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 24
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pin source and run initialized four-way 4-state RTL replay
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq yosys iverilog >/tmp/g4apt.log
+          git clone -q --filter=blob:none https://github.com/billdmar/fifo-verification-suite.git /tmp/g4-bill
+          git -C /tmp/g4-bill checkout -q --detach 8fd43ee5973422c6cb3c9e2cb293b8f3bd9067c3
+          mkdir -p work/evidence work/ir
+          python3 cert/date-g2-independent-20260917/derive_g4_factorial_20260918.py > work/evidence/source_generation.log
+          iverilog -g2012 -s tb -o work/evidence/tb.vvp work/factorial/sim_O0_B0.sv work/factorial/sim_O0_B1.sv work/factorial/sim_O1_B0.sv work/factorial/sim_O1_B1.sv work/factorial/tb_factorial.sv
+          vvp work/evidence/tb.vvp | tee work/evidence/replay.log
+          grep -q 'G4_INITIALIZED_WITNESS_PASS' work/evidence/replay.log
+          grep -q 'G4_OTHER_PORTS_MATCH_PASS' work/evidence/replay.log
+          { yosys -V;iverilog -V | head -2;git -C /tmp/g4-bill rev-parse HEAD; } > work/evidence/tools.txt 2>&1
+      - name: Re-elaborate every exact controlled RTL into official Yosys formal IR and SMT2
+        shell: bash
+        run: |
+          set -euo pipefail
+          for cell in O0_B0 O0_B1 O1_B0 O1_B1 BAD_TREADY_CONTROL;do
+            yosys -Q -T -l "work/ir/$cell.log" -p "read_verilog -formal -sv -DFORMAL work/factorial/$cell/rtl/axis_pkt_fifo.sv; chparam -set DEPTH 8 axis_pkt_fifo; prep -top axis_pkt_fifo; write_json work/ir/$cell.json; write_smt2 -wires -mem work/ir/$cell.smt2" > "work/ir/$cell.stdout" 2>&1
+          done
+          python3 - <<'PY'
+          from pathlib import Path
+          import json,re,hashlib
+          counts={}
+          for p in sorted(Path('work/ir').glob('*.smt2')):
+            t=p.read_text();n=len(re.findall(r'^\(define-fun \|axis_pkt_fifo_a \d+\|',t,re.M));u=len(re.findall(r'^\(define-fun \|axis_pkt_fifo_u \d+\|',t,re.M));c=len(re.findall(r'^\(define-fun \|axis_pkt_fifo_c \d+\|',t,re.M));counts[p.stem]={'assertions':n,'assumptions':u,'covers':c,'sha256':hashlib.sha256(p.read_bytes()).hexdigest()}
+          Path('work/evidence/FORMAL_COUNTS.json').write_text(json.dumps(counts,indent=2,sort_keys=True)+'\n');print('FORMAL_COUNTS',counts,flush=True)
+          for k,v in counts.items():
+            assert v['assertions']==18,(k,v)
+            assert v['assumptions']==(5 if k.startswith('O1_') else 4),(k,v)
+            assert v['covers']==6,(k,v)
+          PY
+      - name: Seal artifacts even after failure
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p work
+          find work -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 -r sha256sum > work/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: date-g4-initialized-replay-and-ir-20260918
+          path: work/
+          if-no-files-found: error
+          retention-days: 90
