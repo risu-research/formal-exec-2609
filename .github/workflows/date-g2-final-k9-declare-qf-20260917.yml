@@ -1,0 +1,87 @@
+name: date-g2-final-k9-declare-qf-20260917
+on:
+  push:
+    branches: [research/date-g2-independent-20260917]
+    paths: [.github/workflows/date-g2-final-k9-declare-qf-20260917.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  qf-logic-hint-no-formula-changes:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 13
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {mode: qf-eager-cadical, flags: '--bitblast=eager --bv-sat-solver=cadical'}
+          - {mode: qf-eager-cryptominisat, flags: '--bitblast=eager --bv-sat-solver=cryptominisat'}
+          - {mode: qf-lazy-ackermann, flags: '--bitblast=lazy --ackermann --unconstrained-simp'}
+          - {mode: qf-lazy-cryptominisat, flags: '--bitblast=lazy --bv-sat-solver=cryptominisat'}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install cvc5 and independent Z3
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq cvc5 z3
+      - name: Cryptographically lock exact old official formula and add only SMT logic metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p source evidence
+          gh run download 35304343972 --repo risu-research/formal-exec-2609 -n date-g2-pktcount-clock-9 -D source
+          (cd source && sed 's@evidence/@@g' SHA256SUMS.txt | sha256sum -c --status)
+          cp source/packet_count_fail_at_state_09.smt2 evidence/original_immutable.smt2
+          cp source/packet_depth_manifest.json evidence/
+          python3 - <<'PY'
+          import pathlib,json,hashlib
+          p=pathlib.Path('evidence');original=(p/'original_immutable.smt2').read_bytes();manifest=json.loads((p/'packet_depth_manifest.json').read_text())
+          assert hashlib.sha256(original).hexdigest()==manifest['disjuncts']['9']
+          assert b'(set-logic ' not in original
+          assert b'(forall ' not in original and b'(exists ' not in original
+          assert b'(declare-sort |axis_pkt_fifo_s| 0)' in original and b'(Array ' in original and b'(declare-fun |axis_pkt_fifo#' in original
+          tagged=b'(set-logic QF_AUFBV)\n'+original
+          assert tagged.split(b'\n',1)[1]==original
+          (p/'with_only_logic_hint.smt2').write_bytes(tagged)
+          (p/'logic_hint_manifest.json').write_text(json.dumps({'source_sha256':hashlib.sha256(original).hexdigest(),'with_logic_hint_sha256':hashlib.sha256(tagged).hexdigest(),'only_added_bytes':'(set-logic QF_AUFBV)\\n','purpose':'Tells solver exact existing quantifier-free array, uninterpreted-function and bit-vector theories; constraints/quantification unchanged'},indent=2)+'\n')
+          print('EXACT_FORMULA_AND_ONLY_LOGIC_HINT_PASS',hashlib.sha256(original).hexdigest())
+          PY
+          z3 -smt2 evidence/original_immutable.smt2 | tee evidence/z3_original.out
+          z3 -smt2 evidence/with_only_logic_hint.smt2 | tee evidence/z3_qf.out
+          test "$(head -1 evidence/z3_original.out)" = unsat
+          test "$(head -1 evidence/z3_qf.out)" = unsat
+          cvc5 --version | head -1 > evidence/cvc5_version.txt
+      - name: Independently solve unmodified assertions with explicit QF theory metadata
+        env:
+          MODE: ${{ matrix.mode }}
+          FLAGS: ${{ matrix.flags }}
+        run: |
+          python3 - <<'PY'
+          import os,subprocess,shlex,pathlib,time,json,hashlib
+          p=pathlib.Path('evidence');q=p/'with_only_logic_hint.smt2'
+          cmd=['cvc5','--lang','smt2','--no-incremental']+shlex.split(os.environ['FLAGS'])+[str(q)]
+          start=time.monotonic();r={'mode':os.environ['MODE'],'flags':os.environ['FLAGS'],'original_sha256':hashlib.sha256((p/'original_immutable.smt2').read_bytes()).hexdigest(),'logic_hint_sha256':hashlib.sha256(q.read_bytes()).hexdigest()}
+          try:
+            x=subprocess.run(cmd,capture_output=True,text=True,timeout=540)
+            (p/'cvc5.stdout').write_text(x.stdout);(p/'cvc5.stderr').write_text(x.stderr)
+            r.update(verdict=x.stdout.strip().splitlines()[0] if x.stdout.strip() else 'NO_VERDICT',exit=x.returncode,seconds=round(time.monotonic()-start,2))
+          except subprocess.TimeoutExpired as ex:
+            r.update(verdict='UNKNOWN_TIMEOUT',exit=None,seconds=540)
+            (p/'cvc5.stderr').write_text(str(ex))
+          (p/'verdict.json').write_text(json.dumps(r,indent=2)+'\n')
+          print('EXACT_QF_CLOCK9',r,flush=True)
+          assert r['verdict']=='unsat' and r['exit']==0,'Unknown, SAT or unsupported flags cannot be presented as UNSAT'
+          print('QF_CLOCK9_CVC5_UNSAT_CERTIFIED',flush=True)
+          PY
+      - name: Always preserve success or failure evidence
+        if: always()
+        run: |
+          mkdir -p evidence
+          find evidence -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 -r sha256sum > evidence/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: date-g2-qf-clock9-${{ matrix.mode }}
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 90
