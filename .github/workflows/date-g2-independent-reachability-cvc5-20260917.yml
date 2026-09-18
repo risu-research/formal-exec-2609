@@ -28,7 +28,7 @@ jobs:
           gh run download 35293627220 --repo risu-research/formal-exec-2609 -n date-g2-official-smt2-probe-v2 -D official
           gh run download 35294365338 --repo risu-research/formal-exec-2609 -n date-g2-official-backend-independent-dual-solver-v1 -D previous
           (cd official && sed 's@evidence/@@g' SHA256SUMS.txt | sha256sum -c --status)
-          (cd previous && sed 's@^evidence/@@g' SHA256SUMS.txt | sha256sum -c --status)
+          (cd previous && sed 's@evidence/@@g' SHA256SUMS.txt | sha256sum -c --status)
           test "$(sha256sum official/old.smt2 | cut -d' ' -f1)" = 41a3d4eac9450eab902dfdc46ddc6482adde8bda3e6e9009429ea32dd5b39173
           python3 - <<'PY'
           import pathlib,json,hashlib
@@ -55,7 +55,6 @@ jobs:
           import subprocess,json,time,pathlib,hashlib,shutil
           d=pathlib.Path('reach');out=pathlib.Path('evidence/reach');out.mkdir(parents=True)
           meta=json.loads((d/'reachability_meta.json').read_text());result={}
-          # SAT witness first; UNSAT cases k0..8 follow, each in two independent solvers.
           names=['old_contract_exclusion_depth9']+[f'old_contract_exclusion_depth{k}' for k in range(9)]+['old_any_assertion_failure_up_to_depth9']
           for name in names:
            f=d/(name+'.smt2');raw=f.read_bytes();assert hashlib.sha256(raw).hexdigest()==meta['query_sha256'][name]
@@ -89,7 +88,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: date-g2-initialized-contract-cover-dual-solver-v2
+          name: date-g2-initialized-contract-cover-dual-solver-v3
           path: evidence/
           if-no-files-found: error
           retention-days: 90
