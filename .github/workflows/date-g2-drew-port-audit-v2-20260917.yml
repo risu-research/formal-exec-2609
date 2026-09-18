@@ -1,0 +1,83 @@
+name: date-g2-drew-port-audit-v2-20260917
+on:
+  push:
+    branches: [research/date-g2-independent-20260917]
+    paths: [.github/workflows/date-g2-drew-port-audit-v2-20260917.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Freeze and retrieve immutable Drew revisions
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          d=json.load(open('cert/date-g2-independent-20260917/FROZEN_SELECTION.json'))
+          c=next(x for x in d['candidate_order_frozen_before_any_new_whole_F_query'] if x['id']=='X-DREW-PORT')
+          assert c['parent']=='9ae13f188f36d82bee98e1b7578b572bb6ac500a' and c['child']=='40a7d1a17e90324cb9a274e56cb35ea5da0124ce' and c['task']=='formal/async_fifo.sby prove'
+          PY
+          mkdir -p evidence
+          git clone -q https://github.com/drewbabel/fifo.git /tmp/drew
+          git -C /tmp/drew diff --name-only 9ae13f188f36d82bee98e1b7578b572bb6ac500a 40a7d1a17e90324cb9a274e56cb35ea5da0124ce > evidence/change_paths.txt
+          test "$(cat evidence/change_paths.txt)" = rtl/synchronizer.sv
+          for side in old new; do
+            sha=9ae13f188f36d82bee98e1b7578b572bb6ac500a
+            if [ "$side" = new ]; then sha=40a7d1a17e90324cb9a274e56cb35ea5da0124ce; fi
+            git -C /tmp/drew checkout -q --detach "$sha"
+            test "$(git -C /tmp/drew rev-parse HEAD)" = "$sha"
+            mkdir -p evidence/$side
+            cp /tmp/drew/rtl/{synchronizer,fifomem,rptr_empty,wptr_full,async_fifo}.sv evidence/$side/
+            cp /tmp/drew/formal/async_fifo.sby evidence/$side/original.sby
+          done
+      - name: Verify whole-RTL and whole-formal identity modulo named port permutation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import re,json,pathlib
+          p=pathlib.Path('evidence')
+          o=(p/'old/synchronizer.sv').read_text();n=(p/'new/synchronizer.sv').read_text()
+          comments=re.compile(r'/\*[\s\S]*?\*/|//[^\n]*')
+          scrub=lambda x:comments.sub(' ',x)
+          tok=lambda x:re.findall(r'[A-Za-z_$][\w$]*|\d+|\S',scrub(x))
+          pat=re.compile(r'(module\s+synchronizer\s*#\s*\([^)]*\)\s*\()([\s\S]*?)(\)\s*;)')
+          def norm(s):
+            matches=list(pat.finditer(s));assert len(matches)==1
+            m=matches[0];h=scrub(m.group(2))
+            h=re.sub(r'(?m)^\s*`(?:ifdef FORMAL|endif)\s*$', '',h)
+            decl=[' '.join(tok(x)) for x in h.split(',') if tok(x)]
+            names=[x.split()[-1] for x in decl]
+            assert len(names)==5 and set(names)=={'clk','rst_n','d','q','mid'},names
+            return tok(s[:m.start(2)]+' , '.join(sorted(decl))+s[m.end(2):]),names
+          ot,op=norm(o);nt,np=norm(n)
+          assert ot==nt,'body changed beyond formal port order'
+          assert op==['clk','rst_n','d','q','mid'],op
+          assert np==['mid','clk','rst_n','d','q'],np
+          inst_text=(p/'old/async_fifo.sv').read_text()
+          instances=re.findall(r'\bsynchronizer\s*#\s*\([\s\S]*?\)\s*\)\s*\w+\s*\(([\s\S]*?)\)\s*;',inst_text)
+          assert len(instances)==2,len(instances)
+          for inst in instances:
+            args=re.findall(r'\.([A-Za-z_]\w*)\s*\(',inst)
+            assert sorted(args)==sorted(['clk','rst_n','d','q','mid']),args
+          for f in ['async_fifo.sv','fifomem.sv','rptr_empty.sv','wptr_full.sv','original.sby']:
+            assert (p/'old'/f).read_bytes()==(p/'new'/f).read_bytes(),f
+          result={'verdict':'SOURCE_AND_PORT_BINDING_IDENTITY_PASS','changed_paths':['rtl/synchronizer.sv'],'old_formal_ports':op,'new_formal_ports':np,'named_only_instantiations':len(instances),'normalized_synchronizer_tokens':len(ot),'assertion_and_assumption_logic':'IDENTICAL_ALL_SOURCE','implementation_logic':'IDENTICAL_ALL_SOURCE','whole_F':'LOSS_UNSAT_AND_GAIN_UNSAT_BY_SOURCE_IDENTITY_ON_MATCHED_STATE_AND_INPUT_DOMAIN','observable_RTL':'SAME_MODULE_IMPLEMENTATION','caveat':'Source-structural identity; not an independent flattened Yosys miter or distinct solver proof.'}
+          (p/'audit.json').write_text(json.dumps(result,indent=2,sort_keys=True)+'\n')
+          print(json.dumps(result,sort_keys=True))
+          PY
+      - name: Seal evidence
+        if: always()
+        run: |
+          find evidence -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 -r sha256sum > evidence/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: date-g2-drew-port-audit-v2
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 90
