@@ -1,0 +1,92 @@
+name: date-g1-formula-provenance-matrix-20260918
+on:
+  push:
+    branches: [research/date-g2-independent-20260917]
+    paths: [.github/workflows/date-g1-formula-provenance-matrix-20260918.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  source-matrix:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install exact historical toolchain and retrieve both sealed authorities
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y yosys z3 cvc5 unzip
+          mkdir -p evidence/sources evidence/frozen evidence/out
+          gh run download 35275901145 --repo risu-research/formal-exec-2609 -n date-zipcpu-g1-source-20260917 -D evidence/sources
+          curl --fail --silent --show-error --location --retry 3 --header "Authorization: Bearer $GH_TOKEN" --header 'Accept: application/vnd.github+json' https://api.github.com/repos/risu-research/formal-exec-2609/actions/artifacts/10327123106/zip -o evidence/frozen.zip
+          unzip -oq evidence/frozen.zip -d evidence/frozen
+          yosys -V > evidence/yosys.txt
+          z3 --version > evidence/z3.txt
+          cvc5 --version | head -1 > evidence/cvc5.txt
+          cat evidence/yosys.txt
+          test "$(sha256sum evidence/frozen/natural/r0.json | cut -d' ' -f1)" = '7d9a87f8033b9d4b70148fc2bb3cfe916931eaa95e9e78f379d447123a53ae74'
+          test "$(sha256sum evidence/frozen/natural/r1.json | cut -d' ' -f1)" = '81a07443eeb1645218a60dc996ed0c69218c5c48fe1d6a9275d6f7ec0fcc8c05'
+      - name: Execute 7-route pass-intervention matrix from exact old/new/patched source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib,json,pathlib,subprocess,shutil
+          R=pathlib.Path('evidence');src=R/'sources/sources';manifest=json.loads((src/'source-manifest.json').read_text())
+          for name,digest in manifest.items():
+            p=src/name
+            assert p.is_file() and hashlib.sha256(p.read_bytes()).hexdigest()==digest,name
+          orig=(src/'new.v').read_text();patched=(src/'patched.v').read_text()
+          substitutions=[('`ASSUME( (i_addr[(AW+1):2] == o_wb_addr)','`ASSUME( (i_addr == o_wb_addr)'),('||(i_addr[(AW+1):2] == o_wb_addr+1));','||(i_addr == o_wb_addr+1));')]
+          for a,b in substitutions:
+            assert orig.count(a)==1,a
+            orig=orig.replace(a,b,1)
+          assert orig==patched
+          routes={
+            'frozen_exact':'prep -top pipemem -flatten -nordff; dffunmap',
+            'frozen_no_dff':'prep -top pipemem -flatten -nordff',
+            'frozen_share_then_dff':'prep -top pipemem -flatten -nordff; opt -share_all; dffunmap',
+            'frozen_dff_then_share':'prep -top pipemem -flatten -nordff; dffunmap; opt -share_all',
+            'source_exact':'prep -top pipemem -nordff; opt -share_all; flatten; opt -share_all',
+            'source_plus_dff':'prep -top pipemem -nordff; opt -share_all; flatten; opt -share_all; dffunmap',
+            'source_no_share':'prep -top pipemem -nordff; flatten'
+          }
+          summary={'upstream_git_old':'128cab89f5edaae4699184f50c1334598ebe904e','upstream_git_child':'d511239e19be8fcc7f340a64554ea93699637e62','source_manifests':manifest,'routes':routes,'outputs':{}}
+          read='read_verilog -D PIPEMEM -formal rtl/core/pipemem.v; read_verilog -D PIPEMEM -formal rtl/ex/fwb_master.v; '
+          for side in ('old','new','patched'):
+            root=R/'build'/side
+            for d in ('rtl/core','rtl/ex'): (root/d).mkdir(parents=True,exist_ok=True)
+            shutil.copyfile(src/(side+'.v'),root/'rtl/core/pipemem.v')
+            shutil.copyfile(src/(('old' if side=='old' else 'new')+'.fwb_master.v'),root/'rtl/ex/fwb_master.v')
+            for label,steps in routes.items():
+              d=R/'out'/side/label;d.mkdir(parents=True,exist_ok=True)
+              target=d.resolve()/'ir.json';script=read+steps+'; write_json '+str(target)
+              (d/'script.ys').write_text(script+'\n')
+              proc=subprocess.run(['yosys','-Q','-T','-p',script],cwd=root,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=100)
+              (d/'yosys.stdout').write_text(proc.stdout);(d/'yosys.stderr').write_text(proc.stderr)
+              assert proc.returncode==0 and target.is_file(),(side,label,proc.returncode,proc.stderr[-1500:])
+              payload=target.read_bytes();summary['outputs'][f'{side}/{label}']={'sha256':hashlib.sha256(payload).hexdigest(),'bytes':len(payload)}
+              print(side,label,len(payload),summary['outputs'][f'{side}/{label}']['sha256'],flush=True)
+          for side,frozen_name,expected in [('old','r0','7d9a87f8033b9d4b70148fc2bb3cfe916931eaa95e9e78f379d447123a53ae74'),('new','r1','81a07443eeb1645218a60dc996ed0c69218c5c48fe1d6a9275d6f7ec0fcc8c05')]:
+            got=summary['outputs'][side+'/frozen_exact']['sha256'];summary['outputs'][side+'/frozen_exact']['matches_frozen_authority']=got==expected
+            assert got==expected,(side,'literal frozen recipe does not reproduce authority',got,expected)
+          (R/'matrix.json').write_text(json.dumps(summary,indent=2,sort_keys=True)+'\n')
+          print('PASS both historical frozen JSON reproduced BYTES EXACTLY, all three sources seven routes generated')
+          PY
+      - name: Seal every file including logs on failure
+        if: always()
+        shell: bash
+        run: |
+          find evidence -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 -r sha256sum > evidence/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: date-g1-formula-provenance-matrix-20260918
+          path: evidence/
+          retention-days: 90
+          if-no-files-found: error
