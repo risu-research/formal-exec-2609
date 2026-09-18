@@ -1,0 +1,70 @@
+name: date-g2-last-unknown-final-attempt-20260918
+on:
+  push:
+    branches: [research/date-g2-independent-20260917]
+    paths: [.github/workflows/date-g2-last-unknown-final-attempt-20260918.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  last-one:
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [eager_qf_ufbv, default_extended]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 13
+    steps:
+      - name: Install cvc5 and z3
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y cvc5 z3 python3
+          cvc5 --version; z3 --version
+      - name: Verify frozen exact query and evaluate last unresolved assertion
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VARIANT: ${{ matrix.variant }}
+        run: |
+          set -euo pipefail
+          mkdir -p prior evidence
+          gh run download 35306779235 --repo risu-research/formal-exec-2609 -n date-g2-split-depth-9 -D prior
+          (cd prior && sed 's@evidence/@@g' SHA256SUMS.txt | sha256sum -c --status)
+          python3 - <<'PY'
+          import pathlib,json,hashlib,subprocess,time,os
+          prior=pathlib.Path('prior/k09_a12.smt2');rows=json.loads(pathlib.Path('prior/verdicts.json').read_text());ref=rows['k09_a12']
+          assert ref['z3']['verdict']=='unsat' and ref['cvc5']['verdict']=='UNKNOWN_TIMEOUT'
+          assert hashlib.sha256(prior.read_bytes()).hexdigest()==ref['sha256']
+          variant=os.environ['VARIANT'];assert variant in ('eager_qf_ufbv','default_extended')
+          original=prior.read_text();path=pathlib.Path('evidence/k09_a12.smt2');path.write_text(original)
+          if variant=='eager_qf_ufbv':
+           # The official SMT2 declares a state uninterpreted sort, UFs and bit-vectors,
+           # and contains NO forall or exists. Set-logic does not change any formula.
+           assert '(set-logic ' not in original and '(forall ' not in original and '(exists ' not in original
+           modified='(set-logic QF_UFBV)\n'+original
+           path=pathlib.Path('evidence/k09_a12_QF_UFBV.smt2');path.write_text(modified)
+           cmd=['cvc5','--lang','smt2','--bitblast=eager',str(path)]
+          else:cmd=['cvc5','--lang','smt2',str(path)]
+          started=time.monotonic()
+          try:
+           p=subprocess.run(cmd,capture_output=True,text=True,timeout=540)
+           verdict=p.stdout.strip().splitlines()[0] if p.stdout.strip() else 'EMPTY'
+           if p.returncode or verdict not in ('unsat','sat','unknown') or '(error' in p.stdout+p.stderr:verdict='ERROR'
+           result={'verdict':verdict,'elapsed_seconds':round(time.monotonic()-started,3),'stdout':p.stdout,'stderr':p.stderr,'returncode':p.returncode}
+          except subprocess.TimeoutExpired as e:result={'verdict':'UNKNOWN_TIMEOUT','elapsed_seconds':round(time.monotonic()-started,3),'stdout':'','stderr':str(e),'returncode':None}
+          result.update({'variant':variant,'original_sha256':ref['sha256'],'evaluated_sha256':hashlib.sha256(path.read_bytes()).hexdigest(),'command':cmd})
+          pathlib.Path('evidence/RESULT.json').write_text(json.dumps(result,indent=2)+'\n')
+          print('FINAL_LAST_CASE',variant,verdict if 'verdict' in locals() else result['verdict'],result['elapsed_seconds'],flush=True)
+          if result['verdict']!='unsat':raise SystemExit('LAST_CASE_STILL_UNRESOLVED')
+          PY
+      - name: Seal results even if unresolved
+        if: always()
+        run: |
+          find evidence -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 -r sha256sum > evidence/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: date-g2-last-k09-a12-${{ matrix.variant }}
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 90
