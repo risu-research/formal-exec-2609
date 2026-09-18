@@ -1,0 +1,77 @@
+name: date-g1-new-k6-cvc5-recovery-20260918
+on:
+  push:
+    branches: [research/date-g2-independent-20260917]
+    paths: [.github/workflows/date-g1-new-k6-cvc5-recovery-20260918.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  recover:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 65
+    steps:
+      - uses: actions/checkout@v4
+      - name: Recreate pinned inputs without editing formulas
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq cvc5 unzip python3 python3-pip >/tmp/apt.log
+          python3 -m pip install --break-system-packages 'z3-solver==4.13.3.0' >/tmp/pip.log
+          mkdir -p work/{frozen,source,matrix,queries,results}
+          for spec in 'frozen 10327123106 9f7202d5d34179d61957b70fbe641180002f1237562d511927cf360e41ed92fa' 'source 10549755919 c2d037604d3bfd7a292f17361dc40c0bbbd8296ad13cb448de9f55942d96eb33' 'matrix 10549453754 4ab06e19d5f86a06e0e15c48e2c03c3d1d713bdba5966020e8b95e9d2a75f8de'; do
+            read -r name id want <<< "$spec"
+            curl --fail --silent --show-error --location --retry 3 -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' "https://api.github.com/repos/risu-research/formal-exec-2609/actions/artifacts/$id/zip" -o "work/$name.zip"
+            test "$(sha256sum work/$name.zip | cut -d' ' -f1)" = "$want"
+            unzip -oq "work/$name.zip" -d "work/$name"
+            echo "PINNED_ARCHIVE_PASS $name $want"
+          done
+          python3 cert/date-g2-independent-20260917/verify_native_formula_relation_20260918.py --root work --output work/queries --side new
+          python3 - <<'PY'
+          import z3
+          assert z3.get_version_string()=='4.13.3'
+          print('Z3',z3.get_version_string())
+          PY
+          cvc5 --version | head -1
+      - name: Independently solve original new-k6 queries with extended per-query limit
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib,json,subprocess,time,z3
+          from pathlib import Path
+          p=Path('work/queries'); m=json.loads((p/'MANIFEST.json').read_text())
+          a=[c for c in m['cases'] if c['side']=='new' and c['depth']==6]
+          assert len(m['cases'])==32 and len(a)==9
+          assert next(c for c in a if c['kind']=='all')['sha256']=='b3074f766cece27774d809e5b59749bf07d39facdf9080f484686620cd24c0cf'
+          out=[]
+          for c in a:
+            file=p/c['name'];b=file.read_bytes(); assert hashlib.sha256(b).hexdigest()==c['sha256']
+            for tool in ('z3_4_13','cvc5_1_1'):
+              t=time.monotonic()
+              if tool=='z3_4_13':
+                s=z3.Solver(); s.set(timeout=60000);s.from_string(b.decode());observed=str(s.check());rc=0;err=''
+              else:
+                try:
+                  r=subprocess.run(['cvc5','--lang','smt2',str(file)],capture_output=True,text=True,timeout=300)
+                  observed=r.stdout.strip();rc=r.returncode;err=r.stderr[-1500:]
+                except subprocess.TimeoutExpired:
+                  observed='TIMEOUT';rc=-1;err='cvc5 exceeded 300 sec'
+              row={'case':c['name'],'sha256':c['sha256'],'kind':c['kind'],'solver':tool,'expected':c['expected'],'observed':observed,'returncode':rc,'seconds':round(time.monotonic()-t,3),'stderr':err}
+              out.append(row);Path('work/results/VERDICTS.json').write_text(json.dumps(out,indent=2,sort_keys=True)+'\n');print('VERDICT',json.dumps(row),flush=True)
+              assert observed==c['expected'] and rc==0,'UNRESOLVED_SOLVER_VERDICT'
+          assert len(out)==18
+          print('RECOVERED_NEW_K6_DUAL_SOLVER_PASS',len(out),flush=True)
+          PY
+      - name: Seal all evidence even on failure
+        if: always()
+        run: |
+          find work -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 -r sha256sum > work/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: date-g1-new-k6-cvc5-recovery-20260918
+          path: work/
+          retention-days: 90
