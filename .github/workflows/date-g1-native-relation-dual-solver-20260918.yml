@@ -1,0 +1,101 @@
+name: date-g1-native-relation-dual-solver-20260918
+on:
+  push:
+    branches: [research/date-g2-independent-20260917]
+    paths: [.github/workflows/date-g1-native-relation-dual-solver-20260918.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  cross-solve:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 32
+    strategy:
+      fail-fast: false
+      matrix:
+        side: [old, new]
+        depth: [2, 3, 5, 6]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Retrieve three SHA-pinned original artifacts and solver binaries
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq z3 cvc5 unzip python3 > /tmp/apt.log
+          mkdir -p work/frozen work/source work/matrix work/queries work/results
+          for spec in 'frozen 10327123106 9f7202d5d34179d61957b70fbe641180002f1237562d511927cf360e41ed92fa' 'source 10549755919 c2d037604d3bfd7a292f17361dc40c0bbbd8296ad13cb448de9f55942d96eb33' 'matrix 10549453754 4ab06e19d5f86a06e0e15c48e2c03c3d1d713bdba5966020e8b95e9d2a75f8de'; do
+            read -r name id want <<< "$spec"
+            curl --fail --silent --show-error --location --retry 3 --header "Authorization: Bearer $GH_TOKEN" --header 'Accept: application/vnd.github+json' "https://api.github.com/repos/risu-research/formal-exec-2609/actions/artifacts/$id/zip" -o "work/$name.zip"
+            got="$(sha256sum "work/$name.zip" | cut -d' ' -f1)"
+            test "$got" = "$want" || { echo "SHA256 FAIL $name $got"; exit 1; }
+            unzip -oq "work/$name.zip" -d "work/$name"
+            echo "ARCHIVE_PASS $name $got"
+          done
+          z3 --version | tee work/results/z3_version.txt
+          cvc5 --version | head -1 | tee work/results/cvc5_version.txt
+          yosys_script=cert/date-g2-independent-20260917/verify_native_formula_relation_20260918.py
+          test -s "$yosys_script"
+          sha256sum "$yosys_script" | tee work/results/replay_code_sha256.txt
+      - name: Regenerate exact model queries and independently verify frozen JSON and domain mapping
+        shell: bash
+        env:
+          SIDE: ${{ matrix.side }}
+          DEPTH: ${{ matrix.depth }}
+        run: |
+          set -euo pipefail
+          python3 cert/date-g2-independent-20260917/verify_native_formula_relation_20260918.py --root work --output work/queries --side "$SIDE"
+          python3 - <<'PY'
+          from pathlib import Path
+          import json,hashlib,os
+          side=os.environ['SIDE'];depth=int(os.environ['DEPTH']);p=Path('work/queries/MANIFEST.json');m=json.loads(p.read_text())
+          expected={('old',2):'acb8689f1c9ce5bcbfe1fa4f3b35d3bb0243707f6eea0a550574532195661dc6',('old',3):'96bd30f384faed38524d1460f5607538181917296f9096093a473d924a320652',('old',5):'a8183279150a3da69873a0b79534cc9a54f9b1579c8e4d7f5a21d11925634c01',('old',6):'85af599a217f8c83aa68d23e0fe832fef4f8411646bc6875877fda81f791126f',('new',2):'81254c979031eb3654063ceb47b6b8a1f3bfe22643591344cfa74de4adad2bbd',('new',3):'89acbcdc63a3f1955d228b6850be039a6a8fb35159625cdb8391433580277be7',('new',5):'44685a798f135e7049e4ab0c3c2201ddebedb565caa85f88e1c8ae8e2f6e697b',('new',6):'b3074f766cece27774d809e5b59749bf07d39facdf9080f484686620cd24c0cf'}
+          cases=[x for x in m['cases'] if x['side']==side and x['depth']==depth]
+          assert 6<=len(cases)<=9
+          for c in cases:
+            q=Path('work/queries')/c['name'];assert hashlib.sha256(q.read_bytes()).hexdigest()==c['sha256']
+          a=next(x for x in cases if x['kind']=='all');assert a['sha256']==expected[(side,depth)],('MODEL_DRIFT',side,depth,a['sha256'])
+          (Path('work/results')/'selected_manifest.json').write_text(json.dumps({'cases':cases,'mapping':m['mapping'][side]},indent=2,sort_keys=True)+'\n')
+          print('REGEN_PASS',side,depth,'queries',len(cases),'exact all-query SHA256',a['sha256'])
+          PY
+      - name: Execute all queries with both actual CLI solvers; fail closed on timeout or mismatch
+        shell: bash
+        env:
+          SIDE: ${{ matrix.side }}
+          DEPTH: ${{ matrix.depth }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import json,os,subprocess,hashlib,time
+          side=os.environ['SIDE'];depth=int(os.environ['DEPTH']);selected=json.loads(Path('work/results/selected_manifest.json').read_text());out=[]
+          for c in selected['cases']:
+            p=Path('work/queries')/c['name'];data=p.read_bytes();assert hashlib.sha256(data).hexdigest()==c['sha256']
+            for label,cmd in [('z3',['z3','-smt2',str(p)]),('cvc5',['cvc5','--lang','smt2',str(p)])]:
+              t=time.time()
+              try:
+                proc=subprocess.run(cmd,capture_output=True,text=True,timeout=165)
+                record={'case':c['name'],'kind':c['kind'],'side':side,'depth':depth,'solver':label,'query_sha256':c['sha256'],'expected':c['expected'],'observed':proc.stdout.strip(),'stderr':proc.stderr.strip(),'returncode':proc.returncode,'elapsed_sec':round(time.time()-t,3)}
+              except subprocess.TimeoutExpired as e:
+                record={'case':c['name'],'side':side,'depth':depth,'solver':label,'expected':c['expected'],'observed':'TIMEOUT','elapsed_sec':round(time.time()-t,3),'returncode':-1}
+              out.append(record);Path('work/results/solver_results.json').write_text(json.dumps(out,indent=2,sort_keys=True)+'\n')
+              print(label,c['name'],record['observed'],record['elapsed_sec'],flush=True)
+              if record['returncode']!=0 or record['observed']!=c['expected']:
+                raise RuntimeError('REAL_SOLVER_MISMATCH: '+str(record))
+          print('DUAL_SOLVER_PASS',side,depth,len(selected['cases']),'exact shared inputs, original Yosys SMT2 on both sides')
+          PY
+      - name: Seal all collected evidence including failures
+        if: always()
+        shell: bash
+        run: |
+          find work -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 -r sha256sum > work/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: date-g1-native-relation-${{ matrix.side }}-k${{ matrix.depth }}-20260918
+          path: work/
+          if-no-files-found: error
+          retention-days: 90
