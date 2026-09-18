@@ -1,0 +1,38 @@
+{
+  "schema": "date-r3-prospective-task-probes-v1",
+  "population": "TWO_PREDECLARED_H143_SUBSET_PROBES_NOT_NEW_H143_SAMPLES",
+  "selection_time_rule": "Committed before executing or inspecting prospective SBY outcomes",
+  "selected": [
+    {
+      "id": "H143-ZIP-IGNORE-PIPMEM",
+      "repository": "ZipCPU/zipcpu",
+      "parent": "024b23c974236eaa452ae66be5ddf439246c286f",
+      "child": "1958cdb56f189fd5e38307c7066eb69c5f15714e",
+      "formal_target": "bench/formal/pipemem.sby",
+      "task": "lcl_aligned_lock",
+      "candidate_status": "prospectively selected from unchanged tracked SBY, not historically selected",
+      "original_engine": "smtbmc (solver unspecified in original SBY)",
+      "expected_outcome": "NOT_ASSUMED"
+    },
+    {
+      "id": "H143-ZIP-COMMENT-ZIPCORE",
+      "repository": "ZipCPU/zipcpu",
+      "parent": "d475d2bb6f7cbdbf5f6dc810305d8bf9e5bd3ccd",
+      "child": "e860404b043380e6bf0c937fcb8427dc265ea91f",
+      "formal_target": "bench/formal/zipcore.sby",
+      "task": "lowlogic",
+      "candidate_status": "prospectively selected from unchanged tracked SBY referencing fdebug.v, not historically selected",
+      "original_engine": "smtbmc boolector",
+      "expected_outcome": "NOT_ASSUMED"
+    }
+  ],
+  "protocol": [
+    "Pin source commits, tracked SBY, all [files] dependencies, runner Yosys/SBY/SAT versions and exact task-name selection.",
+    "Capture actual SBY workdir/src, model and log/exit status for each side, including failures and timeouts.",
+    "Compare byte-exact input closure across sides before comparing outputs; source equivalence is not a proof of historical PASS.",
+    "Run unchanged original SBY task first. If solver unavailable, preserve that failure and separately label any adapted prospective run.",
+    "Report status as PROSPECTIVE_REPLAY, not historical execution. Do not upgrade original H143 labels without historical task-selection and all-axis closure.",
+    "Report any timeout, missing generated file, unsupported Yosys syntax or tool mismatch explicitly."
+  ],
+  "fixed_h143_accounting": {"total": 143, "adverse": 9, "resolved_nonregressive": 4, "unresolved": 130}
+}
