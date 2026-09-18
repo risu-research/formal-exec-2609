@@ -1,0 +1,94 @@
+name: date-g2-drew-port-semantic-20260917
+on:
+  push:
+    branches: [research/date-g2-independent-20260917]
+    paths: [.github/workflows/date-g2-drew-port-semantic-20260917.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  source-identity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch original full revisions and check frozen candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          d=json.load(open('cert/date-g2-independent-20260917/FROZEN_SELECTION.json'))
+          c=next(x for x in d['candidate_order_frozen_before_any_new_whole_F_query'] if x['id']=='X-DREW-PORT')
+          assert c['repository']=='drewbabel/fifo'
+          assert c['parent']=='9ae13f188f36d82bee98e1b7578b572bb6ac500a'
+          assert c['child']=='40a7d1a17e90324cb9a274e56cb35ea5da0124ce'
+          assert c['task']=='formal/async_fifo.sby prove'
+          PY
+          mkdir -p evidence
+          git clone -q https://github.com/drewbabel/fifo.git /tmp/drew
+          git -C /tmp/drew diff --name-only 9ae13f188f36d82bee98e1b7578b572bb6ac500a 40a7d1a17e90324cb9a274e56cb35ea5da0124ce > evidence/change_paths.txt
+          test "$(cat evidence/change_paths.txt)" = 'rtl/synchronizer.sv'
+          for side in old new; do
+            sha=9ae13f188f36d82bee98e1b7578b572bb6ac500a
+            if [ "$side" = new ]; then sha=40a7d1a17e90324cb9a274e56cb35ea5da0124ce; fi
+            git -C /tmp/drew checkout -q --detach "$sha"
+            test "$(git -C /tmp/drew rev-parse HEAD)" = "$sha"
+            mkdir -p evidence/$side
+            cp /tmp/drew/rtl/{synchronizer,fifomem,rptr_empty,wptr_full,async_fifo}.sv evidence/$side/
+            cp /tmp/drew/formal/async_fifo.sby evidence/$side/original.sby
+            (cd evidence/$side && find . -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum) > evidence/$side/SHA256SUMS.txt
+          done
+      - name: Prove source identity modulo declared port order with named-only original consumers
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,pathlib,re
+          p=pathlib.Path('evidence')
+          old=(p/'old/synchronizer.sv').read_text();new=(p/'new/synchronizer.sv').read_text()
+          comment=re.compile(r'/\*[\s\S]*?\*/|//[^\n]*')
+          strip=lambda s:comment.sub(' ',s)
+          tokens=lambda s:re.findall(r'[A-Za-z_$][\w$]*|\d+|\S',strip(s))
+          pattern=re.compile(r'(module\s+synchronizer\s*#\s*\([^)]*\)\s*\()([\s\S]*?)(\)\s*;)')
+          def normalized(s):
+            matches=list(pattern.finditer(s))
+            assert len(matches)==1
+            m=matches[0]
+            h=m.group(2)
+            h=re.sub(r'(?m)^\s*`(?:ifdef FORMAL|endif)\s*$', '',h)
+            declarations=[' '.join(tokens(x)) for x in h.split(',') if tokens(x)]
+            assert len(declarations)==5 and any(z.endswith(' mid') for z in declarations),declarations
+            names=[z.split()[-1] for z in declarations]
+            assert set(names)=={'clk','rst_n','d','q','mid'}
+            return tokens(s[:m.start(2)]+' , '.join(sorted(declarations))+s[m.end(2):]),names
+          oldtokens,oldports=normalized(old);newtokens,newports=normalized(new)
+          assert oldtokens==newtokens, 'Synchronizer has differences beyond formal port order or comments'
+          assert oldports==['clk','rst_n','d','q','mid']
+          assert newports==['mid','clk','rst_n','d','q']
+          a=(p/'old/async_fifo.sv').read_text()
+          assert tokens(a)==tokens((p/'new/async_fifo.sv').read_text())
+          instances=re.findall(r'\bsynchronizer\s*#\s*\([^)]*\)\s*\w+\s*\(([\s\S]*?)\)\s*;',a)
+          assert len(instances)==2,len(instances)
+          for inst in instances:
+            args=re.findall(r'\.([A-Za-z_]\w*)\s*\(',inst)
+            assert sorted(args)==sorted(['clk','rst_n','d','q','mid']),args
+            assert not re.search(r'\)\s*,\s*[^.]',inst),inst
+          for f in ['fifomem.sv','rptr_empty.sv','wptr_full.sv','async_fifo.sv','original.sby']:
+            assert (p/'old'/f).read_bytes()==(p/'new'/f).read_bytes(),f
+          result={'changed_paths':['rtl/synchronizer.sv'],'old_formal_port_order':oldports,'new_formal_port_order':newports,'matched_normalized_source_tokens':len(oldtokens),'named_only_instance_count':len(instances),'unchanged_other_four_RTL_and_original_SBY':True,'observable_RTL':'SOURCE_IDENTITY_WITHOUT_FORMAL','whole_F':'SOURCE_IDENTITY_MODULO_NAMED_FORMAL_PORT_PERMUTATION','coverage':'all states, inputs and clock interleavings for exactly the frozen target and module hierarchy','limitation':'This is syntax/port-binding equivalence, not an independent solver on a flattened cross-revision miter.'}
+          (p/'audit.json').write_text(json.dumps(result,sort_keys=True,indent=2)+'\n')
+          print(json.dumps(result,sort_keys=True))
+          PY
+      - name: Seal files even if failed
+        if: always()
+        run: |
+          mkdir -p evidence
+          find evidence -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 -r sha256sum > evidence/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: date-g2-drew-port-semantic
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 90
