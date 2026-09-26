@@ -69,5 +69,5 @@ Selection: S04 was labeled X5 while repository/commit/title were blinded and the
 C00 exact old function; C11 exact new function; C10 old contract/new body; C01 new contract/old body.
 Verifier: Dafny 4.11.0 from the generic public worker environment.
 EOF
-sha256sum "$OUT"/*.dfy "$OUT"/*.log "$OUT/results.csv "$OUT/MANIFEST.md" > "$OUT/SHA256SUMS.txt"
+sha256sum "$OUT"/*.dfy "$OUT"/*.log "$OUT/results.csv" "$OUT/MANIFEST.md" > "$OUT/SHA256SUMS.txt"
 cat "$OUT/results.csv"
