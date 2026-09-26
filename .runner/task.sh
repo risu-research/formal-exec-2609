@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 OUT=.runner/out; rm -rf "$OUT"; mkdir -p "$OUT/patches"
-WORK=/tmp/r14; rm -rf "$WORK"; mkdir -p "$WORK"
+WORK=/tmp/r15; rm -rf "$WORK"; mkdir -p "$WORK"
 REPO=FStarLang/FStar
 D="$WORK/repo"
 timeout 600 git clone --quiet --filter=blob:none --no-checkout https://github.com/$REPO.git "$D"
@@ -16,7 +16,7 @@ EOF
 python3 - "$D" "$OUT" <<'PY'
 from pathlib import Path
 import subprocess,re,csv,sys
-D=Path(sys.argv[1]); OUT=Path(sys.argv[2])
+D=Path(sys.argv[1]); OUT=Path(sys.argv[2]); REPO='FStarLang/FStar'
 CRE=re.compile(r'\b(requires|ensures|requires_|ensures_|pre|post)\b'); PRE=re.compile(r'\b(assert|assume|admit|lemma|by_tactic|calc|rewrite|unfold|norm|simp|squash|requires|ensures|requires_|ensures_|pre|post)\b'); EX={'test','tests','example','examples','bench','benchmark','tutorial','generated','vendor'}
 def run(a,t=180):
  try:return subprocess.run(a,cwd=D,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,errors='replace',timeout=t)
@@ -49,7 +49,7 @@ for line in (OUT/'windows.txt').read_text().splitlines():
    if cur:recs[cur['sha']]=cur
    z=ln[3:].split('\t',3);cur={'sha':z[0],'parents':z[1] if len(z)>1 else '','date':z[2] if len(z)>2 else '','sub':z[3] if len(z)>3 else '','n':0}
   elif cur:
-   z=ln.split('\t');
+   z=ln.split('\t')
    if len(z)>=3 and z[0].isdigit() and z[1].isdigit():cur['n']+=int(z[0])+int(z[1])
  if cur:recs[cur['sha']]=cur
 rows=[]
@@ -70,8 +70,8 @@ prod=sum(x[8]=='PRODUCTION' for x in rows); np=sum(x[8]=='NONPRODUCTION' for x i
 (OUT/'summary.txt').write_text(f'commits_seen={len(recs)}\nstrict={len(rows)}\nproduction={prod}\nnonproduction={np}\nwindow_failures={len(fails)}\n')
 PY
 cat > "$OUT/MANIFEST.md" <<'EOF'
-# r14 fixed-month salvage
-Only the two r13 failed FStarLang/FStar calendar quarters are retried, split into six pre-specified calendar-month windows. Same frozen date/token/<=200/strict/setting rules. This is execution salvage only; failed months remain explicit and are not zeros.
+# r15 fixed-month salvage
+Exact r14 six calendar-month windows and frozen F* gates. The only semantic-neutral change from failed r14 is defining the repository constant inside the Python process; r14's NameError is preserved separately.
 EOF
 sha256sum "$OUT/windows.txt" "$OUT/strict_candidates.csv" "$OUT/window_failures.csv" "$OUT/summary.txt" "$OUT/MANIFEST.md" > "$OUT/core_sha256.txt"
 cat "$OUT/summary.txt"
