@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-OUT=.runner/out; rm -rf "$OUT"; mkdir -p "$OUT"
+OUT="$(pwd)/.runner/out"; rm -rf "$OUT"; mkdir -p "$OUT"
 WORK=/tmp/r18; rm -rf "$WORK"; mkdir -p "$WORK"
 PARENT=9d111f83fb03035701f6796004ec062a133e196a
 HEAD=ff84ac08aba49743e5ec9f582799d0df62c5e6f4
@@ -24,26 +24,20 @@ sha256sum "$WORK/head/FStar.Int.fsti" "$WORK/parent/FStar.Int.fsti" > "$OUT/sour
 python3 - "$WORK" <<'PY'
 from pathlib import Path
 import sys,re
-w=Path(sys.argv[1])
-old=(w/'parent/FStar.Int.fsti').read_text()
-new=(w/'head/FStar.Int.fsti').read_text()
+w=Path(sys.argv[1]); old=(w/'parent/FStar.Int.fsti').read_text(); new=(w/'head/FStar.Int.fsti').read_text()
 def block(s):
-    a=s.index('let div (#n:pos)')
-    b=s.index('\nval div_underspec:',a)
-    return s[a:b]
+    a=s.index('let div (#n:pos)'); b=s.index('\nval div_underspec:',a); return s[a:b]
 ob,nb=block(old),block(new)
 def split(b):
     m=re.search(r'\n=\s*',b)
     if not m: raise SystemExit('cannot find body boundary')
     return b[:m.start()], b[m.start():]
 op,obody=split(ob); np,nbody=split(nb)
-blocks={'C00':op+obody,'C10':op+nbody,'C01':np+obody,'C11':np+nbody}
-for k,v in blocks.items():
+for k,v in {'C00':op+obody,'C10':op+nbody,'C01':np+obody,'C11':np+nbody}.items():
     d=w/k; d.mkdir(); (d/'FStar.Int.fsti').write_text(new.replace(nb,v,1)); (w/f'{k}.div.txt').write_text(v)
 (w/'old.div.txt').write_text(ob); (w/'new.div.txt').write_text(nb)
 PY
 cp "$WORK"/*.div.txt "$OUT/"
-
 printf 'case,exit_code,verified_marker,error_marker\n' > "$OUT/results.csv"
 verify_one(){
   name=$1; file=$2; inc=$3
@@ -55,12 +49,9 @@ verify_one(){
   e=$(grep -ciE 'error|failed' "$OUT/$name.log" || true)
   printf '%s,%s,%s,%s\n' "$name" "$ec" "$v" "$e" >> "$OUT/results.csv"
 }
-# Exact historical source endpoints use their corresponding source tree as include context.
 verify_one H0 "$WORK/parent/FStar.Int.fsti" "$WORK/up/ulib"
 verify_one H1 "$WORK/head/FStar.Int.fsti" "$WORK/up/ulib"
-# Fixed-head counterfactuals vary only the div definition block.
 for c in C00 C10 C01 C11; do verify_one "$c" "$WORK/$c/FStar.Int.fsti" "$WORK/up/ulib"; done
-
 cat > "$OUT/MANIFEST.md" <<EOF
 # r18 F* blind-selected H055 replay
 Upstream: FStarLang/FStar
