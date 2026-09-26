@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 OUT=.runner/out; rm -rf "$OUT"; mkdir -p "$OUT/patches"
-WORK=/tmp/r15; rm -rf "$WORK"; mkdir -p "$WORK"
-REPO=FStarLang/FStar
+WORK=/tmp/r16; rm -rf "$WORK"; mkdir -p "$WORK"
 D="$WORK/repo"
-timeout 600 git clone --quiet --filter=blob:none --no-checkout https://github.com/$REPO.git "$D"
+timeout 600 git clone --quiet --filter=blob:none --no-checkout https://github.com/FStarLang/FStar.git "$D"
 cat > "$OUT/windows.txt" <<'EOF'
 2024-04-01 2024-04-30
 2024-05-01 2024-05-31
@@ -15,7 +14,7 @@ cat > "$OUT/windows.txt" <<'EOF'
 EOF
 python3 - "$D" "$OUT" <<'PY'
 from pathlib import Path
-import subprocess,re,csv,sys
+import subprocess,re,csv,sys,concurrent.futures
 D=Path(sys.argv[1]); OUT=Path(sys.argv[2]); REPO='FStarLang/FStar'
 CRE=re.compile(r'\b(requires|ensures|requires_|ensures_|pre|post)\b'); PRE=re.compile(r'\b(assert|assume|admit|lemma|by_tactic|calc|rewrite|unfold|norm|simp|squash|requires|ensures|requires_|ensures_|pre|post)\b'); EX={'test','tests','example','examples','bench','benchmark','tutorial','generated','vendor'}
 def run(a,t=180):
@@ -39,12 +38,18 @@ def parse(df):
   elif cur and h is not None and ln[:1] in '+-' and not ln.startswith(('+++','---')):h.append(ln)
  if cur:fs.append(cur)
  return fs
-recs={}; fails=[]
-for line in (OUT/'windows.txt').read_text().splitlines():
- a,b=line.split(); p=run(['git','log','--all',f'--since={a}',f'--until={b}T23:59:59Z','-G(requires|ensures|requires_|ensures_|(^|[^A-Za-z0-9_])(pre|post)([^A-Za-z0-9_]|$))','--format=@@@%H%x09%P%x09%cs%x09%s','--numstat','--','*.fst','*.fsti'],180)
- if p.returncode: fails.append(f'{a},{b},{p.returncode}'); continue
+windows=[tuple(x.split()) for x in (OUT/'windows.txt').read_text().splitlines()]
+def scanwin(w):
+ a,b=w; p=run(['git','log','--all',f'--since={a}',f'--until={b}T23:59:59Z','-G(requires|ensures|requires_|ensures_|(^|[^A-Za-z0-9_])(pre|post)([^A-Za-z0-9_]|$))','--format=@@@%H%x09%P%x09%cs%x09%s','--numstat','--','*.fst','*.fsti'],180)
+ return a,b,p.returncode,p.stdout
+raw=[]
+with concurrent.futures.ThreadPoolExecutor(max_workers=6) as ex:
+ for x in ex.map(scanwin,windows): raw.append(x)
+recs={};fails=[]
+for a,b,ec,text in sorted(raw):
+ if ec: fails.append(f'{a},{b},{ec}'); continue
  cur=None
- for ln in p.stdout.splitlines():
+ for ln in text.splitlines():
   if ln.startswith('@@@'):
    if cur:recs[cur['sha']]=cur
    z=ln[3:].split('\t',3);cur={'sha':z[0],'parents':z[1] if len(z)>1 else '','date':z[2] if len(z)>2 else '','sub':z[3] if len(z)>3 else '','n':0}
@@ -52,26 +57,30 @@ for line in (OUT/'windows.txt').read_text().splitlines():
    z=ln.split('\t')
    if len(z)>=3 and z[0].isdigit() and z[1].isdigit():cur['n']+=int(z[0])+int(z[1])
  if cur:recs[cur['sha']]=cur
-rows=[]
-for r in recs.values():
- if not r['parents'].split() or r['n']>200:continue
+def classify(r):
+ if not r['parents'].split() or r['n']>200:return None
  par=r['parents'].split()[0]; df=run(['git','diff','--unified=3',par,r['sha'],'--','*.fst','*.fsti'],120).stdout; paths=[];cc=ee=0
  for f in parse(df):
   if f['a'] or f['d']:continue
   for h in f['hs']:
    ch=[x[1:] for x in h if x[:1] in '+-']; c=[x for x in ch if CRE.search(x) and not comment(x)]; e=[x for x in ch if exe(x)]; cc+=len(c);ee+=len(e)
    if c and e:paths.append(f['p'])
- if paths:
-  setting='NONPRODUCTION' if all(nonprod(p) for p in paths) else 'PRODUCTION'; pf=f'FStarLang__FStar__{r["sha"]}.diff'; (OUT/'patches'/pf).write_text(df); rows.append([REPO,r['sha'],par,r['date'],r['sub'],r['n'],cc,ee,setting,';'.join(sorted(set(paths))),pf])
+ if not paths:return None
+ setting='NONPRODUCTION' if all(nonprod(p) for p in paths) else 'PRODUCTION'; pf=f'FStarLang__FStar__{r["sha"]}.diff'; (OUT/'patches'/pf).write_text(df)
+ return [REPO,r['sha'],par,r['date'],r['sub'],r['n'],cc,ee,setting,';'.join(sorted(set(paths))),pf]
+rows=[]
+with concurrent.futures.ThreadPoolExecutor(max_workers=6) as ex:
+ for x in ex.map(classify,list(recs.values())):
+  if x:rows.append(x)
 with (OUT/'strict_candidates.csv').open('w',newline='') as f:
  w=csv.writer(f);w.writerow(['repo','commit','parent','date','subject','changed_source_lines','contract_changed_lines','exec_changed_lines','setting','strict_paths','patch_file']);w.writerows(rows)
 (OUT/'window_failures.csv').write_text('start,end,exit_code\n'+'\n'.join(fails)+'\n')
-prod=sum(x[8]=='PRODUCTION' for x in rows); np=sum(x[8]=='NONPRODUCTION' for x in rows)
+prod=sum(x[8]=='PRODUCTION' for x in rows);np=sum(x[8]=='NONPRODUCTION' for x in rows)
 (OUT/'summary.txt').write_text(f'commits_seen={len(recs)}\nstrict={len(rows)}\nproduction={prod}\nnonproduction={np}\nwindow_failures={len(fails)}\n')
 PY
 cat > "$OUT/MANIFEST.md" <<'EOF'
-# r15 fixed-month salvage
-Exact r14 six calendar-month windows and frozen F* gates. The only semantic-neutral change from failed r14 is defining the repository constant inside the Python process; r14's NameError is preserved separately.
+# r16 parallel fixed-month salvage
+Same six frozen month windows and same F* discovery/size/strict/production gates as r15. Execution topology only: six read-only git-log windows and candidate diff classification use bounded parallel workers. Specified before r15 outcome was known.
 EOF
 sha256sum "$OUT/windows.txt" "$OUT/strict_candidates.csv" "$OUT/window_failures.csv" "$OUT/summary.txt" "$OUT/MANIFEST.md" > "$OUT/core_sha256.txt"
 cat "$OUT/summary.txt"
