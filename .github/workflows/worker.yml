@@ -1,0 +1,34 @@
+name: worker
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  worker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dafny-lang/setup-dafny-action@v1
+        with:
+          dafny-version: '4.11.0'
+      - name: Run task when present
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f .runner/task.sh ]; then
+            chmod +x .runner/task.sh
+            .runner/task.sh
+          else
+            echo 'no task on this ref'
+          fi
+      - name: Upload task output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: worker-output
+          path: .runner/out/
+          if-no-files-found: ignore
