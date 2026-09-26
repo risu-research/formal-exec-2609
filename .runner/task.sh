@@ -2,108 +2,98 @@
 set -u
 OUT=.runner/out
 rm -rf "$OUT"
-mkdir -p "$OUT"
-BASE=0d1fae88f5f6191fe249baecf404e5b846f7e116
-HEAD=3e5ed81a48339acd79fb4e620219d81a099078ef
-UP=Consensys-Incorporated/evm-dafny
-WORK=/tmp/r03
+mkdir -p "$OUT/patches"
+WORK=/tmp/r04
 rm -rf "$WORK"
 mkdir -p "$WORK"
 
-# Historical verifier used by upstream CI.
-curl -L --retry 3 -o "$WORK/dafny.zip" \
-  https://github.com/dafny-lang/dafny/releases/download/v3.7.3/dafny-3.7.3-x64-ubuntu-16.04.zip
-unzip -q "$WORK/dafny.zip" -d "$WORK/dafny373"
-DAFNY=$(find "$WORK/dafny373" -type f -name dafny | head -1)
-chmod +x "$DAFNY"
-"$DAFNY" /version > "$OUT/verifier.txt" 2>&1 || true
+cat > "$OUT/frame.txt" <<'EOF'
+microsoft/Ironclad
+Consensys-Incorporated/evm-dafny
+sun-wendy/DafnyBench
+franck44/evm-dis
+Mondego/dafny-synthesis
+ChuyueSun/Clover
+dafny-lang/libraries
+lemmy/lets-prove-blocking-queue
+mit-pdos/daisy-nfsd
+vmware-labs/verified-betrfs
+EOF
 
-for pair in base:$BASE head:$HEAD; do
-  name=${pair%%:*}; sha=${pair#*:}
-  curl -L --retry 3 -o "$WORK/$name.tar.gz" "https://codeload.github.com/$UP/tar.gz/$sha"
-  mkdir -p "$WORK/$name"
-  tar -xzf "$WORK/$name.tar.gz" -C "$WORK/$name" --strip-components=1
-  printf '%s,%s\n' "$name" "$sha" >> "$OUT/historical_refs.csv"
-done
+printf 'repo,clone_status,dfy_commits,contract_diff_commits,structural_candidates\n' > "$OUT/repo_summary.csv"
+printf 'repo,commit,parent,date,subject,contract_changed_lines,other_changed_lines,structural_candidate\n' > "$OUT/commit_candidates.csv"
 
-# Preserve exact upstream file hashes.
-sha256sum "$WORK/base/src/dafny/state.dfy" "$WORK/head/src/dafny/state.dfy" > "$OUT/state_sha256.txt"
-
-# Exact endpoints plus four fixed-head causal hybrids.
-cp -a "$WORK/base" "$WORK/H0"
-cp -a "$WORK/head" "$WORK/H1"
-for c in C00 C10 C01 C11; do cp -a "$WORK/head" "$WORK/$c"; done
-
-python3 - "$WORK" <<'PY'
+python3 - "$OUT" "$WORK" <<'PY'
 from pathlib import Path
-import sys
-w=Path(sys.argv[1])
-p=w/'head/src/dafny/state.dfy'
-t=p.read_text()
-start=t.index("        function method Expand(address: nat, len: nat): (s': State)")
-end=t.index("        /**\n         *  Get the size of the memory.", start)
-new_block=t[start:end]
-old_block="""        function method Expand(address: nat, len: nat) : State
-        requires !IsFailure() {
-            OK(evm.(memory:=Memory.Expand(evm.memory,address,len)))
-        }
+import subprocess, re, csv, sys, os, shlex
+out=Path(sys.argv[1]); work=Path(sys.argv[2])
+repos=[x.strip() for x in (out/'frame.txt').read_text().splitlines() if x.strip()]
+contract_re=re.compile(r'\b(requires|ensures|invariant|modifies|reads|decreases)\b')
+noise_re=re.compile(r'^\s*(//|/\*|\*|\*/|\{|\}|$)')
+proofish_re=re.compile(r'^\s*(assert\b|assume\b|reveal\b|calc\b|lemma\b|ghost\b)')
+summary=[]; rows=[]
+for repo in repos:
+    safe=repo.replace('/','__'); d=work/safe
+    clone=['timeout','240','git','clone','--quiet','--filter=blob:none','--no-checkout',f'https://github.com/{repo}.git',str(d)]
+    cp=subprocess.run(clone, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    if cp.returncode!=0:
+        summary.append([repo,'FAIL',0,0,0])
+        (out/f'{safe}.clone_error.txt').write_text(cp.stderr[-8000:])
+        continue
+    def run(args, timeout=240):
+        return subprocess.run(args,cwd=d,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,timeout=timeout)
+    # Count all commits touching Dafny files.
+    p=run(['git','rev-list','--all','--','*.dfy'])
+    all_commits=[x for x in p.stdout.splitlines() if x.strip()]
+    # Pickaxe directly over diffs: independent of PR title/body text.
+    p=run(['git','log','--all','--format=%H','-G(requires|ensures|invariant|modifies|reads|decreases)','--','*.dfy'], timeout=360)
+    cands=[]
+    for x in p.stdout.splitlines():
+        x=x.strip()
+        if x and x not in cands: cands.append(x)
+    structural=0
+    for sha in cands:
+        parent=run(['git','rev-parse',f'{sha}^']).stdout.strip()
+        if not parent: continue
+        meta=run(['git','show','-s','--format=%cs%x09%s',sha]).stdout.strip().split('\t',1)
+        date=meta[0] if meta else ''
+        subj=meta[1] if len(meta)>1 else ''
+        diff=run(['git','diff','--unified=0',parent,sha,'--','*.dfy'], timeout=240).stdout
+        changed=[]
+        for ln in diff.splitlines():
+            if ln.startswith(('+++','---','@@','diff ','index ')): continue
+            if ln.startswith(('+','-')):
+                changed.append(ln[1:])
+        contract=[ln for ln in changed if contract_re.search(ln)]
+        other=[ln for ln in changed if not contract_re.search(ln) and not noise_re.match(ln)]
+        # permissive structural sensitivity: at least one contract-token line and one other substantive source line.
+        structural_flag=bool(contract and other)
+        if structural_flag: structural += 1
+        rows.append([repo,sha,parent,date,subj.replace('\n',' '),len(contract),len(other),int(structural_flag)])
+        if structural_flag:
+            # Preserve the exact patch for later blinded/manual adjudication.
+            patch=(out/'patches'/f'{safe}__{sha}.diff')
+            patch.write_text(diff)
+    summary.append([repo,'OK',len(all_commits),len(cands),structural])
 
-"""
-old_contract_new_body="""        function method Expand(address: nat, len: nat) : State
-        requires !IsFailure() {
-            OK(evm.(memory:=Memory.Expand2(evm.memory, address + len - 1)))
-        }
-
-"""
-new_contract_old_body=new_block.replace(
-    "OK(evm.(memory:=Memory.Expand2(evm.memory, address + len - 1)))",
-    "OK(evm.(memory:=Memory.Expand(evm.memory,address,len)))")
-blocks={'C00':old_block,'C10':old_contract_new_body,'C01':new_contract_old_body,'C11':new_block}
-for name,block in blocks.items():
-    q=w/name/'src/dafny/state.dfy'
-    s=q.read_text()
-    a=s.index("        function method Expand(address: nat, len: nat): (s': State)")
-    b=s.index("        /**\n         *  Get the size of the memory.", a)
-    q.write_text(s[:a]+block+s[b:])
-    (w/f'{name}.Expand.txt').write_text(block)
+with (out/'repo_summary.csv').open('a',newline='') as f:
+    csv.writer(f).writerows(summary)
+with (out/'commit_candidates.csv').open('a',newline='') as f:
+    csv.writer(f).writerows(rows)
 PY
 
-for c in C00 C10 C01 C11; do
-  cp "$WORK/$c.Expand.txt" "$OUT/$c.Expand.txt"
-done
+cat > "$OUT/MANIFEST.md" <<'EOF'
+# Post-freeze diff-history sensitivity arm
 
-printf 'case,exit_code,verified,errors\n' > "$OUT/results.csv"
-verify_case() {
-  c=$1
-  d="$WORK/$c"
-  set +e
-  (cd "$d" && "$DAFNY" /compile:0 /verifyAllModules src/dafny/evm.dfy src/dafny/evms/berlin.dfy) > "$OUT/$c.log" 2>&1
-  ec=$?
-  set -e
-  # Last verifier summary if available.
-  summary=$(grep -E 'Dafny program verifier finished|verified, [0-9]+ error' "$OUT/$c.log" | tail -1 || true)
-  verified=$(printf '%s' "$summary" | sed -nE 's/.*finished with ([0-9]+) verified.*/\1/p')
-  errors=$(printf '%s' "$summary" | sed -nE 's/.*verified, ([0-9]+) error.*/\1/p')
-  printf '%s,%s,%s,%s\n' "$c" "$ec" "${verified:-NA}" "${errors:-NA}" >> "$OUT/results.csv"
-}
-set -e
-for c in H0 H1 C00 C10 C01 C11; do verify_case "$c"; done
+This arm was specified after the primary 41-PR screening denominator had been frozen. It does not change that denominator.
 
-# Causal-source diffs and manifest.
-diff -u "$OUT/C00.Expand.txt" "$OUT/C10.Expand.txt" > "$OUT/body_delta.diff" || true
-diff -u "$OUT/C00.Expand.txt" "$OUT/C01.Expand.txt" > "$OUT/contract_plus_body_context.diff" || true
-cat > "$OUT/MANIFEST.md" <<EOF
-# r03 verifier replay
+Purpose: audit recall bias from GitHub PR text search by scanning actual `.dfy` Git diffs independently of PR titles/bodies.
 
-Historical source: $UP PR 171
-Base: $BASE
-Head: $HEAD
-Historical verifier: Dafny 3.7.3 (upstream CI version)
+Frame: exactly the same frozen ten repositories. For every reachable Git commit touching `.dfy`, `git log -G` identifies commits whose actual diffs change one of `requires|ensures|invariant|modifies|reads|decreases`. A permissive structural flag records whether the same commit also changes at least one other substantive `.dfy` source line. This flag is discovery-only, not evidence of executable-body co-evolution; candidates require manual adjudication.
 
-H0/H1 are exact historical trees. C00/C10/C01/C11 all use the exact head tree except for the State.Expand function block. C00=old contract+old body; C10=old contract+new body; C01=new contract+old body; C11=new contract+new body. C11 is byte-for-byte the head State.Expand block. The four causal cells are counterfactual isolation states, not claimed historical commits.
-
-No outcome criterion was used to select this candidate; it was selected from a frozen systematic screening frame before replay.
+All hits, zero-hit repositories, clone failures, and exact candidate patches are retained. The primary denominator remains 41 PR hits regardless of what this sensitivity arm finds.
 EOF
-find "$OUT" -maxdepth 1 -type f -print0 | sort -z | xargs -0 sha256sum > "$OUT/SHA256SUMS.txt"
-cat "$OUT/results.csv"
+
+sha256sum "$OUT/repo_summary.csv" "$OUT/commit_candidates.csv" "$OUT/MANIFEST.md" > "$OUT/core_sha256.txt"
+cat "$OUT/repo_summary.csv"
 exit 0
