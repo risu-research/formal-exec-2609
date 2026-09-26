@@ -1,23 +1,22 @@
 #!/usr/bin/env bash
 set -euo pipefail
 OUT=.runner/out; rm -rf "$OUT"; mkdir -p "$OUT/patches"
-WORK=/tmp/r16; rm -rf "$WORK"; mkdir -p "$WORK"
+WORK=/tmp/r17; rm -rf "$WORK"; mkdir -p "$WORK"
 D="$WORK/repo"
 timeout 600 git clone --quiet --filter=blob:none --no-checkout https://github.com/FStarLang/FStar.git "$D"
 cat > "$OUT/windows.txt" <<'EOF'
-2024-04-01 2024-04-30
-2024-05-01 2024-05-31
-2024-06-01 2024-06-30
-2026-07-01 2026-07-31
-2026-08-01 2026-08-31
-2026-09-01 2026-09-26
+2026-08-01 2026-08-07
+2026-08-08 2026-08-14
+2026-08-15 2026-08-21
+2026-08-22 2026-08-28
+2026-08-29 2026-08-31
 EOF
 python3 - "$D" "$OUT" <<'PY'
 from pathlib import Path
 import subprocess,re,csv,sys,concurrent.futures
 D=Path(sys.argv[1]); OUT=Path(sys.argv[2]); REPO='FStarLang/FStar'
 CRE=re.compile(r'\b(requires|ensures|requires_|ensures_|pre|post)\b'); PRE=re.compile(r'\b(assert|assume|admit|lemma|by_tactic|calc|rewrite|unfold|norm|simp|squash|requires|ensures|requires_|ensures_|pre|post)\b'); EX={'test','tests','example','examples','bench','benchmark','tutorial','generated','vendor'}
-def run(a,t=180):
+def run(a,t=150):
  try:return subprocess.run(a,cwd=D,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,errors='replace',timeout=t)
  except subprocess.TimeoutExpired:
   class R:pass
@@ -40,14 +39,13 @@ def parse(df):
  return fs
 windows=[tuple(x.split()) for x in (OUT/'windows.txt').read_text().splitlines()]
 def scanwin(w):
- a,b=w; p=run(['git','log','--all',f'--since={a}',f'--until={b}T23:59:59Z','-G(requires|ensures|requires_|ensures_|(^|[^A-Za-z0-9_])(pre|post)([^A-Za-z0-9_]|$))','--format=@@@%H%x09%P%x09%cs%x09%s','--numstat','--','*.fst','*.fsti'],180)
- return a,b,p.returncode,p.stdout
+ a,b=w; p=run(['git','log','--all',f'--since={a}',f'--until={b}T23:59:59Z','-G(requires|ensures|requires_|ensures_|(^|[^A-Za-z0-9_])(pre|post)([^A-Za-z0-9_]|$))','--format=@@@%H%x09%P%x09%cs%x09%s','--numstat','--','*.fst','*.fsti'],150); return a,b,p.returncode,p.stdout
 raw=[]
-with concurrent.futures.ThreadPoolExecutor(max_workers=6) as ex:
- for x in ex.map(scanwin,windows): raw.append(x)
+with concurrent.futures.ThreadPoolExecutor(max_workers=5) as ex:
+ for x in ex.map(scanwin,windows):raw.append(x)
 recs={};fails=[]
 for a,b,ec,text in sorted(raw):
- if ec: fails.append(f'{a},{b},{ec}'); continue
+ if ec:fails.append(f'{a},{b},{ec}');continue
  cur=None
  for ln in text.splitlines():
   if ln.startswith('@@@'):
@@ -59,17 +57,17 @@ for a,b,ec,text in sorted(raw):
  if cur:recs[cur['sha']]=cur
 def classify(r):
  if not r['parents'].split() or r['n']>200:return None
- par=r['parents'].split()[0]; df=run(['git','diff','--unified=3',par,r['sha'],'--','*.fst','*.fsti'],120).stdout; paths=[];cc=ee=0
+ par=r['parents'].split()[0];df=run(['git','diff','--unified=3',par,r['sha'],'--','*.fst','*.fsti'],120).stdout;paths=[];cc=ee=0
  for f in parse(df):
   if f['a'] or f['d']:continue
   for h in f['hs']:
-   ch=[x[1:] for x in h if x[:1] in '+-']; c=[x for x in ch if CRE.search(x) and not comment(x)]; e=[x for x in ch if exe(x)]; cc+=len(c);ee+=len(e)
+   ch=[x[1:] for x in h if x[:1] in '+-'];c=[x for x in ch if CRE.search(x) and not comment(x)];e=[x for x in ch if exe(x)];cc+=len(c);ee+=len(e)
    if c and e:paths.append(f['p'])
  if not paths:return None
- setting='NONPRODUCTION' if all(nonprod(p) for p in paths) else 'PRODUCTION'; pf=f'FStarLang__FStar__{r["sha"]}.diff'; (OUT/'patches'/pf).write_text(df)
+ setting='NONPRODUCTION' if all(nonprod(p) for p in paths) else 'PRODUCTION';pf=f'FStarLang__FStar__{r["sha"]}.diff';(OUT/'patches'/pf).write_text(df)
  return [REPO,r['sha'],par,r['date'],r['sub'],r['n'],cc,ee,setting,';'.join(sorted(set(paths))),pf]
 rows=[]
-with concurrent.futures.ThreadPoolExecutor(max_workers=6) as ex:
+with concurrent.futures.ThreadPoolExecutor(max_workers=5) as ex:
  for x in ex.map(classify,list(recs.values())):
   if x:rows.append(x)
 with (OUT/'strict_candidates.csv').open('w',newline='') as f:
@@ -79,8 +77,8 @@ prod=sum(x[8]=='PRODUCTION' for x in rows);np=sum(x[8]=='NONPRODUCTION' for x in
 (OUT/'summary.txt').write_text(f'commits_seen={len(recs)}\nstrict={len(rows)}\nproduction={prod}\nnonproduction={np}\nwindow_failures={len(fails)}\n')
 PY
 cat > "$OUT/MANIFEST.md" <<'EOF'
-# r16 parallel fixed-month salvage
-Same six frozen month windows and same F* discovery/size/strict/production gates as r15. Execution topology only: six read-only git-log windows and candidate diff classification use bounded parallel workers. Specified before r15 outcome was known.
+# r17 fixed-week August salvage
+Only the one failed r16 month (2026-08) is retried as five frozen contiguous calendar windows. Same F* token/date/<=200/strict/production gates; read-only windows execute in parallel. Failed weeks remain explicit.
 EOF
 sha256sum "$OUT/windows.txt" "$OUT/strict_candidates.csv" "$OUT/window_failures.csv" "$OUT/summary.txt" "$OUT/MANIFEST.md" > "$OUT/core_sha256.txt"
 cat "$OUT/summary.txt"
