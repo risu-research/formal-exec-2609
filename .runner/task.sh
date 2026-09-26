@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-set -u
+set -euo pipefail
 OUT=.runner/out
 rm -rf "$OUT"
 mkdir -p "$OUT/patches"
-WORK=/tmp/r04
+WORK=/tmp/r05
 rm -rf "$WORK"
 mkdir -p "$WORK"
 
@@ -19,81 +19,85 @@ lemmy/lets-prove-blocking-queue
 mit-pdos/daisy-nfsd
 vmware-labs/verified-betrfs
 EOF
-
-printf 'repo,clone_status,dfy_commits,contract_diff_commits,structural_candidates\n' > "$OUT/repo_summary.csv"
-printf 'repo,commit,parent,date,subject,contract_changed_lines,other_changed_lines,structural_candidate\n' > "$OUT/commit_candidates.csv"
+printf 'repo,clone_status,scan_status,dfy_commits,contract_diff_commits,structural_candidates\n' > "$OUT/repo_summary.csv"
+printf 'repo,commit,parent,date,subject,contract_changed_lines,other_changed_lines,structural_candidate,patch_sha256\n' > "$OUT/commit_candidates.csv"
 
 python3 - "$OUT" "$WORK" <<'PY'
 from pathlib import Path
-import subprocess, re, csv, sys, os, shlex
+import subprocess, re, csv, sys, hashlib, gzip
 out=Path(sys.argv[1]); work=Path(sys.argv[2])
 repos=[x.strip() for x in (out/'frame.txt').read_text().splitlines() if x.strip()]
 contract_re=re.compile(r'\b(requires|ensures|invariant|modifies|reads|decreases)\b')
 noise_re=re.compile(r'^\s*(//|/\*|\*|\*/|\{|\}|$)')
-proofish_re=re.compile(r'^\s*(assert\b|assume\b|reveal\b|calc\b|lemma\b|ghost\b)')
-summary=[]; rows=[]
+
+def run(args,cwd=None,timeout=240):
+    try:
+        p=subprocess.run(args,cwd=cwd,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=timeout)
+        return p.returncode,p.stdout.decode('utf-8','replace'),p.stderr.decode('utf-8','replace'),'OK'
+    except subprocess.TimeoutExpired as e:
+        so=(e.stdout or b'').decode('utf-8','replace') if isinstance(e.stdout,(bytes,bytearray)) else (e.stdout or '')
+        se=(e.stderr or b'').decode('utf-8','replace') if isinstance(e.stderr,(bytes,bytearray)) else (e.stderr or '')
+        return 124,so,se,'TIMEOUT'
+
 for repo in repos:
     safe=repo.replace('/','__'); d=work/safe
-    clone=['timeout','240','git','clone','--quiet','--filter=blob:none','--no-checkout',f'https://github.com/{repo}.git',str(d)]
-    cp=subprocess.run(clone, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-    if cp.returncode!=0:
-        summary.append([repo,'FAIL',0,0,0])
-        (out/f'{safe}.clone_error.txt').write_text(cp.stderr[-8000:])
+    rc,so,se,st=run(['git','clone','--quiet','--filter=blob:none','--no-checkout',f'https://github.com/{repo}.git',str(d)],timeout=240)
+    if rc!=0:
+        with (out/'repo_summary.csv').open('a',newline='') as f: csv.writer(f).writerow([repo,'FAIL',st,0,0,0])
+        (out/f'{safe}.clone_error.txt').write_text(se[-12000:])
         continue
-    def run(args, timeout=240):
-        return subprocess.run(args,cwd=d,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,timeout=timeout)
-    # Count all commits touching Dafny files.
-    p=run(['git','rev-list','--all','--','*.dfy'])
-    all_commits=[x for x in p.stdout.splitlines() if x.strip()]
-    # Pickaxe directly over diffs: independent of PR title/body text.
-    p=run(['git','log','--all','--format=%H','-G(requires|ensures|invariant|modifies|reads|decreases)','--','*.dfy'], timeout=360)
-    cands=[]
-    for x in p.stdout.splitlines():
+    # all Dafny-touching commits
+    rc,so,se,st=run(['git','rev-list','--all','--','*.dfy'],cwd=d,timeout=300)
+    all_count=len([x for x in so.splitlines() if x.strip()]) if rc==0 else -1
+    if rc!=0:
+        with (out/'repo_summary.csv').open('a',newline='') as f: csv.writer(f).writerow([repo,'OK',f'REVLIST_{st}',all_count,0,0])
+        continue
+    # independent diff-based pickaxe; no PR title/body text involved
+    rc,so,se,st=run(['git','log','--all','--format=%H','-G(requires|ensures|invariant|modifies|reads|decreases)','--','*.dfy'],cwd=d,timeout=420)
+    if rc!=0:
+        with (out/'repo_summary.csv').open('a',newline='') as f: csv.writer(f).writerow([repo,'OK',f'PICKAXE_{st}',all_count,0,0])
+        (out/f'{safe}.scan_error.txt').write_text(se[-12000:])
+        continue
+    seen=set(); cands=[]
+    for x in so.splitlines():
         x=x.strip()
-        if x and x not in cands: cands.append(x)
-    structural=0
+        if x and x not in seen: seen.add(x); cands.append(x)
+    structural=0; scan_status='OK'
     for sha in cands:
-        parent=run(['git','rev-parse',f'{sha}^']).stdout.strip()
-        if not parent: continue
-        meta=run(['git','show','-s','--format=%cs%x09%s',sha]).stdout.strip().split('\t',1)
-        date=meta[0] if meta else ''
-        subj=meta[1] if len(meta)>1 else ''
-        diff=run(['git','diff','--unified=0',parent,sha,'--','*.dfy'], timeout=240).stdout
+        rc,parent,_,pst=run(['git','rev-parse',f'{sha}^'],cwd=d,timeout=20)
+        parent=parent.strip()
+        if rc!=0 or not parent: continue
+        rc,meta,_,_=run(['git','show','-s','--format=%cs%x09%s',sha],cwd=d,timeout=20)
+        parts=meta.strip().split('\t',1); date=parts[0] if parts else ''; subj=parts[1] if len(parts)>1 else ''
+        rc,diff,err,dst=run(['git','diff','--unified=0',parent,sha,'--','*.dfy'],cwd=d,timeout=180)
+        if rc!=0:
+            scan_status='PARTIAL'; continue
         changed=[]
         for ln in diff.splitlines():
             if ln.startswith(('+++','---','@@','diff ','index ')): continue
-            if ln.startswith(('+','-')):
-                changed.append(ln[1:])
+            if ln.startswith(('+','-')): changed.append(ln[1:])
         contract=[ln for ln in changed if contract_re.search(ln)]
         other=[ln for ln in changed if not contract_re.search(ln) and not noise_re.match(ln)]
-        # permissive structural sensitivity: at least one contract-token line and one other substantive source line.
         structural_flag=bool(contract and other)
         if structural_flag: structural += 1
-        rows.append([repo,sha,parent,date,subj.replace('\n',' '),len(contract),len(other),int(structural_flag)])
+        digest=hashlib.sha256(diff.encode('utf-8','replace')).hexdigest()
+        with (out/'commit_candidates.csv').open('a',newline='') as f:
+            csv.writer(f).writerow([repo,sha,parent,date,subj.replace('\n',' '),len(contract),len(other),int(structural_flag),digest])
         if structural_flag:
-            # Preserve the exact patch for later blinded/manual adjudication.
-            patch=(out/'patches'/f'{safe}__{sha}.diff')
-            patch.write_text(diff)
-    summary.append([repo,'OK',len(all_commits),len(cands),structural])
-
-with (out/'repo_summary.csv').open('a',newline='') as f:
-    csv.writer(f).writerows(summary)
-with (out/'commit_candidates.csv').open('a',newline='') as f:
-    csv.writer(f).writerows(rows)
+            pp=out/'patches'/f'{safe}__{sha}.diff.gz'
+            with gzip.open(pp,'wt',encoding='utf-8') as g: g.write(diff)
+    with (out/'repo_summary.csv').open('a',newline='') as f:
+        csv.writer(f).writerow([repo,'OK',scan_status,all_count,len(cands),structural])
 PY
 
 cat > "$OUT/MANIFEST.md" <<'EOF'
-# Post-freeze diff-history sensitivity arm
+# Post-freeze diff-history sensitivity arm — robust rerun
 
-This arm was specified after the primary 41-PR screening denominator had been frozen. It does not change that denominator.
+The primary 41-PR screening denominator was frozen before this arm. This arm does not alter it.
 
-Purpose: audit recall bias from GitHub PR text search by scanning actual `.dfy` Git diffs independently of PR titles/bodies.
+Same ten repositories are cloned. Actual `.dfy` Git history is scanned with `git log -G` for changed `requires|ensures|invariant|modifies|reads|decreases` lines, independent of PR title/body text. A permissive structural flag requires at least one other substantive changed `.dfy` line in the same commit; it is discovery-only and must not be interpreted as an executable-body repair without manual adjudication.
 
-Frame: exactly the same frozen ten repositories. For every reachable Git commit touching `.dfy`, `git log -G` identifies commits whose actual diffs change one of `requires|ensures|invariant|modifies|reads|decreases`. A permissive structural flag records whether the same commit also changes at least one other substantive `.dfy` source line. This flag is discovery-only, not evidence of executable-body co-evolution; candidates require manual adjudication.
-
-All hits, zero-hit repositories, clone failures, and exact candidate patches are retained. The primary denominator remains 41 PR hits regardless of what this sensitivity arm finds.
+Repository failures/timeouts are isolated and recorded. Candidate patches are gzip-preserved with hashes. This rerun fixes the first sensitivity attempt's UTF-8 decoding failure by decoding Git output with replacement and checkpointing every repository/candidate row as it is processed.
 EOF
-
 sha256sum "$OUT/repo_summary.csv" "$OUT/commit_candidates.csv" "$OUT/MANIFEST.md" > "$OUT/core_sha256.txt"
 cat "$OUT/repo_summary.csv"
-exit 0
