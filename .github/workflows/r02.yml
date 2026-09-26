@@ -1,0 +1,133 @@
+name: r02
+
+on:
+  push:
+    branches:
+      - run/260926-r02
+
+permissions:
+  contents: read
+
+jobs:
+  matrix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dafny-lang/setup-dafny-action@v1
+        with:
+          dafny-version: '4.11.0'
+
+      - name: Prepare inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE=31bb53ec1e93936eb3a72cda31a2d042c9cdbbdb
+          HEAD=bf26cf111684c01c8f53a6a5d7e07903fced5099
+          mkdir -p /tmp/u out/input
+          git -C /tmp/u init
+          git -C /tmp/u remote add origin https://github.com/haalfi/remote-store.git
+          git -C /tmp/u fetch --depth=1 origin "$BASE" "$HEAD"
+          for rev in base head; do
+            if [ "$rev" = base ]; then sha="$BASE"; else sha="$HEAD"; fi
+            git -C /tmp/u show "$sha:sdd/formal/BackendContract.dfy" > "out/input/${rev}-BackendContract.dfy"
+            git -C /tmp/u show "$sha:sdd/formal/MemoryBackend.dfy" > "out/input/${rev}-MemoryBackend.dfy"
+          done
+          sha256sum out/input/* > out/input/SHA256SUMS.txt
+          printf 'base=%s\nhead=%s\n' "$BASE" "$HEAD" > out/input/refs.txt
+          dafny --version | tee out/dafny-version.txt
+
+      - name: Build matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          root = Path('out')
+          inp = root/'input'
+          base_b = (inp/'base-BackendContract.dfy').read_text()
+          head_b = (inp/'head-BackendContract.dfy').read_text()
+          base_m = (inp/'base-MemoryBackend.dfy').read_text()
+          head_m = (inp/'head-MemoryBackend.dfy').read_text()
+
+          new_contract = """      fs[dst].content == old(fs)[src].content &&\n      fs[dst].info.metadata == old(fs)[src].info.metadata\n"""
+          old_contract = """      fs[dst].content == old(fs)[src].content\n"""
+
+          # Head contains this strengthened Copy postcondition exactly twice,
+          # once in each concrete refinement. Revert only those two clauses.
+          if head_m.count(new_contract) != 2:
+              raise SystemExit(f'unexpected strengthened-contract count: {head_m.count(new_contract)}')
+          b1s0_m = head_m.replace(new_contract, old_contract)
+
+          # Revert only the Copy-body delta in head, preserving the strengthened
+          # postconditions. This yields old executable semantics + new contract.
+          body_new = """    // BK-196 / WR-013: thread user metadata onto the copy destination.\n    // BasicFileInfo would drop it — the gap this item closes.\n    var newInfo := FileInfo(dst, dst, srcEntry.info.size,\n                            None, None, None, srcEntry.info.metadata);\n"""
+          body_old = """    var newInfo := BasicFileInfo(dst, dst, srcEntry.info.size);\n"""
+          if head_m.count(body_new) != 2:
+              raise SystemExit(f'unexpected body-constructor count: {head_m.count(body_new)}')
+          b0s1_m = head_m.replace(body_new, body_old)
+          meta_assert_6 = "      assert fs[dst].info.metadata == old(fs)[src].info.metadata;\n"
+          meta_assert_4 = "    assert fs[dst].info.metadata == old(fs)[src].info.metadata;\n"
+          if b0s1_m.count(meta_assert_6) != 2:
+              raise SystemExit(f'unexpected self-copy metadata-assert count: {b0s1_m.count(meta_assert_6)}')
+          if b0s1_m.count(meta_assert_4) != 2:
+              raise SystemExit(f'unexpected normal-copy metadata-assert count: {b0s1_m.count(meta_assert_4)}')
+          b0s1_m = b0s1_m.replace(meta_assert_6, '').replace(meta_assert_4, '')
+
+          cases = {
+              'B0S0': (base_b, base_m),
+              'B1S0': (base_b, b1s0_m),
+              'B0S1': (head_b, b0s1_m),
+              'B1S1': (head_b, head_m),
+          }
+          for name, (bc, mb) in cases.items():
+              d = root/'matrix'/name
+              d.mkdir(parents=True, exist_ok=True)
+              (d/'BackendContract.dfy').write_text(bc)
+              (d/'MemoryBackend.dfy').write_text(mb)
+
+          # Exact historical endpoints must be byte-identical.
+          assert (root/'matrix/B0S0/BackendContract.dfy').read_bytes() == (inp/'base-BackendContract.dfy').read_bytes()
+          assert (root/'matrix/B0S0/MemoryBackend.dfy').read_bytes() == (inp/'base-MemoryBackend.dfy').read_bytes()
+          assert (root/'matrix/B1S1/BackendContract.dfy').read_bytes() == (inp/'head-BackendContract.dfy').read_bytes()
+          assert (root/'matrix/B1S1/MemoryBackend.dfy').read_bytes() == (inp/'head-MemoryBackend.dfy').read_bytes()
+          PY
+          mkdir -p out/diffs
+          diff -u out/matrix/B0S0/BackendContract.dfy out/matrix/B1S0/BackendContract.dfy > out/diffs/body-only-contract.diff || true
+          diff -u out/matrix/B0S0/MemoryBackend.dfy out/matrix/B1S0/MemoryBackend.dfy > out/diffs/body-only-memory.diff || true
+          diff -u out/matrix/B0S0/BackendContract.dfy out/matrix/B0S1/BackendContract.dfy > out/diffs/spec-only-contract.diff || true
+          diff -u out/matrix/B0S0/MemoryBackend.dfy out/matrix/B0S1/MemoryBackend.dfy > out/diffs/spec-only-memory.diff || true
+          find out/matrix -type f -name '*.dfy' -print0 | sort -z | xargs -0 sha256sum > out/matrix-sha256.txt
+
+      - name: Verify matrix
+        shell: bash
+        run: |
+          set +e
+          mkdir -p out/results
+          printf 'case,exit_code,status,verified,errors\n' > out/results/results.csv
+          for c in B0S0 B1S0 B0S1 B1S1; do
+            echo "===== $c ====="
+            (cd "out/matrix/$c" && dafny verify --verification-time-limit 120 MemoryBackend.dfy) > "out/results/$c.log" 2>&1
+            rc=$?
+            cat "out/results/$c.log"
+            if [ "$rc" -eq 0 ]; then status=PASS; else status=FAIL; fi
+            summary=$(grep -E 'Dafny program verifier finished with [0-9]+ verified, [0-9]+ error' "out/results/$c.log" | tail -1)
+            verified=$(printf '%s' "$summary" | sed -nE 's/.*with ([0-9]+) verified, ([0-9]+) error.*/\1/p')
+            errors=$(printf '%s' "$summary" | sed -nE 's/.*with ([0-9]+) verified, ([0-9]+) error.*/\2/p')
+            printf '%s,%s,%s,%s,%s\n' "$c" "$rc" "$status" "${verified:-NA}" "${errors:-NA}" >> out/results/results.csv
+          done
+          cat out/results/results.csv
+          exit 0
+
+      - name: Seal output
+        if: always()
+        shell: bash
+        run: |
+          find out -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > out/SHA256SUMS.txt || true
+
+      - name: Upload output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: r02
+          path: out/
