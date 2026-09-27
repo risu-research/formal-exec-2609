@@ -1,0 +1,75 @@
+name: fstar-holdout-historical
+on:
+  push:
+    paths: ['.github/workflows/fstar-holdout-historical.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  replay:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - name: Four-cell replay
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="$GITHUB_WORKSPACE/out"; WORK=/tmp/fstar413
+          BASE=190ad51e37fc1009d7f97492a533bf9f0cffb50e; HEAD=aef9671b5ace8112e9469a855bdbf39036ce6a94
+          rm -rf "$OUT" "$WORK"; mkdir -p "$OUT" "$WORK"
+          git clone -q https://github.com/hacl-star/hacl-star.git "$WORK/repo"
+          for c in B0S0 B1S0 B0S1 B1S1; do mkdir -p "$WORK/$c"; git -C "$WORK/repo" archive "$HEAD" | tar -x -C "$WORK/$c"; done
+          mkdir -p "$WORK/base"; git -C "$WORK/repo" archive "$BASE" | tar -x -C "$WORK/base"
+          python3 - "$WORK" <<'PY'
+          from pathlib import Path
+          import sys,hashlib
+          w=Path(sys.argv[1]); i='code/chacha20poly1305/Hacl.Impl.Chacha20Poly1305.fst'; s='specs/Spec.Chacha20Poly1305.fst'
+          bi=(w/'base'/i).read_text(); hi=(w/'B1S1'/i).read_text(); bs=(w/'base'/s).read_text(); hs=(w/'B1S1'/s).read_text()
+          oc='    let acc = Spec.poly1305_padded r (as_seq h0 aad) acc in\n'; nc='    let acc = if (length aad <> 0) then Spec.poly1305_padded r (as_seq h0 aad) acc else acc in\n'
+          ob='  poly1305_padded ctx aadlen aad;\n'; nb='  if (aadlen <> 0ul) then (\n    poly1305_padded ctx aadlen aad)\n  else ();\n'
+          os='  let acc = poly1305_padded r aad acc in\n'; ns='  let acc = if (length aad <> 0) then poly1305_padded r aad acc else acc in\n'
+          assert hi.replace(nc,oc).replace(nb,ob)==bi and hs.replace(ns,os)==bs
+          (w/'B0S0'/i).write_text(bi); (w/'B0S0'/s).write_text(bs)
+          (w/'B1S0'/i).write_text(hi.replace(nc,oc)); (w/'B1S0'/s).write_text(hs.replace(ns,os))
+          (w/'B0S1'/i).write_text(hi.replace(nb,ob)); (w/'B0S1'/s).write_text(hs)
+          for c in ['B0S0','B1S0','B0S1','B1S1']:
+            with (w/c/'CELL_SHA256.txt').open('w') as f:
+              for x in [i,s]: f.write(hashlib.sha256((w/c/x).read_bytes()).hexdigest()+'  '+x+'\n')
+          PY
+          curl -L --retry 3 -sS -o "$WORK/fstar.tar.gz" https://raw.githubusercontent.com/FStarLang/binaries/master/weekly/fstar_202103220652_694b7c79cd_Linux_x86_64.tar.gz
+          mkdir "$WORK/FStar"; tar -xzf "$WORK/fstar.tar.gz" -C "$WORK/FStar" --strip-components=1
+          FSTAR=$(find "$WORK/FStar" -type f -name fstar.exe | head -1); chmod +x "$FSTAR"; "$FSTAR" --version > "$OUT/fstar-version.txt"
+          Z3BIN=$(find "$WORK/FStar" -type f -name z3 | head -1 || true)
+          if [ -z "$Z3BIN" ]; then curl -L --retry 3 -sS -o "$WORK/z3.zip" https://raw.githubusercontent.com/FStarLang/binaries/master/z3-tested/z3-4.8.5-x64-ubuntu-16.04.zip; mkdir "$WORK/z3"; unzip -q "$WORK/z3.zip" -d "$WORK/z3"; Z3BIN=$(find "$WORK/z3" -type f -name z3 | head -1); fi
+          chmod +x "$Z3BIN"; export PATH="$(dirname "$Z3BIN"):$PATH"; z3 --version > "$OUT/z3-version.txt"
+          FSTAR_ROOT=$(cd "$(dirname "$FSTAR")/.." && pwd)
+          printf 'cell,attempt,dep_rc,verify_rc,status,last_line\n' > "$OUT/results.csv"
+          set +e
+          for c in B0S0 B1S0 B0S1 B1S1; do
+            d="$WORK/$c"; rm -rf "$d/obj"; mkdir "$d/obj"
+            INC=""; for x in "$d/lib" "$d/specs" "$d/specs/lemmas" "$d/code/hash" "$d/code/hmac" "$d/code/hkdf" "$d/code/poly1305" "$d/code/chacha20" "$d/code/chacha20poly1305" "$d/code/streaming" "$d/code/blake2" "$d/code/curve25519" "$FSTAR_ROOT/ulib/.cache" "$FSTAR_ROOT/ulib"; do [ -d "$x" ] && INC="$INC --include $x"; done
+            FLAGS="--odir $d/obj --cache_checked_modules $INC --cmi --already_cached 'Prims FStar LowStar C Spec.Loops TestLib WasmSupport' --cache_dir $d/obj --trivial_pre_for_unannotated_effectful_fns false --warn_error '+241@247-272' --z3rlimit 100"
+            cd "$d/code/chacha20poly1305"; eval "$FSTAR $FLAGS --dep full Hacl.Impl.Chacha20Poly1305.fst --warn_error '-285'" > "$OUT/$c.deps.mk" 2> "$OUT/$c.dep.err"; drc=$?
+            if [ $drc -eq 0 ]; then
+              cat > Mini.mk <<EOF
+          FSTAR=$FSTAR
+          FLAGS=$FLAGS
+          include $OUT/$c.deps.mk
+          %.checked:
+          	\$(FSTAR) \$(FLAGS) \$< --hint_file $d/hints/\$(notdir \$*).hints
+          EOF
+              make -f Mini.mk -j1 "$d/obj/Hacl.Impl.Chacha20Poly1305.fst.checked" > "$OUT/$c.verify.log" 2>&1; rc=$?
+            else rc=99; cp "$OUT/$c.dep.err" "$OUT/$c.verify.log"; fi
+            [ $rc -eq 0 ] && st=PASS || st=FAIL_OR_INFRA; last=$(tail -n 1 "$OUT/$c.verify.log" | tr ',' ';' | tr '\n' ' '); printf '%s,H_weekly_2021-03-22,%s,%s,%s,%s\n' "$c" "$drc" "$rc" "$st" "$last" >> "$OUT/results.csv"
+          done
+          set -e
+          printf 'base,%s\nhead,%s\n' "$BASE" "$HEAD" > "$OUT/historical_refs.csv"
+          for c in B0S0 B1S0 B0S1 B1S1; do cp "$WORK/$c/CELL_SHA256.txt" "$OUT/$c.sha256"; done
+          cat "$OUT/results.csv"; find "$OUT" -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > "$OUT/SHA256SUMS.txt"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fstar-holdout-pr413-attemptH
+          path: out
+          if-no-files-found: error
+          retention-days: 7
