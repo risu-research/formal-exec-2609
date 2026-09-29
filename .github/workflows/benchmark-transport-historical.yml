@@ -27,7 +27,7 @@ jobs:
       - name: Install analysis dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install pandas==2.2.3 numpy==2.1.3 scipy==1.14.1 tabulate==0.9.0
+          python -m pip install pandas==2.2.3 numpy==2.1.3 scipy==1.14.1 scikit-learn==1.5.2 tabulate==0.9.0
 
       - name: Fetch exact historical TabZilla commit
         env:
@@ -41,10 +41,12 @@ jobs:
           git -C upstream checkout --detach FETCH_HEAD
           test "$(git -C upstream rev-parse HEAD)" = "$UPSTREAM_COMMIT"
           test -f upstream/tabzilla_analysis/final-selected18-algs/cleaned_results/tuned_aggregated_results.csv
+          test -f upstream/TabSurvey/metafeatures.csv
           mkdir -p results
           printf 'upstream_commit=%s\n' "$UPSTREAM_COMMIT" > results/PROVENANCE.txt
           git -C upstream rev-parse HEAD >> results/PROVENANCE.txt
           sha256sum upstream/tabzilla_analysis/final-selected18-algs/cleaned_results/tuned_aggregated_results.csv >> results/PROVENANCE.txt
+          sha256sum upstream/TabSurvey/metafeatures.csv >> results/PROVENANCE.txt
 
       - name: Execute task-level interaction matrix
         run: |
@@ -54,19 +56,29 @@ jobs:
             --out results \
             --bootstrap 5000 \
             --permutations 5000 \
-            | tee results/console.txt
+            | tee results/console_matrix.txt
+
+      - name: Execute structural support audit
+        run: |
+          set -euxo pipefail
+          python bench_transport/run_support_audit.py \
+            --upstream upstream \
+            --out results \
+            | tee results/console_support.txt
 
       - name: Record environment and checksums
         if: always()
         run: |
           python --version > results/PYTHON_VERSION.txt || true
           python -m pip freeze > results/PIP_FREEZE.txt || true
-          (cd results && sha256sum * > SHA256SUMS.txt) || true
+          (cd results && find . -maxdepth 1 -type f ! -name SHA256SUMS.txt -printf '%P\n' | sort | xargs sha256sum > SHA256SUMS.txt) || true
 
       - name: Publish run summary
         if: always()
         run: |
           if [ -f results/SUMMARY.md ]; then cat results/SUMMARY.md >> "$GITHUB_STEP_SUMMARY"; fi
+          printf '\n\n' >> "$GITHUB_STEP_SUMMARY"
+          if [ -f results/SUPPORT_AUDIT.md ]; then cat results/SUPPORT_AUDIT.md >> "$GITHUB_STEP_SUMMARY"; fi
 
       - name: Upload evidence bundle
         if: always()
