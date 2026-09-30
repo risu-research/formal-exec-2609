@@ -106,11 +106,7 @@ jobs:
               echo "execution_branch_sha=$(git rev-parse HEAD)"
               echo "source_commit=feca5e554148bdc4ac17c3379984c2a71244cd32"
               echo "python=$(python --version 2>&1)"
-              python - <<'PY'
-import numpy,pandas
-print('numpy='+numpy.__version__)
-print('pandas='+pandas.__version__)
-PY
+              python -c "import numpy,pandas; print('numpy='+numpy.__version__); print('pandas='+pandas.__version__)"
             } > "$D/provenance/execution_environment.txt"
             find "$D" -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > "$D/SHA256SUMS.txt"
           done
