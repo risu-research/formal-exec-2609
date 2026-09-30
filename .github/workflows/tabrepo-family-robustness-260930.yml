@@ -1,0 +1,55 @@
+name: tabrepo-family-robustness-260930
+
+on:
+  push:
+    branches: [run/tabrepo-replication-260930-work]
+    paths:
+      - '.github/workflows/tabrepo-family-robustness-260930.yml'
+      - 'runs/tabrepo-replication-260930/family_robustness.py'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  robustness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: run/tabrepo-replication-260930-work
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install numpy==2.1.3 pandas==2.2.3 pyarrow==18.1.0 tabulate==0.9.0
+      - name: Fetch exact public outcome matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p tmp/tabrepo results/tabrepo-family-robustness-260930
+          curl -fL --retry 3 -o tmp/tabrepo/configs.parquet https://tabrepo.s3.us-west-2.amazonaws.com/contexts/2023_11_14/configs.parquet
+          test "$(sha256sum tmp/tabrepo/configs.parquet | awk '{print $1}')" = "6d815d406e0a69d0c1ec1910ac1a9c5b0142ef821bb4a9a544244e006350836f"
+      - name: Run post-hoc family-equalized robustness
+        run: |
+          python runs/tabrepo-replication-260930/family_robustness.py \
+            --parquet tmp/tabrepo/configs.parquet \
+            --freeze results/tabrepo-matrix-freeze-260930/MATRIX_FREEZE.json \
+            --task-frame results/tabrepo-matrix-freeze-260930/task_frame.csv \
+            --out results/tabrepo-family-robustness-260930 \
+            --perm 20000
+      - name: Freeze and commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp runs/tabrepo-replication-260930/POSTHOC_FAMILY_ROBUSTNESS.md results/tabrepo-family-robustness-260930/POSTHOC_FAMILY_ROBUSTNESS.md
+          find results/tabrepo-family-robustness-260930 -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > results/tabrepo-family-robustness-260930/SHA256SUMS.txt
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add results/tabrepo-family-robustness-260930
+          git commit -m 'Freeze post-hoc family-equalized TabRepo robustness [skip ci]'
+          git push origin HEAD:run/tabrepo-replication-260930-work
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tabrepo-family-robustness-260930
+          path: results/tabrepo-family-robustness-260930/
+          retention-days: 90
