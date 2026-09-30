@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/tabzilla-mechanism-260929.yml'
       - 'runs/tabzilla-transport-260929/mechanism_analysis.py'
+      - 'runs/tabzilla-transport-260929/size_bridge_analysis.py'
   workflow_dispatch:
 
 permissions:
@@ -18,7 +19,7 @@ concurrency:
 jobs:
   analyze:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 120
     steps:
       - name: Checkout execution branch
         uses: actions/checkout@v4
@@ -48,9 +49,11 @@ jobs:
           META='TabSurvey/metafeatures.csv'
           test "$(git -C tabzilla-src hash-object "$CLEAN")" = "6afbc26593d51fad95927729305ab3b98ab0e56a"
           test "$(git -C tabzilla-src hash-object "$META")" = "a0408b880be9d474ce93e2fc0c23b0c9886b9c9b"
-          mkdir -p results/tabzilla-mechanism-260929/provenance
+          mkdir -p results/tabzilla-mechanism-260929/provenance results/tabzilla-size-bridge-260929/provenance
           sha256sum "tabzilla-src/$CLEAN" "tabzilla-src/$META" > results/tabzilla-mechanism-260929/provenance/source_sha256.txt
+          cp results/tabzilla-mechanism-260929/provenance/source_sha256.txt results/tabzilla-size-bridge-260929/provenance/source_sha256.txt
           git -C tabzilla-src show -s --format=fuller HEAD > results/tabzilla-mechanism-260929/provenance/source_commit.txt
+          cp results/tabzilla-mechanism-260929/provenance/source_commit.txt results/tabzilla-size-bridge-260929/provenance/source_commit.txt
       - name: Run exact-ID structural mechanism analysis
         shell: bash
         run: |
@@ -61,41 +64,55 @@ jobs:
             --meta tabzilla-src/TabSurvey/metafeatures.csv \
             --out results/tabzilla-mechanism-260929/analysis \
             --perm 50000 --boot 3000
+      - name: Run exact-ID task-size bridge analysis
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf results/tabzilla-size-bridge-260929/analysis
+          python runs/tabzilla-transport-260929/size_bridge_analysis.py \
+            --clean tabzilla-src/tabzilla_analysis/final-selected18-algs/cleaned_results/tuned_aggregated_results.csv \
+            --meta tabzilla-src/TabSurvey/metafeatures.csv \
+            --out results/tabzilla-size-bridge-260929/analysis \
+            --perm 50000
       - name: Freeze execution metadata and checksums
         shell: bash
         run: |
           set -euo pipefail
-          {
-            echo "runner_repository=${GITHUB_REPOSITORY}"
-            echo "runner_branch=${GITHUB_REF_NAME}"
-            echo "runner_run_id=${GITHUB_RUN_ID}"
-            echo "runner_sha=${GITHUB_SHA}"
-            echo "source_commit=feca5e554148bdc4ac17c3379984c2a71244cd32"
-            echo "python=$(python --version 2>&1)"
-            python - <<'PY'
-          import numpy,pandas
-          print('numpy='+numpy.__version__)
-          print('pandas='+pandas.__version__)
-          PY
-          } > results/tabzilla-mechanism-260929/provenance/execution_environment.txt
-          find results/tabzilla-mechanism-260929 -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > results/tabzilla-mechanism-260929/SHA256SUMS.txt
+          for D in results/tabzilla-mechanism-260929 results/tabzilla-size-bridge-260929; do
+            {
+              echo "runner_repository=${GITHUB_REPOSITORY}"
+              echo "runner_branch=${GITHUB_REF_NAME}"
+              echo "runner_run_id=${GITHUB_RUN_ID}"
+              echo "runner_sha=${GITHUB_SHA}"
+              echo "source_commit=feca5e554148bdc4ac17c3379984c2a71244cd32"
+              echo "python=$(python --version 2>&1)"
+              python - <<'PY'
+import numpy,pandas
+print('numpy='+numpy.__version__)
+print('pandas='+pandas.__version__)
+PY
+            } > "$D/provenance/execution_environment.txt"
+            find "$D" -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > "$D/SHA256SUMS.txt"
+          done
       - name: Commit frozen results
         shell: bash
         run: |
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add results/tabzilla-mechanism-260929
+          git add results/tabzilla-mechanism-260929 results/tabzilla-size-bridge-260929
           if git diff --cached --quiet; then
             echo 'No result changes.'
           else
-            git commit -m 'Freeze TabZilla structural mechanism analysis [skip ci]'
+            git commit -m 'Freeze TabZilla mechanism and task-size bridge [skip ci]'
             git push origin HEAD:run/tabzilla-transport-260929
           fi
-      - name: Upload frozen bundle
+      - name: Upload frozen bundles
         uses: actions/upload-artifact@v4
         with:
-          name: tabzilla-mechanism-260929
-          path: results/tabzilla-mechanism-260929/
+          name: tabzilla-mechanism-size-bridge-260929
+          path: |
+            results/tabzilla-mechanism-260929/
+            results/tabzilla-size-bridge-260929/
           if-no-files-found: error
           retention-days: 90
