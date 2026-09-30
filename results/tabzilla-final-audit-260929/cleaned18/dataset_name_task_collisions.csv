@@ -1,0 +1,5 @@
+task_id,dataset_name,base_name
+10101,openml__blood-transfusion-service-center__10101,openml__blood-transfusion-service-center
+145836,openml__blood-transfusion-service-center__145836,openml__blood-transfusion-service-center
+25,openml__colic__25,openml__colic
+27,openml__colic__27,openml__colic

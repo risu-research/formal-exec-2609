@@ -1,0 +1,6 @@
+source_repository=https://github.com/naszilla/tabzilla.git
+source_commit=feca5e554148bdc4ac17c3379984c2a71244cd32
+cleaned_csv_path=tabzilla_analysis/final-selected18-algs/cleaned_results/tuned_aggregated_results.csv
+cleaned_csv_git_blob=6afbc26593d51fad95927729305ab3b98ab0e56a
+raw_csv_path=tabzilla_analysis/results/tuned_aggregated_results.csv
+raw_csv_git_blob=63a9add515a5574a5f529757b071f3ee2d11d9da
