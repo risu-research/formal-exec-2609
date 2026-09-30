@@ -1,0 +1,11 @@
+runner_repository=risu-research/formal-exec-2609
+runner_branch=run/tabzilla-mechanism-260930
+runner_workflow=tabzilla-mechanism-260930
+runner_run_id=36660270586
+runner_run_attempt=1
+runner_sha=f0808973302723591fb443145384132f4e36e179
+python=Python 3.11.16
+numpy=2.4.6
+pandas=3.0.6
+scipy=1.17.1
+tabulate=0.10.0

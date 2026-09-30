@@ -1,0 +1,36 @@
+{
+  "source_commit": "feca5e554148bdc4ac17c3379984c2a71244cd32",
+  "expected_clean_blob": "6afbc26593d51fad95927729305ab3b98ab0e56a",
+  "expected_metafeature_blob": "a0408b880be9d474ce93e2fc0c23b0c9886b9c9b",
+  "clean_csv_sha256": "67b57c57eded5d4c05da4692c67f5c15e7999fb23f5f7125233bff75c3a5a23a",
+  "metafeature_csv_sha256": "91515bcc6ed6a13ce10bd1085b8c027fff5e6490841e6068cf85563ce7affa64",
+  "primary_tasks": 104,
+  "primary_algorithms": 18,
+  "primary_cc18": 46,
+  "primary_outside": 58,
+  "global_interaction_all": {
+    "n_tasks": 104,
+    "n_cc18": 46,
+    "n_outside": 58,
+    "n_algorithms": 18,
+    "stat_l2": 0.009968623804308645,
+    "stat_max_abs": 0.05776502963376146,
+    "p_l2": 0.00741985160296794,
+    "p_max_abs": 0.009659806803863923,
+    "permutations": 50000,
+    "subset": "all"
+  },
+  "metafeature_join": {
+    "joined_cleaned_tasks": 104,
+    "joined_cc18_tasks": 46,
+    "joined_outside_tasks": 58,
+    "cleaned_tasks_missing_metafeatures": []
+  },
+  "meta_selection_omnibus": {
+    "stat_standardized_mean_vector_l2": 1.2755274227703708,
+    "p_permutation": 0.27085458290834186,
+    "permutations": 50000,
+    "n_features_used": 28
+  },
+  "guardrail": "Association/finite-frame diagnostics. Suite membership is not randomized; neither omnibus test is a causal effect of CC18 curation."
+}
