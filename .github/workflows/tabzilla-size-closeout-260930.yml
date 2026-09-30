@@ -1,0 +1,140 @@
+name: tabzilla-size-closeout-260930
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/tabzilla-size-closeout-260930.yml'
+      - 'runs/TRIGGER_TABZILLA_SIZE_CLOSEOUT_260930.txt'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: tabzilla-size-closeout-260930
+  cancel-in-progress: false
+
+jobs:
+  closeout:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout execution branch
+        uses: actions/checkout@v4
+        with:
+          ref: run/tabzilla-transport-260929
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11.16'
+
+      - name: Install pinned dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip==26.2.1
+          pip install numpy==2.4.6 pandas==3.0.6
+
+      - name: Fetch exact historical TabZilla source
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf tabzilla-src
+          git init tabzilla-src
+          git -C tabzilla-src remote add origin https://github.com/naszilla/tabzilla.git
+          git -C tabzilla-src fetch --depth=1 origin feca5e554148bdc4ac17c3379984c2a71244cd32
+          git -C tabzilla-src checkout --detach FETCH_HEAD
+          test "$(git -C tabzilla-src rev-parse HEAD)" = "feca5e554148bdc4ac17c3379984c2a71244cd32"
+          CLEAN='tabzilla_analysis/final-selected18-algs/cleaned_results/tuned_aggregated_results.csv'
+          META='TabSurvey/metafeatures.csv'
+          test -f "tabzilla-src/$CLEAN"
+          test -f "tabzilla-src/$META"
+          test "$(git -C tabzilla-src hash-object "$CLEAN")" = "6afbc26593d51fad95927729305ab3b98ab0e56a"
+          test "$(git -C tabzilla-src hash-object "$META")" = "a0408b880be9d474ce93e2fc0c23b0c9886b9c9b"
+          mkdir -p results/tabzilla-size-bridge-260930/provenance results/tabzilla-size-match-260930/provenance
+          sha256sum "tabzilla-src/$CLEAN" "tabzilla-src/$META" > /tmp/source_sha256.txt
+          cp /tmp/source_sha256.txt results/tabzilla-size-bridge-260930/provenance/source_sha256.txt
+          cp /tmp/source_sha256.txt results/tabzilla-size-match-260930/provenance/source_sha256.txt
+          git -C tabzilla-src show -s --format=fuller HEAD > /tmp/source_commit.txt
+          cp /tmp/source_commit.txt results/tabzilla-size-bridge-260930/provenance/source_commit.txt
+          cp /tmp/source_commit.txt results/tabzilla-size-match-260930/provenance/source_commit.txt
+
+      - name: Verify frozen analysis scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f runs/tabzilla-transport-260929/size_bridge_analysis.py
+          test -f runs/tabzilla-transport-260929/nonparametric_size_match.py
+          sha256sum runs/tabzilla-transport-260929/size_bridge_analysis.py runs/tabzilla-transport-260929/nonparametric_size_match.py | tee /tmp/analysis_scripts_sha256.txt
+          cp /tmp/analysis_scripts_sha256.txt results/tabzilla-size-bridge-260930/provenance/analysis_scripts_sha256.txt
+          cp /tmp/analysis_scripts_sha256.txt results/tabzilla-size-match-260930/provenance/analysis_scripts_sha256.txt
+
+      - name: Run parametric size bridge
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf results/tabzilla-size-bridge-260930/analysis
+          python runs/tabzilla-transport-260929/size_bridge_analysis.py \
+            --clean tabzilla-src/tabzilla_analysis/final-selected18-algs/cleaned_results/tuned_aggregated_results.csv \
+            --meta tabzilla-src/TabSurvey/metafeatures.csv \
+            --out results/tabzilla-size-bridge-260930/analysis \
+            --perm 50000
+
+      - name: Run nonparametric size-matched common-support sensitivity
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf results/tabzilla-size-match-260930/analysis
+          python runs/tabzilla-transport-260929/nonparametric_size_match.py \
+            --clean tabzilla-src/tabzilla_analysis/final-selected18-algs/cleaned_results/tuned_aggregated_results.csv \
+            --meta tabzilla-src/TabSurvey/metafeatures.csv \
+            --out results/tabzilla-size-match-260930/analysis \
+            --perm 50000 --boot 5000
+
+      - name: Freeze execution metadata and checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          for D in results/tabzilla-size-bridge-260930 results/tabzilla-size-match-260930; do
+            {
+              echo "runner_repository=${GITHUB_REPOSITORY}"
+              echo "workflow_run_id=${GITHUB_RUN_ID}"
+              echo "workflow_trigger_sha=${GITHUB_SHA}"
+              echo "execution_branch=run/tabzilla-transport-260929"
+              echo "execution_branch_sha=$(git rev-parse HEAD)"
+              echo "source_commit=feca5e554148bdc4ac17c3379984c2a71244cd32"
+              echo "python=$(python --version 2>&1)"
+              python - <<'PY'
+import numpy,pandas
+print('numpy='+numpy.__version__)
+print('pandas='+pandas.__version__)
+PY
+            } > "$D/provenance/execution_environment.txt"
+            find "$D" -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > "$D/SHA256SUMS.txt"
+          done
+
+      - name: Commit frozen closeout results to execution branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add results/tabzilla-size-bridge-260930 results/tabzilla-size-match-260930
+          if git diff --cached --quiet; then
+            echo 'No result changes.'
+          else
+            git commit -m 'Freeze TabZilla size bridge and nonparametric closeout [skip ci]'
+            git push origin HEAD:run/tabzilla-transport-260929
+          fi
+
+      - name: Upload durable closeout artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tabzilla-size-closeout-260930
+          path: |
+            results/tabzilla-size-bridge-260930/
+            results/tabzilla-size-match-260930/
+          if-no-files-found: error
+          retention-days: 90
