@@ -1,0 +1,118 @@
+name: tabrepo-stage0-260930
+
+on:
+  push:
+    branches: [run/tabrepo-replication-260930-work]
+    paths:
+      - '.github/workflows/tabrepo-stage0-260930.yml'
+      - 'runs/tabrepo-replication-260930/PREREGISTRATION.md'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  schema-freeze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: run/tabrepo-replication-260930-work
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install analysis IO
+        run: pip install pandas==2.2.3 pyarrow==18.1.0
+      - name: Fetch exact public sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p tmp/tabrepo results/tabrepo-stage0-260930
+          curl -fL --retry 3 -o tmp/tabrepo/configs.parquet \
+            https://tabrepo.s3.us-west-2.amazonaws.com/contexts/2023_11_14/configs.parquet
+          git clone -q https://github.com/autogluon/tabarena.git tmp/tabarena
+          git -C tmp/tabarena checkout -q --detach 3785b6f7a7853d992627cf97908081d54d908bd3
+          test "$(git -C tmp/tabarena rev-parse HEAD)" = "3785b6f7a7853d992627cf97908081d54d908bd3"
+          test "$(git -C tmp/tabarena hash-object data/metadata/task_metadata_244.csv)" = "0a68d470a0bf5b977b8d6f9aeeb1c499d483a2f6"
+          cp tmp/tabarena/data/metadata/task_metadata_244.csv tmp/tabrepo/task_metadata_244.csv
+          sha256sum tmp/tabrepo/configs.parquet tmp/tabrepo/task_metadata_244.csv > results/tabrepo-stage0-260930/SOURCE_SHA256.txt
+      - name: Outcome-blind schema and coverage scan
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, re
+          import pandas as pd
+          from pathlib import Path
+          out=Path('results/tabrepo-stage0-260930')
+          df=pd.read_parquet('tmp/tabrepo/configs.parquet')
+          meta=pd.read_csv('tmp/tabrepo/task_metadata_244.csv')
+          # Only schema, identifiers, coverage, and non-outcome metadata are inspected here.
+          outcome_tokens=('score','error','metric_error','time','runtime','latency','memory','predict','loss')
+          id_candidates=[c for c in df.columns if any(k in c.lower() for k in ['dataset','task','tid','fold','config','model','framework','metric','problem'])]
+          outcome_like=[c for c in df.columns if any(k in c.lower() for k in outcome_tokens)]
+          schema={
+            'rows':int(len(df)),
+            'columns':list(df.columns),
+            'dtypes':{c:str(t) for c,t in df.dtypes.items()},
+            'identifier_candidates':id_candidates,
+            'outcome_like_columns_not_inspected_for_values':outcome_like,
+            'metadata_rows':int(len(meta)),
+            'metadata_columns':list(meta.columns),
+          }
+          # Cardinalities only for identifier/non-outcome fields.
+          cards=[]
+          for c in id_candidates:
+            cards.append({'column':c,'n_unique':int(df[c].nunique(dropna=True)),'n_missing':int(df[c].isna().sum())})
+          pd.DataFrame(cards).to_csv(out/'identifier_cardinalities.csv',index=False)
+
+          # Resolve likely dataset/config/fold fields by names only.
+          def first(names):
+            lower={c.lower():c for c in df.columns}
+            for n in names:
+              if n in lower: return lower[n]
+            return None
+          dcol=first(['dataset','dataset_name','task','task_name'])
+          tidcol=first(['tid','task_id'])
+          ccol=first(['config','config_name','model','model_name'])
+          fcol=first(['fold'])
+          mcol=first(['metric','metric_name','eval_metric'])
+          pcol=first(['problem_type','task_type'])
+          resolved={'dataset':dcol,'tid':tidcol,'config':ccol,'fold':fcol,'metric':mcol,'problem_type':pcol}
+          schema['resolved_identifier_columns']=resolved
+          if dcol:
+            cov=df.groupby(dcol,dropna=False).size().rename('rows').reset_index()
+            if ccol: cov['n_configs']=df.groupby(dcol)[ccol].nunique().reindex(cov[dcol]).to_numpy()
+            if fcol: cov['n_folds']=df.groupby(dcol)[fcol].nunique().reindex(cov[dcol]).to_numpy()
+            cov.to_csv(out/'dataset_coverage.csv',index=False)
+          if ccol:
+            cfg=pd.DataFrame({ccol:sorted(df[ccol].dropna().astype(str).unique())})
+            cfg['prefix']=cfg[ccol].str.replace(r'_r\d+.*$','',regex=True).str.replace(r'_BAG.*$','',regex=True)
+            cfg.groupby('prefix').size().rename('n_configs').reset_index().sort_values(['n_configs','prefix'],ascending=[False,True]).to_csv(out/'config_prefix_counts.csv',index=False)
+            cfg.to_csv(out/'config_names.csv',index=False)
+          for label,col in [('metric',mcol),('problem_type',pcol)]:
+            if col and col not in outcome_like:
+              df[[col]].drop_duplicates().sort_values(col).to_csv(out/f'{label}_values.csv',index=False)
+          # Metadata task/problem/size profile, no CC18 labeling.
+          meta_keep=[c for c in ['tid','did','name','task_type','NumberOfClasses','NumberOfFeatures','NumberOfInstances','NumberOfNumericFeatures','NumberOfSymbolicFeatures'] if c in meta.columns]
+          meta[meta_keep].to_csv(out/'task_metadata_profile.csv',index=False)
+          (out/'schema.json').write_text(json.dumps(schema,indent=2,default=str)+'\n')
+          print(json.dumps(schema,indent=2,default=str))
+          PY
+      - name: Freeze stage-0 results
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp runs/tabrepo-replication-260930/PREREGISTRATION.md results/tabrepo-stage0-260930/PREREGISTRATION.md
+          find results/tabrepo-stage0-260930 -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > results/tabrepo-stage0-260930/SHA256SUMS.txt
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add results/tabrepo-stage0-260930
+          git commit -m 'Freeze outcome-blind TabRepo stage-0 schema [skip ci]'
+          git push origin HEAD:run/tabrepo-replication-260930-work
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tabrepo-stage0-260930
+          path: results/tabrepo-stage0-260930/
+          retention-days: 90
