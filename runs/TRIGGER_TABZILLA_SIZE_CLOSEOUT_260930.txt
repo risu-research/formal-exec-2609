@@ -3,4 +3,5 @@ Date: 2026-09-30
 Execution branch: run/tabzilla-transport-260929
 Historical source commit: feca5e554148bdc4ac17c3379984c2a71244cd32
 Workflow: diagnostic preflights for both parametric and nonparametric analyses before full inference
-Workflow commit: 24a69a06acb434ea6626d4b678385a2b2f2cc04b
+Fixes: pandas writable matrix in size bridge; tuple unpack in optimal size matching
+Execution commits: fd7a3e18a0f2d99677c8077e40cc89b8b8dbc397, 910e897ff7d6624c6acfd3a7d9232147f509aba6
