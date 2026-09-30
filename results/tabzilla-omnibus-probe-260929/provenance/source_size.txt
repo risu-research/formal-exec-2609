@@ -1,0 +1,3 @@
+    1873   536711 tabzilla-src/tabzilla_analysis/final-selected18-algs/cleaned_results/tuned_aggregated_results.csv
+    1831 24976558 tabzilla-src/TabSurvey/metafeatures.csv
+    3704 25513269 total

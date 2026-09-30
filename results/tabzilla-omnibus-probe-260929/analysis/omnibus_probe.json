@@ -1,0 +1,520 @@
+{
+  "rows": 1872,
+  "tasks": 104,
+  "cc18_tasks": 46,
+  "outside_tasks": 58,
+  "algorithms": [
+    "CatBoost",
+    "DANet",
+    "DecisionTree",
+    "FTTransformer",
+    "KNN",
+    "LightGBM",
+    "LinearModel",
+    "MLP",
+    "MLP-rtdl",
+    "NODE",
+    "RandomForest",
+    "ResNet",
+    "SAINT",
+    "STG",
+    "SVM",
+    "TabNet",
+    "VIME",
+    "XGBoost"
+  ],
+  "subsets": {
+    "all18": {
+      "algorithms": [
+        "CatBoost",
+        "DANet",
+        "DecisionTree",
+        "FTTransformer",
+        "KNN",
+        "LightGBM",
+        "LinearModel",
+        "MLP",
+        "MLP-rtdl",
+        "NODE",
+        "RandomForest",
+        "ResNet",
+        "SAINT",
+        "STG",
+        "SVM",
+        "TabNet",
+        "VIME",
+        "XGBoost"
+      ],
+      "n_algorithms": 18,
+      "pairwise_rms_interaction": 0.03424586502185533,
+      "max_abs_pairwise_interaction": 0.08949289543336933,
+      "centroid_l2": 0.09984299576990188,
+      "permutation_B": 20000,
+      "permutation_p": 0.006749662516874156,
+      "group_centroid_shift_by_algorithm": {
+        "CatBoost": 0.019822258022785966,
+        "DANet": -0.007788831368571605,
+        "DecisionTree": 0.03172786579960786,
+        "FTTransformer": 0.007893038539281742,
+        "KNN": -0.018346390044851276,
+        "LightGBM": -0.0014625012884905524,
+        "LinearModel": 0.01677045141044701,
+        "MLP": 0.007865141650346765,
+        "MLP-rtdl": 0.006503683090436493,
+        "NODE": -0.009237963230225478,
+        "RandomForest": 0.00756600748116288,
+        "ResNet": 0.01144322318062899,
+        "SAINT": 0.024314090120716975,
+        "STG": 0.011664606469338461,
+        "SVM": -0.008564858350732965,
+        "TabNet": -0.055929436543001816,
+        "VIME": -0.05776502963376146,
+        "XGBoost": 0.013524644694882508
+      },
+      "top_pairwise_shifts": [
+        {
+          "abs_shift": 0.08949289543336933,
+          "algorithm_a": "DecisionTree",
+          "algorithm_b": "VIME",
+          "signed_shift_a_minus_b": 0.08949289543336933
+        },
+        {
+          "abs_shift": 0.08765730234260968,
+          "algorithm_a": "DecisionTree",
+          "algorithm_b": "TabNet",
+          "signed_shift_a_minus_b": 0.08765730234260968
+        },
+        {
+          "abs_shift": 0.08207911975447843,
+          "algorithm_a": "SAINT",
+          "algorithm_b": "VIME",
+          "signed_shift_a_minus_b": 0.08207911975447843
+        },
+        {
+          "abs_shift": 0.08024352666371878,
+          "algorithm_a": "SAINT",
+          "algorithm_b": "TabNet",
+          "signed_shift_a_minus_b": 0.08024352666371878
+        },
+        {
+          "abs_shift": 0.07758728765654743,
+          "algorithm_a": "CatBoost",
+          "algorithm_b": "VIME",
+          "signed_shift_a_minus_b": 0.07758728765654743
+        },
+        {
+          "abs_shift": 0.07575169456578779,
+          "algorithm_a": "CatBoost",
+          "algorithm_b": "TabNet",
+          "signed_shift_a_minus_b": 0.07575169456578779
+        },
+        {
+          "abs_shift": 0.07453548104420847,
+          "algorithm_a": "LinearModel",
+          "algorithm_b": "VIME",
+          "signed_shift_a_minus_b": 0.07453548104420847
+        },
+        {
+          "abs_shift": 0.07269988795344882,
+          "algorithm_a": "LinearModel",
+          "algorithm_b": "TabNet",
+          "signed_shift_a_minus_b": 0.07269988795344882
+        },
+        {
+          "abs_shift": 0.07128967432864397,
+          "algorithm_a": "VIME",
+          "algorithm_b": "XGBoost",
+          "signed_shift_a_minus_b": -0.07128967432864397
+        },
+        {
+          "abs_shift": 0.06945408123788432,
+          "algorithm_a": "TabNet",
+          "algorithm_b": "XGBoost",
+          "signed_shift_a_minus_b": -0.06945408123788432
+        }
+      ]
+    },
+    "minus_TabNet": {
+      "algorithms": [
+        "CatBoost",
+        "DANet",
+        "DecisionTree",
+        "FTTransformer",
+        "KNN",
+        "LightGBM",
+        "LinearModel",
+        "MLP",
+        "MLP-rtdl",
+        "NODE",
+        "RandomForest",
+        "ResNet",
+        "SAINT",
+        "STG",
+        "SVM",
+        "VIME",
+        "XGBoost"
+      ],
+      "n_algorithms": 17,
+      "pairwise_rms_interaction": 0.028845528119232248,
+      "max_abs_pairwise_interaction": 0.08949289543336933,
+      "centroid_l2": 0.08158747416006544,
+      "permutation_B": 20000,
+      "permutation_p": 0.0351982400879956,
+      "group_centroid_shift_by_algorithm": {
+        "CatBoost": 0.01653229116731526,
+        "DANet": -0.011078798224042287,
+        "DecisionTree": 0.02843789894413718,
+        "FTTransformer": 0.004603071683811058,
+        "KNN": -0.02163635690032196,
+        "LightGBM": -0.004752468143961235,
+        "LinearModel": 0.013480484554976316,
+        "MLP": 0.004575174794876076,
+        "MLP-rtdl": 0.003213716234965809,
+        "NODE": -0.012527930085696162,
+        "RandomForest": 0.004276040625692198,
+        "ResNet": 0.008153256325158311,
+        "SAINT": 0.021024123265246303,
+        "STG": 0.008374639613867776,
+        "SVM": -0.01185482520620365,
+        "VIME": -0.06105499648923214,
+        "XGBoost": 0.01023467783941183
+      },
+      "top_pairwise_shifts": [
+        {
+          "abs_shift": 0.08949289543336933,
+          "algorithm_a": "DecisionTree",
+          "algorithm_b": "VIME",
+          "signed_shift_a_minus_b": 0.08949289543336933
+        },
+        {
+          "abs_shift": 0.08207911975447844,
+          "algorithm_a": "SAINT",
+          "algorithm_b": "VIME",
+          "signed_shift_a_minus_b": 0.08207911975447844
+        },
+        {
+          "abs_shift": 0.0775872876565474,
+          "algorithm_a": "CatBoost",
+          "algorithm_b": "VIME",
+          "signed_shift_a_minus_b": 0.0775872876565474
+        },
+        {
+          "abs_shift": 0.07453548104420846,
+          "algorithm_a": "LinearModel",
+          "algorithm_b": "VIME",
+          "signed_shift_a_minus_b": 0.07453548104420846
+        },
+        {
+          "abs_shift": 0.07128967432864397,
+          "algorithm_a": "VIME",
+          "algorithm_b": "XGBoost",
+          "signed_shift_a_minus_b": -0.07128967432864397
+        },
+        {
+          "abs_shift": 0.06942963610309992,
+          "algorithm_a": "STG",
+          "algorithm_b": "VIME",
+          "signed_shift_a_minus_b": 0.06942963610309992
+        },
+        {
+          "abs_shift": 0.06920825281439046,
+          "algorithm_a": "ResNet",
+          "algorithm_b": "VIME",
+          "signed_shift_a_minus_b": 0.06920825281439046
+        },
+        {
+          "abs_shift": 0.0656580681730432,
+          "algorithm_a": "FTTransformer",
+          "algorithm_b": "VIME",
+          "signed_shift_a_minus_b": 0.0656580681730432
+        },
+        {
+          "abs_shift": 0.06563017128410822,
+          "algorithm_a": "MLP",
+          "algorithm_b": "VIME",
+          "signed_shift_a_minus_b": 0.06563017128410822
+        },
+        {
+          "abs_shift": 0.06533103711492434,
+          "algorithm_a": "RandomForest",
+          "algorithm_b": "VIME",
+          "signed_shift_a_minus_b": 0.06533103711492434
+        }
+      ]
+    },
+    "minus_VIME": {
+      "algorithms": [
+        "CatBoost",
+        "DANet",
+        "DecisionTree",
+        "FTTransformer",
+        "KNN",
+        "LightGBM",
+        "LinearModel",
+        "MLP",
+        "MLP-rtdl",
+        "NODE",
+        "RandomForest",
+        "ResNet",
+        "SAINT",
+        "STG",
+        "SVM",
+        "TabNet",
+        "XGBoost"
+      ],
+      "n_algorithms": 17,
+      "pairwise_rms_interaction": 0.02836270192143388,
+      "max_abs_pairwise_interaction": 0.08765730234260972,
+      "centroid_l2": 0.08022183544567446,
+      "permutation_B": 20000,
+      "permutation_p": 0.02689865506724664,
+      "group_centroid_shift_by_algorithm": {
+        "CatBoost": 0.016424315103152932,
+        "DANet": -0.011186774288204625,
+        "DecisionTree": 0.028329922879974843,
+        "FTTransformer": 0.004495095619648719,
+        "KNN": -0.021744332964484275,
+        "LightGBM": -0.004860444208123576,
+        "LinearModel": 0.013372508490813978,
+        "MLP": 0.004467198730713738,
+        "MLP-rtdl": 0.0031057401708034713,
+        "NODE": -0.0126359061498585,
+        "RandomForest": 0.0041680645615298495,
+        "ResNet": 0.008045280260995984,
+        "SAINT": 0.020916147201083948,
+        "STG": 0.008266663549705434,
+        "SVM": -0.011962801270365985,
+        "TabNet": -0.05932737946263488,
+        "XGBoost": 0.010126701775249502
+      },
+      "top_pairwise_shifts": [
+        {
+          "abs_shift": 0.08765730234260972,
+          "algorithm_a": "DecisionTree",
+          "algorithm_b": "TabNet",
+          "signed_shift_a_minus_b": 0.08765730234260972
+        },
+        {
+          "abs_shift": 0.08024352666371883,
+          "algorithm_a": "SAINT",
+          "algorithm_b": "TabNet",
+          "signed_shift_a_minus_b": 0.08024352666371883
+        },
+        {
+          "abs_shift": 0.07575169456578781,
+          "algorithm_a": "CatBoost",
+          "algorithm_b": "TabNet",
+          "signed_shift_a_minus_b": 0.07575169456578781
+        },
+        {
+          "abs_shift": 0.07269988795344887,
+          "algorithm_a": "LinearModel",
+          "algorithm_b": "TabNet",
+          "signed_shift_a_minus_b": 0.07269988795344887
+        },
+        {
+          "abs_shift": 0.06945408123788438,
+          "algorithm_a": "TabNet",
+          "algorithm_b": "XGBoost",
+          "signed_shift_a_minus_b": -0.06945408123788438
+        },
+        {
+          "abs_shift": 0.06759404301234032,
+          "algorithm_a": "STG",
+          "algorithm_b": "TabNet",
+          "signed_shift_a_minus_b": 0.06759404301234032
+        },
+        {
+          "abs_shift": 0.06737265972363086,
+          "algorithm_a": "ResNet",
+          "algorithm_b": "TabNet",
+          "signed_shift_a_minus_b": 0.06737265972363086
+        },
+        {
+          "abs_shift": 0.0638224750822836,
+          "algorithm_a": "FTTransformer",
+          "algorithm_b": "TabNet",
+          "signed_shift_a_minus_b": 0.0638224750822836
+        },
+        {
+          "abs_shift": 0.06379457819334862,
+          "algorithm_a": "MLP",
+          "algorithm_b": "TabNet",
+          "signed_shift_a_minus_b": 0.06379457819334862
+        },
+        {
+          "abs_shift": 0.06349544402416474,
+          "algorithm_a": "RandomForest",
+          "algorithm_b": "TabNet",
+          "signed_shift_a_minus_b": 0.06349544402416474
+        }
+      ]
+    },
+    "minus_TabNet_VIME": {
+      "algorithms": [
+        "CatBoost",
+        "DANet",
+        "DecisionTree",
+        "FTTransformer",
+        "KNN",
+        "LightGBM",
+        "LinearModel",
+        "MLP",
+        "MLP-rtdl",
+        "NODE",
+        "RandomForest",
+        "ResNet",
+        "SAINT",
+        "STG",
+        "SVM",
+        "XGBoost"
+      ],
+      "n_algorithms": 16,
+      "pairwise_rms_interaction": 0.018958977842525974,
+      "max_abs_pairwise_interaction": 0.05007425584445914,
+      "centroid_l2": 0.05192129915796052,
+      "permutation_B": 20000,
+      "permutation_p": 0.27878606069696515,
+      "group_centroid_shift_by_algorithm": {
+        "CatBoost": 0.012716353886738255,
+        "DANet": -0.014894735504619304,
+        "DecisionTree": 0.024621961663560163,
+        "FTTransformer": 0.0007871344032340365,
+        "KNN": -0.025452294180898977,
+        "LightGBM": -0.008568405424538256,
+        "LinearModel": 0.009664547274399304,
+        "MLP": 0.0007592375142990646,
+        "MLP-rtdl": -0.0006022210456112127,
+        "NODE": -0.016343867366273183,
+        "RandomForest": 0.0004601033451151794,
+        "ResNet": 0.004337319044581291,
+        "SAINT": 0.017208185984669274,
+        "STG": 0.004558702333290757,
+        "SVM": -0.01567076248678067,
+        "XGBoost": 0.006418740558834811
+      },
+      "top_pairwise_shifts": [
+        {
+          "abs_shift": 0.05007425584445914,
+          "algorithm_a": "DecisionTree",
+          "algorithm_b": "KNN",
+          "signed_shift_a_minus_b": 0.05007425584445914
+        },
+        {
+          "abs_shift": 0.042660480165568254,
+          "algorithm_a": "KNN",
+          "algorithm_b": "SAINT",
+          "signed_shift_a_minus_b": -0.042660480165568254
+        },
+        {
+          "abs_shift": 0.040965829029833346,
+          "algorithm_a": "DecisionTree",
+          "algorithm_b": "NODE",
+          "signed_shift_a_minus_b": 0.040965829029833346
+        },
+        {
+          "abs_shift": 0.04029272415034083,
+          "algorithm_a": "DecisionTree",
+          "algorithm_b": "SVM",
+          "signed_shift_a_minus_b": 0.04029272415034083
+        },
+        {
+          "abs_shift": 0.03951669716817947,
+          "algorithm_a": "DANet",
+          "algorithm_b": "DecisionTree",
+          "signed_shift_a_minus_b": -0.03951669716817947
+        },
+        {
+          "abs_shift": 0.03816864806763723,
+          "algorithm_a": "CatBoost",
+          "algorithm_b": "KNN",
+          "signed_shift_a_minus_b": 0.03816864806763723
+        },
+        {
+          "abs_shift": 0.03511684145529828,
+          "algorithm_a": "KNN",
+          "algorithm_b": "LinearModel",
+          "signed_shift_a_minus_b": -0.03511684145529828
+        },
+        {
+          "abs_shift": 0.033552053350942454,
+          "algorithm_a": "NODE",
+          "algorithm_b": "SAINT",
+          "signed_shift_a_minus_b": -0.033552053350942454
+        },
+        {
+          "abs_shift": 0.033190367088098416,
+          "algorithm_a": "DecisionTree",
+          "algorithm_b": "LightGBM",
+          "signed_shift_a_minus_b": 0.033190367088098416
+        },
+        {
+          "abs_shift": 0.03287894847144994,
+          "algorithm_a": "SAINT",
+          "algorithm_b": "SVM",
+          "signed_shift_a_minus_b": 0.03287894847144994
+        }
+      ]
+    },
+    "classical4": {
+      "algorithms": [
+        "CatBoost",
+        "LightGBM",
+        "RandomForest",
+        "XGBoost"
+      ],
+      "n_algorithms": 4,
+      "pairwise_rms_interaction": 0.012809829966872866,
+      "max_abs_pairwise_interaction": 0.021284759311276512,
+      "centroid_l2": 0.01568877355532583,
+      "permutation_B": 20000,
+      "permutation_p": 0.02679866006699665,
+      "group_centroid_shift_by_algorithm": {
+        "CatBoost": 0.009959655795200749,
+        "LightGBM": -0.011325103516075765,
+        "RandomForest": -0.0022965947464223336,
+        "XGBoost": 0.0036620424672973067
+      },
+      "top_pairwise_shifts": [
+        {
+          "abs_shift": 0.021284759311276512,
+          "algorithm_a": "CatBoost",
+          "algorithm_b": "LightGBM",
+          "signed_shift_a_minus_b": 0.021284759311276512
+        },
+        {
+          "abs_shift": 0.01498714598337307,
+          "algorithm_a": "LightGBM",
+          "algorithm_b": "XGBoost",
+          "signed_shift_a_minus_b": -0.01498714598337307
+        },
+        {
+          "abs_shift": 0.012256250541623083,
+          "algorithm_a": "CatBoost",
+          "algorithm_b": "RandomForest",
+          "signed_shift_a_minus_b": 0.012256250541623083
+        },
+        {
+          "abs_shift": 0.009028508769653432,
+          "algorithm_a": "LightGBM",
+          "algorithm_b": "RandomForest",
+          "signed_shift_a_minus_b": -0.009028508769653432
+        },
+        {
+          "abs_shift": 0.006297613327903442,
+          "algorithm_a": "CatBoost",
+          "algorithm_b": "XGBoost",
+          "signed_shift_a_minus_b": 0.006297613327903442
+        },
+        {
+          "abs_shift": 0.00595863721371964,
+          "algorithm_a": "RandomForest",
+          "algorithm_b": "XGBoost",
+          "signed_shift_a_minus_b": -0.00595863721371964
+        }
+      ]
+    }
+  },
+  "statistic_definition": "RMS across all algorithm-pair differences in the outside-minus-CC18 centroid shift after task-wise row centering.",
+  "null": "CC18 membership labels are exchangeable across the 104 fixed historical tasks under no membership-associated algorithm-relative profile shift."
+}
