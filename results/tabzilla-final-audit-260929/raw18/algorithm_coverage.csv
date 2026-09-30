@@ -2,12 +2,15 @@ alg_name,tasks,cc18,outside
 CatBoost,163,68,95
 DANet,147,62,85
 DecisionTree,171,71,100
+FTTransformer,139,59,80
 KNN,164,68,96
 LightGBM,164,69,95
 LinearModel,167,67,100
 MLP,170,71,99
+MLP-rtdl,171,71,100
 NODE,138,58,80
 RandomForest,170,71,99
+ResNet,170,71,99
 SAINT,106,40,66
 STG,163,70,93
 SVM,143,65,78

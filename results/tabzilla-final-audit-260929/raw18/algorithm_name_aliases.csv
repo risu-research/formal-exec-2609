@@ -1,0 +1,4 @@
+raw_name,canonical_name
+rtdl_FTTransformer,FTTransformer
+rtdl_MLP,MLP-rtdl
+rtdl_ResNet,ResNet
