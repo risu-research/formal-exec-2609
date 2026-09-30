@@ -65,6 +65,10 @@ jobs:
           sha256sum "tabzilla-src/$CLEAN" "tabzilla-src/$META" > results/tabzilla-mechanism-260930/provenance/source_sha256.txt
           wc -l "tabzilla-src/$CLEAN" "tabzilla-src/$META" > results/tabzilla-mechanism-260930/provenance/source_linecount.txt
 
+          mkdir -p results/tabzilla-mechanism-260930/source_snapshot
+          cp "tabzilla-src/$CLEAN" results/tabzilla-mechanism-260930/source_snapshot/tuned_aggregated_results_cleaned18.csv
+          cp "tabzilla-src/$META" results/tabzilla-mechanism-260930/source_snapshot/metafeatures.csv
+
       - name: Run omnibus interaction and historical metafeature selection audit
         shell: bash
         run: |
@@ -109,7 +113,7 @@ jobs:
           if git diff --cached --quiet; then
             echo 'No result changes to commit.'
           else
-            git commit -m 'Freeze TabZilla omnibus and metafeature audit [skip ci]'
+            git commit -m 'Freeze TabZilla omnibus and source snapshot [skip ci]'
             git push origin HEAD:run/tabzilla-mechanism-260930
           fi
 
