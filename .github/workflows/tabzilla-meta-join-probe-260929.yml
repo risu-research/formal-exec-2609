@@ -1,0 +1,123 @@
+name: tabzilla-meta-join-probe-260929
+
+on:
+  push:
+    branches: [run/tabzilla-transport-260929]
+    paths:
+      - '.github/workflows/tabzilla-meta-join-probe-260929.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: run/tabzilla-transport-260929
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11.16'
+      - run: pip install pandas==3.0.6 numpy==2.4.6
+      - name: Fetch exact source
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf tabzilla-src
+          git init tabzilla-src
+          git -C tabzilla-src remote add origin https://github.com/naszilla/tabzilla.git
+          git -C tabzilla-src fetch --depth=1 origin feca5e554148bdc4ac17c3379984c2a71244cd32
+          git -C tabzilla-src checkout --detach FETCH_HEAD
+          test "$(git -C tabzilla-src hash-object TabSurvey/metafeatures.csv)" = "a0408b880be9d474ce93e2fc0c23b0c9886b9c9b"
+      - name: Probe collision-safe joins
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT=results/tabzilla-meta-join-probe-260929
+          rm -rf "$OUT" && mkdir -p "$OUT"
+          python - <<'PY'
+          import pandas as pd, numpy as np, re, json
+          from pathlib import Path
+          out=Path('results/tabzilla-meta-join-probe-260929')
+          clean=pd.read_csv('tabzilla-src/tabzilla_analysis/final-selected18-algs/cleaned_results/tuned_aggregated_results.csv')
+          clean=clean[['dataset_name']].drop_duplicates().copy()
+          clean['task_id']=clean.dataset_name.str.extract(r'__(\d+)$')[0].astype(int)
+          clean['base']=clean.dataset_name.str.replace(r'^openml__','',regex=True).str.replace(r'__\d+$','',regex=True)
+          meta=pd.read_csv('tabzilla-src/TabSurvey/metafeatures.csv',usecols=['dataset_name'])
+          def norm(x):
+              x=str(x).strip().lower()
+              x=re.sub(r'^openml[_:/ -]*','',x)
+              x=re.sub(r'__\d+$','',x)
+              x=re.sub(r'[^a-z0-9]+','-',x).strip('-')
+              return x
+          clean['norm']=clean.base.map(norm)
+          meta['norm']=meta.dataset_name.map(norm)
+          meta.to_csv(out/'meta_dataset_names.csv',index=False)
+          clean.to_csv(out/'clean_task_names.csv',index=False)
+          # Exact basename join and normalized join, preserving all collisions.
+          exact=clean.merge(meta,left_on='base',right_on='dataset_name',how='left',suffixes=('_clean','_meta'))
+          normj=clean.merge(meta,on='norm',how='left',suffixes=('_clean','_meta'))
+          exact.to_csv(out/'exact_join.csv',index=False)
+          normj.to_csv(out/'normalized_join.csv',index=False)
+          # Per-task candidate multiplicity.
+          mult=normj.groupby(['task_id','dataset_name_clean','base','norm'],dropna=False).agg(
+              candidate_rows=('dataset_name_meta','count'),
+              candidate_names=('dataset_name_meta',lambda x:' | '.join(sorted(set(x.dropna().astype(str)))))
+          ).reset_index()
+          mult.to_csv(out/'task_join_multiplicity.csv',index=False)
+          unmatched=mult[mult.candidate_rows.eq(0)]
+          ambiguous=mult[mult.candidate_rows.gt(1)]
+          unmatched.to_csv(out/'unmatched_tasks.csv',index=False)
+          ambiguous.to_csv(out/'ambiguous_tasks.csv',index=False)
+          clean_coll=(clean.groupby('norm').filter(lambda x:len(x)>1).sort_values(['norm','task_id']))
+          meta_coll=(meta.groupby('norm').filter(lambda x:len(x)>1).sort_values(['norm','dataset_name']))
+          clean_coll.to_csv(out/'clean_normalized_name_collisions.csv',index=False)
+          meta_coll.to_csv(out/'meta_normalized_name_collisions.csv',index=False)
+          summary={
+            'clean_tasks':len(clean),'meta_rows':len(meta),'meta_names_unique':int(meta.dataset_name.nunique()),
+            'exact_name_matched_tasks':int(exact.groupby('task_id').dataset_name_meta.apply(lambda x:x.notna().any()).sum()),
+            'normalized_matched_tasks':int((mult.candidate_rows>0).sum()),
+            'normalized_unique_match_tasks':int((mult.candidate_rows==1).sum()),
+            'normalized_unmatched_tasks':int((mult.candidate_rows==0).sum()),
+            'normalized_ambiguous_tasks':int((mult.candidate_rows>1).sum()),
+            'clean_tasks_in_normalized_name_collisions':int(len(clean_coll)),
+            'meta_rows_in_normalized_name_collisions':int(len(meta_coll)),
+            'meta_head':meta.head(25).dataset_name.tolist(),
+            'unmatched':unmatched[['task_id','dataset_name_clean','base']].to_dict(orient='records'),
+            'ambiguous':ambiguous[['task_id','dataset_name_clean','candidate_rows','candidate_names']].to_dict(orient='records'),
+          }
+          (out/'summary.json').write_text(json.dumps(summary,indent=2)+'\n')
+          lines=['# Historical metafeature join probe','',
+                 f"- Cleaned tasks: **{len(clean)}**",f"- Meta rows/names: **{len(meta)} / {meta.dataset_name.nunique()}**",
+                 f"- Exact basename matched tasks: **{summary['exact_name_matched_tasks']}**",
+                 f"- Normalized matched tasks: **{summary['normalized_matched_tasks']}**",
+                 f"- Unique normalized matches: **{summary['normalized_unique_match_tasks']}**",
+                 f"- Unmatched: **{summary['normalized_unmatched_tasks']}**",
+                 f"- Ambiguous: **{summary['normalized_ambiguous_tasks']}**",'',
+                 '## First 25 historical meta dataset names','']+[f'- `{x}`' for x in summary['meta_head']]
+          if len(unmatched):
+              lines += ['', '## Unmatched tasks','']+[f"- {r.task_id}: `{r.base}`" for _,r in unmatched.iterrows()]
+          if len(ambiguous):
+              lines += ['', '## Ambiguous tasks','']+[f"- {r.task_id}: `{r.dataset_name_clean}` -> {r.candidate_names}" for _,r in ambiguous.iterrows()]
+          (out/'REPORT.md').write_text('\n'.join(lines)+'\n')
+          print((out/'REPORT.md').read_text())
+          PY
+          find "$OUT" -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > "$OUT/SHA256SUMS.txt"
+      - name: Commit results
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add results/tabzilla-meta-join-probe-260929
+          git commit -m 'Freeze TabZilla metafeature join probe [skip ci]' || true
+          git push origin HEAD:run/tabzilla-transport-260929
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tabzilla-meta-join-probe-260929
+          path: results/tabzilla-meta-join-probe-260929/
+          retention-days: 90
