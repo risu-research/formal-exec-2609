@@ -8,6 +8,8 @@ on:
       - '.github/workflows/tabzilla-final-audit-260929.yml'
       - 'runs/tabzilla-transport-260929/analyze.py'
       - 'runs/tabzilla-transport-260929/analyze_raw18.py'
+      - 'runs/tabzilla-transport-260929/audit_population.py'
+      - 'runs/tabzilla-transport-260929/compare_primary_raw.py'
       - 'runs/tabzilla-transport-260929/FINAL_TRIGGER.txt'
   workflow_dispatch:
 
@@ -56,9 +58,13 @@ jobs:
           RAW='tabzilla_analysis/results/tuned_aggregated_results.csv'
           test -f "tabzilla-src/$CLEAN"
           test -f "tabzilla-src/$RAW"
+          test -f tabzilla-src/scripts/DATASETS_A.sh
+          test -f tabzilla-src/scripts/DATASETS_B.sh
 
           CLEAN_BLOB=$(git -C tabzilla-src hash-object "$CLEAN")
           RAW_BLOB=$(git -C tabzilla-src hash-object "$RAW")
+          LIST_A_BLOB=$(git -C tabzilla-src hash-object scripts/DATASETS_A.sh)
+          LIST_B_BLOB=$(git -C tabzilla-src hash-object scripts/DATASETS_B.sh)
           test "$CLEAN_BLOB" = "6afbc26593d51fad95927729305ab3b98ab0e56a"
           test "$RAW_BLOB" = "63a9add515a5574a5f529757b071f3ee2d11d9da"
 
@@ -70,9 +76,25 @@ jobs:
             echo "cleaned_csv_git_blob=$CLEAN_BLOB"
             echo "raw_csv_path=$RAW"
             echo "raw_csv_git_blob=$RAW_BLOB"
+            echo "study_list_a_path=scripts/DATASETS_A.sh"
+            echo "study_list_a_git_blob=$LIST_A_BLOB"
+            echo "study_list_b_path=scripts/DATASETS_B.sh"
+            echo "study_list_b_git_blob=$LIST_B_BLOB"
           } > results/tabzilla-final-audit-260929/provenance/source_identity.txt
-          sha256sum "tabzilla-src/$CLEAN" "tabzilla-src/$RAW" > results/tabzilla-final-audit-260929/provenance/source_sha256.txt
-          wc -l "tabzilla-src/$CLEAN" "tabzilla-src/$RAW" > results/tabzilla-final-audit-260929/provenance/source_linecount.txt
+          sha256sum "tabzilla-src/$CLEAN" "tabzilla-src/$RAW" tabzilla-src/scripts/DATASETS_A.sh tabzilla-src/scripts/DATASETS_B.sh > results/tabzilla-final-audit-260929/provenance/source_sha256.txt
+          wc -l "tabzilla-src/$CLEAN" "tabzilla-src/$RAW" tabzilla-src/scripts/DATASETS_A.sh tabzilla-src/scripts/DATASETS_B.sh > results/tabzilla-final-audit-260929/provenance/source_linecount.txt
+
+      - name: Audit exact historical study population
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf results/tabzilla-final-audit-260929/population
+          python runs/tabzilla-transport-260929/audit_population.py \
+            --a tabzilla-src/scripts/DATASETS_A.sh \
+            --b tabzilla-src/scripts/DATASETS_B.sh \
+            --raw tabzilla-src/tabzilla_analysis/results/tuned_aggregated_results.csv \
+            --clean tabzilla-src/tabzilla_analysis/final-selected18-algs/cleaned_results/tuned_aggregated_results.csv \
+            --out results/tabzilla-final-audit-260929/population
 
       - name: Run authoritative cleaned 18-algorithm task-level audit
         shell: bash
@@ -95,6 +117,16 @@ jobs:
             --out results/tabzilla-final-audit-260929/raw18 \
             --boot 5000 \
             --perm 10000
+
+      - name: Compare primary and raw interaction matrices
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf results/tabzilla-final-audit-260929/primary_raw_alignment
+          python runs/tabzilla-transport-260929/compare_primary_raw.py \
+            --clean results/tabzilla-final-audit-260929/cleaned18/pairwise_interaction_matrix.csv \
+            --raw results/tabzilla-final-audit-260929/raw18/pairwise_raw18.csv \
+            --out results/tabzilla-final-audit-260929/primary_raw_alignment
 
       - name: Freeze execution metadata
         shell: bash
@@ -127,11 +159,15 @@ jobs:
           root=pathlib.Path('results/tabzilla-final-audit-260929')
           clean=json.loads((root/'cleaned18'/'summary.json').read_text())
           raw=json.loads((root/'raw18'/'summary.json').read_text())
+          pop=json.loads((root/'population'/'summary.json').read_text())
+          align=json.loads((root/'primary_raw_alignment'/'summary.json').read_text())
           manifest={
             'analysis':'Historical TabZilla CC18-vs-outside task-level interaction audit',
             'authoritative_primary':'cleaned18',
             'primary_summary':clean,
             'raw_robustness_summary':raw,
+            'population_provenance_summary':pop,
+            'primary_raw_alignment_summary':align,
             'guardrail':'Descriptive fixed-matrix interaction audit; not a causal effect of CC18 curation.'
           }
           (root/'MANIFEST.json').write_text(json.dumps(manifest,indent=2)+'\n')
