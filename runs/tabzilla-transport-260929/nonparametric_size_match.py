@@ -35,10 +35,9 @@ def optimal_match_1d(z_cc,z_out,caliper):
     # maximize number of matched pairs under caliper, then minimize total |z_i-z_j|.
     ic=np.argsort(z_cc); io=np.argsort(z_out); a=z_cc[ic]; b=z_out[io]
     m,n=len(a),len(b)
-    # score[k] = (matches, cost); store full DP because m,n <= 58.
     nm=np.zeros((m+1,n+1),dtype=np.int16)
     cost=np.zeros((m+1,n+1),dtype=float)
-    prev=np.zeros((m+1,n+1),dtype=np.int8) # 1 skip a, 2 skip b, 3 match
+    prev=np.zeros((m+1,n+1),dtype=np.int8)
     def better(ma,ca,mb,cb):
         return (ma>mb) or (ma==mb and ca<cb-1e-14)
     for i in range(1,m+1): prev[i,0]=1
@@ -99,13 +98,13 @@ def contiguous_blocks(z,block_size):
 
 def one_scheme(R,z,M,task_ids,raw_vec,caliper,B,boot,seed):
     cc=np.flatnonzero(M==0); out=np.flatnonzero(M==1)
-    pc=optimal_match_1d(z[cc],z[out],caliper)
-    if len(pc)<2:return {'pairs':len(pc),'caliper_sd':None if np.isinf(caliper) else float(caliper)}
+    pc,total_cost=optimal_match_1d(z[cc],z[out],caliper)
+    if len(pc)<2:return {'pairs':len(pc),'caliper_sd':None if np.isinf(caliper) else float(caliper),'total_abs_pair_gap_sd':float(total_cost)}
     ci=np.array([cc[i] for i,j in pc],int); oi=np.array([out[j] for i,j in pc],int)
     D=R[oi]-R[ci]; T,p,bootci,d=signflip_stats(D,B,boot,seed)
     gaps=np.abs(z[oi]-z[ci]); smd=float(z[oi].mean()-z[ci].mean())
     denom=np.linalg.norm(d)*np.linalg.norm(raw_vec); cosine=float(np.dot(d,raw_vec)/denom) if denom>1e-15 else np.nan
-    return {'pairs':int(len(pc)),'caliper_sd':None if np.isinf(caliper) else float(caliper),
+    return {'pairs':int(len(pc)),'caliper_sd':None if np.isinf(caliper) else float(caliper),'total_abs_pair_gap_sd':float(total_cost),
             'matched_size_smd_outside_minus_cc18':smd,'mean_abs_pair_gap_sd':float(gaps.mean()),'median_abs_pair_gap_sd':float(np.median(gaps)),'max_abs_pair_gap_sd':float(gaps.max()),
             'matched_T':T,'paired_signflip_p':p,'paired_bootstrap_T_q025_q50_q975':bootci,'matched_vs_raw_vector_cosine':cosine,
             'cc18_task_ids':[int(task_ids[i]) for i in ci],'outside_task_ids':[int(task_ids[i]) for i in oi]}
@@ -139,12 +138,11 @@ def main():
     for bs in [4,6,8,10,12]:
         bins=contiguous_blocks(zc,bs)
         strata[f'contiguous_block_{bs}']=stratified_perm(R,Mc,bins,a.perm,2609303000+bs)
-    raw_all=membership_vector(R,Mc); rawT=pair_rms(raw_all)
-    # Balance table across matching schemes, all18 matching is outcome-independent and common across subsets.
+    # Balance table across matching schemes; matching is outcome-independent and common across subsets.
     balance=[]
     for key,r in results['all18']['matching'].items():
         if r.get('pairs',0)>=2:
-            balance.append({'scheme':key,'pairs':r['pairs'],'size_smd':r['matched_size_smd_outside_minus_cc18'],'mean_abs_gap_sd':r['mean_abs_pair_gap_sd'],'max_abs_gap_sd':r['max_abs_pair_gap_sd']})
+            balance.append({'scheme':key,'pairs':r['pairs'],'size_smd':r['matched_size_smd_outside_minus_cc18'],'mean_abs_gap_sd':r['mean_abs_pair_gap_sd'],'max_abs_gap_sd':r['max_abs_pair_gap_sd'],'total_abs_gap_sd':r['total_abs_pair_gap_sd']})
     pd.DataFrame(balance).to_csv(out/'matching_balance.csv',index=False)
     pd.DataFrame({'task_id':idc,'membership':['CC18' if x==0 else 'outside' for x in Mc],'historical_fold_median_nr_inst':n[cs],'log_nr_inst':logn[cs],'z_log_nr_inst':zc}).to_csv(out/'common_support_tasks.csv',index=False)
     summary={'design':'Outcome-blind 1-D size matching on strict empirical common support; all calipers prespecified and reported.',
