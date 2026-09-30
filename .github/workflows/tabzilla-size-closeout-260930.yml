@@ -53,13 +53,9 @@ jobs:
           test -f "tabzilla-src/$META"
           test "$(git -C tabzilla-src hash-object "$CLEAN")" = "6afbc26593d51fad95927729305ab3b98ab0e56a"
           test "$(git -C tabzilla-src hash-object "$META")" = "a0408b880be9d474ce93e2fc0c23b0c9886b9c9b"
-          mkdir -p results/tabzilla-size-bridge-260930/provenance results/tabzilla-size-match-260930/provenance
-          sha256sum "tabzilla-src/$CLEAN" "tabzilla-src/$META" > /tmp/source_sha256.txt
-          cp /tmp/source_sha256.txt results/tabzilla-size-bridge-260930/provenance/source_sha256.txt
-          cp /tmp/source_sha256.txt results/tabzilla-size-match-260930/provenance/source_sha256.txt
-          git -C tabzilla-src show -s --format=fuller HEAD > /tmp/source_commit.txt
-          cp /tmp/source_commit.txt results/tabzilla-size-bridge-260930/provenance/source_commit.txt
-          cp /tmp/source_commit.txt results/tabzilla-size-match-260930/provenance/source_commit.txt
+          mkdir -p results/tabzilla-size-closeout-260930/diagnostics
+          sha256sum "tabzilla-src/$CLEAN" "tabzilla-src/$META" > results/tabzilla-size-closeout-260930/diagnostics/source_sha256.txt
+          git -C tabzilla-src show -s --format=fuller HEAD > results/tabzilla-size-closeout-260930/diagnostics/source_commit.txt
 
       - name: Verify frozen analysis scripts
         shell: bash
@@ -67,26 +63,98 @@ jobs:
           set -euo pipefail
           test -f runs/tabzilla-transport-260929/size_bridge_analysis.py
           test -f runs/tabzilla-transport-260929/nonparametric_size_match.py
-          sha256sum runs/tabzilla-transport-260929/size_bridge_analysis.py runs/tabzilla-transport-260929/nonparametric_size_match.py | tee /tmp/analysis_scripts_sha256.txt
-          cp /tmp/analysis_scripts_sha256.txt results/tabzilla-size-bridge-260930/provenance/analysis_scripts_sha256.txt
-          cp /tmp/analysis_scripts_sha256.txt results/tabzilla-size-match-260930/provenance/analysis_scripts_sha256.txt
+          python -m py_compile runs/tabzilla-transport-260929/size_bridge_analysis.py
+          python -m py_compile runs/tabzilla-transport-260929/nonparametric_size_match.py
+          sha256sum runs/tabzilla-transport-260929/size_bridge_analysis.py runs/tabzilla-transport-260929/nonparametric_size_match.py | tee results/tabzilla-size-closeout-260930/diagnostics/analysis_scripts_sha256.txt
 
-      - name: Run parametric size bridge
+      - name: Parametric size-bridge diagnostic preflight
+        shell: bash
+        run: |
+          set -uo pipefail
+          D=results/tabzilla-size-closeout-260930/diagnostics
+          rm -rf results/tabzilla-size-bridge-preflight-260930
+          set +e
+          python -u runs/tabzilla-transport-260929/size_bridge_analysis.py \
+            --clean tabzilla-src/tabzilla_analysis/final-selected18-algs/cleaned_results/tuned_aggregated_results.csv \
+            --meta tabzilla-src/TabSurvey/metafeatures.csv \
+            --out results/tabzilla-size-bridge-preflight-260930 \
+            --perm 100 > "$D/parametric_preflight.log" 2>&1
+          rc=$?
+          set -e
+          echo "$rc" > "$D/parametric_preflight_exit_code.txt"
+          cat "$D/parametric_preflight.log"
+          echo "parametric_preflight_rc=$rc"
+          exit 0
+
+      - name: Nonparametric size-match diagnostic preflight
+        shell: bash
+        run: |
+          set -uo pipefail
+          D=results/tabzilla-size-closeout-260930/diagnostics
+          rm -rf results/tabzilla-size-match-preflight-260930
+          set +e
+          python -u runs/tabzilla-transport-260929/nonparametric_size_match.py \
+            --clean tabzilla-src/tabzilla_analysis/final-selected18-algs/cleaned_results/tuned_aggregated_results.csv \
+            --meta tabzilla-src/TabSurvey/metafeatures.csv \
+            --out results/tabzilla-size-match-preflight-260930 \
+            --perm 100 --boot 100 > "$D/nonparametric_preflight.log" 2>&1
+          rc=$?
+          set -e
+          echo "$rc" > "$D/nonparametric_preflight_exit_code.txt"
+          cat "$D/nonparametric_preflight.log"
+          echo "nonparametric_preflight_rc=$rc"
+          exit 0
+
+      - name: Upload diagnostic preflight artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tabzilla-size-closeout-diagnostics-260930
+          path: |
+            results/tabzilla-size-closeout-260930/diagnostics/
+            results/tabzilla-size-bridge-preflight-260930/
+            results/tabzilla-size-match-preflight-260930/
+          if-no-files-found: warn
+          retention-days: 90
+
+      - name: Gate full closeout on both preflights
         shell: bash
         run: |
           set -euo pipefail
-          rm -rf results/tabzilla-size-bridge-260930/analysis
+          D=results/tabzilla-size-closeout-260930/diagnostics
+          prc="$(cat "$D/parametric_preflight_exit_code.txt")"
+          nrc="$(cat "$D/nonparametric_preflight_exit_code.txt")"
+          echo "parametric_preflight_rc=$prc"
+          echo "nonparametric_preflight_rc=$nrc"
+          if [ "$prc" != "0" ] || [ "$nrc" != "0" ]; then
+            echo "At least one diagnostic preflight failed; stopping before full inference."
+            exit 1
+          fi
+
+      - name: Run full parametric size bridge
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf results/tabzilla-size-bridge-260930
+          mkdir -p results/tabzilla-size-bridge-260930/provenance
+          cp results/tabzilla-size-closeout-260930/diagnostics/source_sha256.txt results/tabzilla-size-bridge-260930/provenance/source_sha256.txt
+          cp results/tabzilla-size-closeout-260930/diagnostics/source_commit.txt results/tabzilla-size-bridge-260930/provenance/source_commit.txt
+          cp results/tabzilla-size-closeout-260930/diagnostics/analysis_scripts_sha256.txt results/tabzilla-size-bridge-260930/provenance/analysis_scripts_sha256.txt
           python runs/tabzilla-transport-260929/size_bridge_analysis.py \
             --clean tabzilla-src/tabzilla_analysis/final-selected18-algs/cleaned_results/tuned_aggregated_results.csv \
             --meta tabzilla-src/TabSurvey/metafeatures.csv \
             --out results/tabzilla-size-bridge-260930/analysis \
             --perm 50000
 
-      - name: Run nonparametric size-matched common-support sensitivity
+      - name: Run full nonparametric size-matched common-support sensitivity
         shell: bash
         run: |
           set -euo pipefail
-          rm -rf results/tabzilla-size-match-260930/analysis
+          rm -rf results/tabzilla-size-match-260930
+          mkdir -p results/tabzilla-size-match-260930/provenance
+          cp results/tabzilla-size-closeout-260930/diagnostics/source_sha256.txt results/tabzilla-size-match-260930/provenance/source_sha256.txt
+          cp results/tabzilla-size-closeout-260930/diagnostics/source_commit.txt results/tabzilla-size-match-260930/provenance/source_commit.txt
+          cp results/tabzilla-size-closeout-260930/diagnostics/analysis_scripts_sha256.txt results/tabzilla-size-match-260930/provenance/analysis_scripts_sha256.txt
           python runs/tabzilla-transport-260929/nonparametric_size_match.py \
             --clean tabzilla-src/tabzilla_analysis/final-selected18-algs/cleaned_results/tuned_aggregated_results.csv \
             --meta tabzilla-src/TabSurvey/metafeatures.csv \
