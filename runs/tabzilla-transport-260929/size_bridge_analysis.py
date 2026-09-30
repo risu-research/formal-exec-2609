@@ -96,7 +96,7 @@ def main():
     c=pd.read_csv(a.clean); c['task_id']=c.dataset_name.map(task_clean).astype(int); P=c.pivot(index='task_id',columns='alg_name',values='Accuracy__test_mean').sort_index(); assert P.notna().all().all()
     m=pd.read_csv(a.meta,usecols=['dataset_name','f__pymfe.general.nr_inst']); pr=m.dataset_name.map(task_meta); m['task_id']=[x[0] for x in pr]; m['fold']=[x[1] for x in pr]; assert m.task_id.notna().all(); m.task_id=m.task_id.astype(int)
     S=m.groupby('task_id')['f__pymfe.general.nr_inst'].median(); ids=sorted(set(P.index)&set(S.index)); assert len(ids)==len(P)==104
-    P=P.loc[ids]; n=S.loc[ids].to_numpy(float); logn=np.log1p(n); z=(logn-logn.mean())/logn.std(ddof=1); M=np.array([int(t not in CC18) for t in ids],int); algs=list(P.columns); Rfull=P.to_numpy(float); Rfull-=Rfull.mean(axis=1,keepdims=True)
+    P=P.loc[ids]; n=S.loc[ids].to_numpy(float); logn=np.log1p(n); z=(logn-logn.mean())/logn.std(ddof=1); M=np.array([int(t not in CC18) for t in ids],int); algs=list(P.columns); Rfull=P.to_numpy(dtype=float,copy=True); Rfull-=Rfull.mean(axis=1,keepdims=True)
     subsets={'all18':algs,'minus_TabNet':[x for x in algs if x!='TabNet'],'minus_VIME':[x for x in algs if x!='VIME'],'minus_TabNet_VIME':[x for x in algs if x not in {'TabNet','VIME'}],'classical4':[x for x in ['CatBoost','LightGBM','RandomForest','XGBoost'] if x in algs]}
     res={k:subset(Rfull.copy(),algs,v,z,M,a.perm,260929500+i*10) for i,(k,v) in enumerate(subsets.items())}
     # Coarsened size-conditional permutation for all18 (and two key sensitivities).
