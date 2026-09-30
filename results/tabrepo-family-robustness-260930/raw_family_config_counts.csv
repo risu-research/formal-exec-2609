@@ -1,0 +1,8 @@
+family,n_configs
+NeuralNetTorch,204
+LightGBM,203
+CatBoost,201
+ExtraTrees,201
+RandomForest,201
+LinearModel,52
+XGBoost,28

@@ -1,0 +1,97 @@
+{
+  "status": "post-hoc robustness, not preregistered",
+  "family_rule": "strip terminal _rN_BAG_L1, _cN_BAG_L1, or _BAG_L1",
+  "raw_frame": {
+    "tasks": 117,
+    "families": 7,
+    "family_names": [
+      "CatBoost",
+      "ExtraTrees",
+      "LightGBM",
+      "LinearModel",
+      "NeuralNetTorch",
+      "RandomForest",
+      "XGBoost"
+    ],
+    "cc18": 14,
+    "outside": 103,
+    "common_tasks": 110,
+    "tests": {
+      "raw": {
+        "unadjusted": {
+          "stat_l2": 0.0006218469642280987,
+          "p_l2": 0.5147742612869357,
+          "permutations": 20000
+        },
+        "common_support": {
+          "stat_l2": 0.0007153139432277224,
+          "p_l2": 0.47827608619569023,
+          "permutations": 20000
+        }
+      },
+      "normalized": {
+        "unadjusted": {
+          "stat_l2": 0.09286117921355637,
+          "p_l2": 0.03134843257837108,
+          "permutations": 20000
+        },
+        "common_support": {
+          "stat_l2": 0.09878145816312926,
+          "p_l2": 0.023648817559122043,
+          "permutations": 20000
+        }
+      },
+      "rank": {
+        "unadjusted": {
+          "stat_l2": 3.0643975754124795,
+          "p_l2": 0.02369881505924704,
+          "permutations": 20000
+        },
+        "common_support": {
+          "stat_l2": 3.1686950821995454,
+          "p_l2": 0.021498925053747314,
+          "permutations": 20000
+        }
+      }
+    }
+  },
+  "classification_frame": {
+    "tasks": 211,
+    "families": 4,
+    "family_names": [
+      "LightGBM",
+      "LinearModel",
+      "NeuralNetTorch",
+      "XGBoost"
+    ],
+    "cc18": 31,
+    "outside": 180,
+    "common_tasks": 194,
+    "tests": {
+      "normalized": {
+        "unadjusted": {
+          "stat_l2": 0.021509226709126757,
+          "p_l2": 0.2359882005899705,
+          "permutations": 20000
+        },
+        "common_support": {
+          "stat_l2": 0.0256968995215867,
+          "p_l2": 0.1767411629418529,
+          "permutations": 20000
+        }
+      },
+      "rank": {
+        "unadjusted": {
+          "stat_l2": 0.16379143060854823,
+          "p_l2": 0.2914354282285886,
+          "permutations": 20000
+        },
+        "common_support": {
+          "stat_l2": 0.18526945076822535,
+          "p_l2": 0.24023798810059496,
+          "permutations": 20000
+        }
+      }
+    }
+  }
+}

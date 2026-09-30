@@ -1,0 +1,5 @@
+family,n_configs
+NeuralNetTorch,202
+LightGBM,159
+LinearModel,52
+XGBoost,24
