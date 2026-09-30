@@ -1,0 +1,96 @@
+name: tabzilla-size-bridge-oneshot-260929
+
+on:
+  push:
+    branches:
+      - run/tabzilla-transport-260929
+    paths:
+      - '.github/workflows/tabzilla-size-bridge-oneshot-260929.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: tabzilla-size-bridge-oneshot-260929
+  cancel-in-progress: false
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: run/tabzilla-transport-260929
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11.16'
+      - name: Install pinned dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip==26.2.1
+          pip install numpy==2.4.6 pandas==3.0.6
+      - name: Fetch and verify exact historical TabZilla source
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf tabzilla-src
+          git init tabzilla-src
+          git -C tabzilla-src remote add origin https://github.com/naszilla/tabzilla.git
+          git -C tabzilla-src fetch --depth=1 origin feca5e554148bdc4ac17c3379984c2a71244cd32
+          git -C tabzilla-src checkout --detach FETCH_HEAD
+          CLEAN='tabzilla_analysis/final-selected18-algs/cleaned_results/tuned_aggregated_results.csv'
+          META='TabSurvey/metafeatures.csv'
+          test "$(git -C tabzilla-src rev-parse HEAD)" = "feca5e554148bdc4ac17c3379984c2a71244cd32"
+          test "$(git -C tabzilla-src hash-object "$CLEAN")" = "6afbc26593d51fad95927729305ab3b98ab0e56a"
+          test "$(git -C tabzilla-src hash-object "$META")" = "a0408b880be9d474ce93e2fc0c23b0c9886b9c9b"
+          mkdir -p results/tabzilla-size-bridge-260929/provenance
+          sha256sum "tabzilla-src/$CLEAN" "tabzilla-src/$META" > results/tabzilla-size-bridge-260929/provenance/source_sha256.txt
+      - name: Run frozen task-size bridge analysis
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf results/tabzilla-size-bridge-260929/analysis
+          python runs/tabzilla-transport-260929/size_bridge_analysis.py \
+            --clean tabzilla-src/tabzilla_analysis/final-selected18-algs/cleaned_results/tuned_aggregated_results.csv \
+            --meta tabzilla-src/TabSurvey/metafeatures.csv \
+            --out results/tabzilla-size-bridge-260929/analysis \
+            --perm 50000
+      - name: Freeze provenance and checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "runner_repository=${GITHUB_REPOSITORY}"
+            echo "runner_branch=${GITHUB_REF_NAME}"
+            echo "runner_run_id=${GITHUB_RUN_ID}"
+            echo "runner_sha=${GITHUB_SHA}"
+            echo "source_commit=feca5e554148bdc4ac17c3379984c2a71244cd32"
+            echo "analysis_script_sha256=$(sha256sum runs/tabzilla-transport-260929/size_bridge_analysis.py | cut -d' ' -f1)"
+            echo "python=$(python --version 2>&1)"
+            python - <<'PY'
+          import numpy,pandas
+          print('numpy='+numpy.__version__)
+          print('pandas='+pandas.__version__)
+          PY
+          } > results/tabzilla-size-bridge-260929/provenance/execution_environment.txt
+          find results/tabzilla-size-bridge-260929 -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > results/tabzilla-size-bridge-260929/SHA256SUMS.txt
+      - name: Commit frozen results
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add results/tabzilla-size-bridge-260929
+          if ! git diff --cached --quiet; then
+            git commit -m 'Freeze TabZilla task-size bridge [skip ci]'
+            git push origin HEAD:run/tabzilla-transport-260929
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tabzilla-size-bridge-oneshot-260929
+          path: results/tabzilla-size-bridge-260929/
+          if-no-files-found: error
+          retention-days: 90
