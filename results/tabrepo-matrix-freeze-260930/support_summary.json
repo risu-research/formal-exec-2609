@@ -1,0 +1,21 @@
+{
+  "n_classification_tasks": 211,
+  "n_cc18": 31,
+  "n_outside": 180,
+  "primary_raw_metric": "roc_auc",
+  "n_raw_metric_tasks": 117,
+  "n_raw_metric_cc18": 14,
+  "n_raw_metric_outside": 103,
+  "n_complete_frameworks_classification": 437,
+  "n_complete_frameworks_raw_metric": 1090,
+  "log1p_n_smd_cc18_minus_outside": -0.27966765550313205,
+  "log1p_n_ks": 0.16254480286738351,
+  "log1p_n_ks_p": 0.4361630541097983,
+  "common_support_log1p_n": [
+    6.2166061010848646,
+    11.475441642548555
+  ],
+  "n_common_support": 194,
+  "n_common_support_cc18": 31,
+  "n_common_support_outside": 163
+}
