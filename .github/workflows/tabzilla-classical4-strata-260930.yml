@@ -1,0 +1,62 @@
+name: tabzilla-classical4-strata-260930
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'runs/TRIGGER_TABZILLA_CLASSICAL4_STRATA_260930.txt'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: run/tabzilla-transport-260929
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11.16'
+      - run: pip install numpy==2.4.6 pandas==3.0.6
+      - name: Fetch exact historical source
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf tabzilla-src
+          git init tabzilla-src
+          git -C tabzilla-src remote add origin https://github.com/naszilla/tabzilla.git
+          git -C tabzilla-src fetch --depth=1 origin feca5e554148bdc4ac17c3379984c2a71244cd32
+          git -C tabzilla-src checkout --detach FETCH_HEAD
+          test "$(git -C tabzilla-src hash-object tabzilla_analysis/final-selected18-algs/cleaned_results/tuned_aggregated_results.csv)" = "6afbc26593d51fad95927729305ab3b98ab0e56a"
+          test "$(git -C tabzilla-src hash-object TabSurvey/metafeatures.csv)" = "a0408b880be9d474ce93e2fc0c23b0c9886b9c9b"
+      - name: Run targeted common-support strata test
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf results/tabzilla-classical4-strata-260930
+          python runs/tabzilla-transport-260929/classical4_common_support_strata.py \
+            --clean tabzilla-src/tabzilla_analysis/final-selected18-algs/cleaned_results/tuned_aggregated_results.csv \
+            --meta tabzilla-src/TabSurvey/metafeatures.csv \
+            --out results/tabzilla-classical4-strata-260930/analysis \
+            --perm 50000
+          mkdir -p results/tabzilla-classical4-strata-260930/provenance
+          sha256sum runs/tabzilla-transport-260929/classical4_common_support_strata.py > results/tabzilla-classical4-strata-260930/provenance/script_sha256.txt
+          sha256sum tabzilla-src/tabzilla_analysis/final-selected18-algs/cleaned_results/tuned_aggregated_results.csv tabzilla-src/TabSurvey/metafeatures.csv > results/tabzilla-classical4-strata-260930/provenance/source_sha256.txt
+          printf 'run_id=%s\nexecution_sha=%s\nsource_commit=%s\n' "$GITHUB_RUN_ID" "$(git rev-parse HEAD)" 'feca5e554148bdc4ac17c3379984c2a71244cd32' > results/tabzilla-classical4-strata-260930/provenance/execution.txt
+          find results/tabzilla-classical4-strata-260930 -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > results/tabzilla-classical4-strata-260930/SHA256SUMS.txt
+      - name: Freeze result
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add results/tabzilla-classical4-strata-260930
+          git commit -m 'Freeze classical4 common-support strata test [skip ci]' || true
+          git push origin HEAD:run/tabzilla-transport-260929
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tabzilla-classical4-strata-260930
+          path: results/tabzilla-classical4-strata-260930/
+          retention-days: 90
