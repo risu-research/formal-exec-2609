@@ -1,0 +1,160 @@
+name: tabzilla-final-audit-260929
+
+on:
+  push:
+    branches:
+      - run/tabzilla-transport-260929
+    paths:
+      - '.github/workflows/tabzilla-final-audit-260929.yml'
+      - 'runs/tabzilla-transport-260929/FINAL_TRIGGER.txt'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: tabzilla-final-audit-260929
+  cancel-in-progress: false
+
+jobs:
+  final-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout frozen public execution branch
+        uses: actions/checkout@v4
+        with:
+          ref: run/tabzilla-transport-260929
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install analysis dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          pip install numpy pandas scipy tabulate
+
+      - name: Fetch and verify exact historical TabZilla source
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf tabzilla-src
+          git init tabzilla-src
+          git -C tabzilla-src remote add origin https://github.com/naszilla/tabzilla.git
+          git -C tabzilla-src fetch --depth=1 origin feca5e554148bdc4ac17c3379984c2a71244cd32
+          git -C tabzilla-src checkout --detach FETCH_HEAD
+          ACTUAL_COMMIT=$(git -C tabzilla-src rev-parse HEAD)
+          test "$ACTUAL_COMMIT" = "feca5e554148bdc4ac17c3379984c2a71244cd32"
+
+          CLEAN='tabzilla_analysis/final-selected18-algs/cleaned_results/tuned_aggregated_results.csv'
+          RAW='tabzilla_analysis/results/tuned_aggregated_results.csv'
+          test -f "tabzilla-src/$CLEAN"
+          test -f "tabzilla-src/$RAW"
+
+          CLEAN_BLOB=$(git -C tabzilla-src hash-object "$CLEAN")
+          RAW_BLOB=$(git -C tabzilla-src hash-object "$RAW")
+          test "$CLEAN_BLOB" = "6afbc26593d51fad95927729305ab3b98ab0e56a"
+          test "$RAW_BLOB" = "63a9add515a5574a5f529757b071f3ee2d11d9da"
+
+          mkdir -p results/tabzilla-final-audit-260929/provenance
+          {
+            echo "source_repository=https://github.com/naszilla/tabzilla.git"
+            echo "source_commit=$ACTUAL_COMMIT"
+            echo "cleaned_csv_path=$CLEAN"
+            echo "cleaned_csv_git_blob=$CLEAN_BLOB"
+            echo "raw_csv_path=$RAW"
+            echo "raw_csv_git_blob=$RAW_BLOB"
+          } > results/tabzilla-final-audit-260929/provenance/source_identity.txt
+          sha256sum "tabzilla-src/$CLEAN" "tabzilla-src/$RAW" > results/tabzilla-final-audit-260929/provenance/source_sha256.txt
+          wc -l "tabzilla-src/$CLEAN" "tabzilla-src/$RAW" > results/tabzilla-final-audit-260929/provenance/source_linecount.txt
+
+      - name: Run authoritative cleaned 18-algorithm task-level audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf results/tabzilla-final-audit-260929/cleaned18
+          python runs/tabzilla-transport-260929/analyze.py \
+            --csv tabzilla-src/tabzilla_analysis/final-selected18-algs/cleaned_results/tuned_aggregated_results.csv \
+            --out results/tabzilla-final-audit-260929/cleaned18 \
+            --boot 5000 \
+            --perm 10000
+
+      - name: Run raw-matrix robustness audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf results/tabzilla-final-audit-260929/raw18
+          python runs/tabzilla-transport-260929/analyze_raw18.py \
+            --csv tabzilla-src/tabzilla_analysis/results/tuned_aggregated_results.csv \
+            --out results/tabzilla-final-audit-260929/raw18 \
+            --boot 5000 \
+            --perm 10000
+
+      - name: Freeze execution metadata and checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p results/tabzilla-final-audit-260929/provenance
+          {
+            echo "runner_repository=${GITHUB_REPOSITORY}"
+            echo "runner_branch=${GITHUB_REF_NAME}"
+            echo "runner_workflow=${GITHUB_WORKFLOW}"
+            echo "runner_run_id=${GITHUB_RUN_ID}"
+            echo "runner_run_attempt=${GITHUB_RUN_ATTEMPT}"
+            echo "runner_sha=${GITHUB_SHA}"
+            echo "python=$(python --version 2>&1)"
+            python - <<'PY'
+          import numpy,pandas,scipy
+          print('numpy='+numpy.__version__)
+          print('pandas='+pandas.__version__)
+          print('scipy='+scipy.__version__)
+          PY
+          } > results/tabzilla-final-audit-260929/provenance/execution_environment.txt
+          find results/tabzilla-final-audit-260929 -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > results/tabzilla-final-audit-260929/SHA256SUMS.txt
+
+      - name: Build compact top-level manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, pathlib
+          root=pathlib.Path('results/tabzilla-final-audit-260929')
+          clean=json.loads((root/'cleaned18'/'summary.json').read_text())
+          raw_path=root/'raw18'/'summary.json'
+          raw=json.loads(raw_path.read_text()) if raw_path.exists() else None
+          manifest={
+            'analysis':'Historical TabZilla CC18-vs-outside task-level interaction audit',
+            'authoritative_primary':'cleaned18',
+            'primary_summary':clean,
+            'raw_robustness_summary':raw,
+            'guardrail':'Descriptive fixed-matrix interaction audit; not a causal effect of CC18 curation.'
+          }
+          (root/'MANIFEST.json').write_text(json.dumps(manifest,indent=2)+'\n')
+          print(json.dumps(manifest,indent=2))
+          PY
+
+      - name: Commit compact frozen results to execution branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add results/tabzilla-final-audit-260929
+          if git diff --cached --quiet; then
+            echo 'No result changes to commit.'
+          else
+            git commit -m 'Freeze TabZilla historical interaction audit [skip ci]'
+            git push origin HEAD:run/tabzilla-transport-260929
+          fi
+
+      - name: Upload frozen audit bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: tabzilla-final-audit-260929
+          path: results/tabzilla-final-audit-260929/
+          if-no-files-found: error
+          retention-days: 90
