@@ -1,0 +1,82 @@
+{
+  "rows": 1106432,
+  "columns": [
+    "dataset",
+    "tid",
+    "fold",
+    "framework",
+    "metric_error",
+    "metric_error_val",
+    "metric",
+    "problem_type",
+    "time_train_s",
+    "time_infer_s"
+  ],
+  "dtypes": {
+    "dataset": "object",
+    "tid": "int64",
+    "fold": "int64",
+    "framework": "object",
+    "metric_error": "float64",
+    "metric_error_val": "float64",
+    "metric": "object",
+    "problem_type": "object",
+    "time_train_s": "float64",
+    "time_infer_s": "float64"
+  },
+  "identifier_candidates": [
+    "dataset",
+    "tid",
+    "fold",
+    "framework",
+    "metric_error",
+    "metric_error_val",
+    "metric",
+    "problem_type"
+  ],
+  "outcome_like_columns_not_inspected_for_values": [
+    "metric_error",
+    "metric_error_val",
+    "time_train_s",
+    "time_infer_s"
+  ],
+  "metadata_rows": 244,
+  "metadata_columns": [
+    "tid",
+    "ttid",
+    "did",
+    "name",
+    "task_type",
+    "status",
+    "estimation_procedure",
+    "evaluation_measures",
+    "source_data",
+    "target_feature",
+    "MajorityClassSize",
+    "MaxNominalAttDistinctValues",
+    "MinorityClassSize",
+    "NumberOfClasses",
+    "NumberOfFeatures",
+    "NumberOfInstances",
+    "NumberOfInstancesWithMissingValues",
+    "NumberOfMissingValues",
+    "NumberOfNumericFeatures",
+    "NumberOfSymbolicFeatures",
+    "number_samples",
+    "cost_matrix",
+    "source_data_labeled",
+    "target_feature_event",
+    "target_feature_left",
+    "target_feature_right",
+    "quality_measure",
+    "target_value"
+  ],
+  "resolved_identifier_columns": {
+    "dataset": "dataset",
+    "tid": "tid",
+    "config": null,
+    "fold": "fold",
+    "metric": "metric",
+    "problem_type": "problem_type"
+  }
+}
