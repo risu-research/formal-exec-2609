@@ -2,3 +2,4 @@ Trigger targeted classical-4 common-support size-stratified permutation closeout
 Execution branch: run/tabzilla-transport-260929
 Execution script commit: 98e2e85b467506f6ad5cdb4cdf2e0daa90f542ec
 Historical source: feca5e554148bdc4ac17c3379984c2a71244cd32
+Workflow indexed after 4d8ed631a7ab2370a9de683328f0a5c40129e759; retrigger.
