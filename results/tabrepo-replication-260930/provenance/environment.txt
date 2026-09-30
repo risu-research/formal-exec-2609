@@ -1,0 +1,7 @@
+runner_sha=c38e7b605ac8a2a5c78b6d174ff1db7619302e41
+run_id=36664241243
+python=Python 3.11.16
+numpy=2.1.3
+pandas=2.2.3
+scipy=1.14.1
+pyarrow=18.1.0

@@ -1,0 +1,124 @@
+{
+  "source_parquet_sha256": "6d815d406e0a69d0c1ec1910ac1a9c5b0142ef821bb4a9a544244e006350836f",
+  "primary_raw_metric": "roc_auc",
+  "permutations": 20000,
+  "frames": {
+    "raw": {
+      "tasks": 117,
+      "cc18": 14,
+      "outside": 103,
+      "frameworks": 1090
+    },
+    "classification": {
+      "tasks": 211,
+      "cc18": 31,
+      "outside": 180,
+      "frameworks": 437
+    }
+  },
+  "Q1_support_shift": {
+    "classification_support": {
+      "log1p_n_smd_cc18_minus_outside": -0.27966765550313205,
+      "log1p_n_ks": 0.16254480286738351,
+      "log1p_n_ks_p": 0.4361630541097983,
+      "common_lo": 6.2166061010848646,
+      "common_hi": 11.475441642548557,
+      "n_common": 194,
+      "n_common_cc18": 31,
+      "n_common_outside": 163
+    },
+    "raw_metric_support": {
+      "log1p_n_smd_cc18_minus_outside": -0.4119535060020399,
+      "log1p_n_ks": 0.2926490984743412,
+      "log1p_n_ks_p": 0.1965605291072026,
+      "common_lo": 6.2166061010848646,
+      "common_hi": 11.475441642548557,
+      "n_common": 110,
+      "n_common_cc18": 14,
+      "n_common_outside": 96
+    }
+  },
+  "Q2_raw_interaction_support_control": {
+    "unadjusted_p_l2": 0.7410129493525324,
+    "unadjusted_p_max_abs": 0.4286785660716964,
+    "common_support_p_l2": 0.6900154992250388,
+    "effect_norm_ratio_common_to_unadjusted": 1.0057809638757678,
+    "stratified_p_l2": {
+      "3": 0.7300634968251587,
+      "4": 0.7205139743012849,
+      "5": 0.72026398680066
+    },
+    "freedman_lane_size_p_l2": 0.6393180340982951,
+    "freedman_lane_structural_p_l2": 0.6864656767161642
+  },
+  "Q3_matched_raw_frame": {
+    "raw": {
+      "unadjusted_p_l2": 0.7410129493525324,
+      "unadjusted_p_max_abs": 0.4286785660716964,
+      "common_support_p_l2": 0.6900154992250388,
+      "effect_norm_ratio_common_to_unadjusted": 1.0057809638757678,
+      "stratified_p_l2": {
+        "3": 0.7300634968251587,
+        "4": 0.7205139743012849,
+        "5": 0.72026398680066
+      },
+      "freedman_lane_size_p_l2": 0.6393180340982951,
+      "freedman_lane_structural_p_l2": 0.6864656767161642
+    },
+    "normalized": {
+      "unadjusted_p_l2": 0.23378831058447078,
+      "unadjusted_p_max_abs": 0.3180340982950852,
+      "common_support_p_l2": 0.2040397980100995,
+      "effect_norm_ratio_common_to_unadjusted": 1.0209697462086493,
+      "stratified_p_l2": {
+        "3": 0.23228838558072096,
+        "4": 0.20543972801359933,
+        "5": 0.21883905804709763
+      },
+      "freedman_lane_size_p_l2": 0.2647867606619669,
+      "freedman_lane_structural_p_l2": 0.16444177791110445
+    },
+    "rank": {
+      "unadjusted_p_l2": 0.20443977801109944,
+      "unadjusted_p_max_abs": 0.3462826858657067,
+      "common_support_p_l2": 0.20898955052247387,
+      "effect_norm_ratio_common_to_unadjusted": 0.9974859433792331,
+      "stratified_p_l2": {
+        "3": 0.24303784810759463,
+        "4": 0.21573921303934804,
+        "5": 0.22703864806759663
+      },
+      "freedman_lane_size_p_l2": 0.29668516574171294,
+      "freedman_lane_structural_p_l2": 0.23973801309934503
+    }
+  },
+  "Q3_full_classification": {
+    "normalized": {
+      "unadjusted_p_l2": 0.2111894405279736,
+      "unadjusted_p_max_abs": 0.5313234338283086,
+      "common_support_p_l2": 0.20668966551672416,
+      "effect_norm_ratio_common_to_unadjusted": 1.0026462402180794,
+      "stratified_p_l2": {
+        "3": 0.2024398780060997,
+        "4": 0.18774061296935154,
+        "5": 0.19189040547972602
+      },
+      "freedman_lane_size_p_l2": 0.21178941052947353,
+      "freedman_lane_structural_p_l2": 0.41622918854057295
+    },
+    "rank": {
+      "unadjusted_p_l2": 0.25498725063746813,
+      "unadjusted_p_max_abs": 0.2749862506874656,
+      "common_support_p_l2": 0.18304084795760212,
+      "effect_norm_ratio_common_to_unadjusted": 1.076882104952395,
+      "stratified_p_l2": {
+        "3": 0.17969101544922753,
+        "4": 0.1688915554222289,
+        "5": 0.18034098295085246
+      },
+      "freedman_lane_size_p_l2": 0.1638918054097295,
+      "freedman_lane_structural_p_l2": 0.19474026298685065
+    }
+  },
+  "guardrail": "Finite-frame observational benchmark-membership contrasts; no causal interpretation of CC18 membership."
+}
