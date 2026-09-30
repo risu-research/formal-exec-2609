@@ -1,0 +1,122 @@
+name: tabzilla-mechanism-260930
+
+on:
+  push:
+    branches:
+      - run/tabzilla-mechanism-260930
+    paths:
+      - '.github/workflows/tabzilla-mechanism-260930.yml'
+      - 'runs/tabzilla-mechanism-260930/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: tabzilla-mechanism-260930
+  cancel-in-progress: false
+
+jobs:
+  mechanism-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout mechanism branch
+        uses: actions/checkout@v4
+        with:
+          ref: run/tabzilla-mechanism-260930
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11.16'
+
+      - name: Install pinned analysis dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip==26.2.1
+          pip install numpy==2.4.6 pandas==3.0.6 scipy==1.17.1 tabulate==0.10.0
+
+      - name: Fetch and verify exact historical TabZilla source
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf tabzilla-src
+          git init tabzilla-src
+          git -C tabzilla-src remote add origin https://github.com/naszilla/tabzilla.git
+          git -C tabzilla-src fetch --depth=1 origin feca5e554148bdc4ac17c3379984c2a71244cd32
+          git -C tabzilla-src checkout --detach FETCH_HEAD
+          test "$(git -C tabzilla-src rev-parse HEAD)" = "feca5e554148bdc4ac17c3379984c2a71244cd32"
+
+          CLEAN='tabzilla_analysis/final-selected18-algs/cleaned_results/tuned_aggregated_results.csv'
+          META='TabSurvey/metafeatures.csv'
+          test -f "tabzilla-src/$CLEAN"
+          test -f "tabzilla-src/$META"
+          test "$(git -C tabzilla-src hash-object "$CLEAN")" = "6afbc26593d51fad95927729305ab3b98ab0e56a"
+          test "$(git -C tabzilla-src hash-object "$META")" = "a0408b880be9d474ce93e2fc0c23b0c9886b9c9b"
+
+          mkdir -p results/tabzilla-mechanism-260930/provenance
+          {
+            echo "source_commit=$(git -C tabzilla-src rev-parse HEAD)"
+            echo "clean_blob=$(git -C tabzilla-src hash-object "$CLEAN")"
+            echo "meta_blob=$(git -C tabzilla-src hash-object "$META")"
+          } > results/tabzilla-mechanism-260930/provenance/source_identity.txt
+          sha256sum "tabzilla-src/$CLEAN" "tabzilla-src/$META" > results/tabzilla-mechanism-260930/provenance/source_sha256.txt
+          wc -l "tabzilla-src/$CLEAN" "tabzilla-src/$META" > results/tabzilla-mechanism-260930/provenance/source_linecount.txt
+
+      - name: Run omnibus interaction and historical metafeature selection audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf results/tabzilla-mechanism-260930/audit
+          python runs/tabzilla-mechanism-260930/audit_selection.py \
+            --clean tabzilla-src/tabzilla_analysis/final-selected18-algs/cleaned_results/tuned_aggregated_results.csv \
+            --meta tabzilla-src/TabSurvey/metafeatures.csv \
+            --out results/tabzilla-mechanism-260930/audit \
+            --perm 50000
+
+      - name: Freeze execution metadata and checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p results/tabzilla-mechanism-260930/provenance
+          {
+            echo "runner_repository=${GITHUB_REPOSITORY}"
+            echo "runner_branch=${GITHUB_REF_NAME}"
+            echo "runner_workflow=${GITHUB_WORKFLOW}"
+            echo "runner_run_id=${GITHUB_RUN_ID}"
+            echo "runner_run_attempt=${GITHUB_RUN_ATTEMPT}"
+            echo "runner_sha=${GITHUB_SHA}"
+            echo "python=$(python --version 2>&1)"
+            python - <<'PY'
+          import numpy,pandas,scipy,tabulate
+          print('numpy='+numpy.__version__)
+          print('pandas='+pandas.__version__)
+          print('scipy='+scipy.__version__)
+          print('tabulate='+tabulate.__version__)
+          PY
+          } > results/tabzilla-mechanism-260930/provenance/execution_environment.txt
+          find results/tabzilla-mechanism-260930 -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > results/tabzilla-mechanism-260930/SHA256SUMS.txt
+
+      - name: Commit compact results
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add results/tabzilla-mechanism-260930
+          if git diff --cached --quiet; then
+            echo 'No result changes to commit.'
+          else
+            git commit -m 'Freeze TabZilla omnibus and metafeature audit [skip ci]'
+            git push origin HEAD:run/tabzilla-mechanism-260930
+          fi
+
+      - name: Upload mechanism audit bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: tabzilla-mechanism-260930
+          path: results/tabzilla-mechanism-260930/
+          if-no-files-found: error
+          retention-days: 90
