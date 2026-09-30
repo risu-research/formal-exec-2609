@@ -1,0 +1,23 @@
+{
+  "pairs": 153,
+  "pearson_interaction": 0.8695747064423323,
+  "spearman_interaction": 0.8400747858952192,
+  "kendall_interaction": 0.6529067767457861,
+  "same_interaction_sign_count": 128,
+  "same_interaction_sign_rate": 0.8366013071895425,
+  "mean_abs_interaction_difference": 0.012981896699305228,
+  "median_abs_interaction_difference": 0.011606248066252201,
+  "clean_reversals": 29,
+  "raw_reversals": 20,
+  "reversal_overlap": 13,
+  "reversal_jaccard": 0.3611111111111111,
+  "clean_q05": 26,
+  "raw_q05": 14,
+  "q05_overlap": 11,
+  "q05_jaccard": 0.3793103448275862,
+  "clean_ci_excludes_zero": 53,
+  "raw_ci_excludes_zero": 49,
+  "ci_nonzero_overlap": 39,
+  "raw_pair_common_tasks_min": 92,
+  "raw_pair_common_tasks_max": 171
+}

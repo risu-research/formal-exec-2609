@@ -1,0 +1,7 @@
+source_list,source_line,dataset_name,task_id,base_name
+A,104,openml__bank-marketing__9899,9899,openml__bank-marketing
+A,54,openml__bank-marketing__14965,14965,openml__bank-marketing
+A,51,openml__blood-transfusion-service-center__10101,10101,openml__blood-transfusion-service-center
+A,110,openml__blood-transfusion-service-center__145836,145836,openml__blood-transfusion-service-center
+B,17,openml__colic__25,25,openml__colic
+B,18,openml__colic__27,27,openml__colic

@@ -1,3 +1,5 @@
    1873 tabzilla-src/tabzilla_analysis/final-selected18-algs/cleaned_results/tuned_aggregated_results.csv
    3201 tabzilla-src/tabzilla_analysis/results/tuned_aggregated_results.csv
-   5074 total
+    111 tabzilla-src/scripts/DATASETS_A.sh
+     72 tabzilla-src/scripts/DATASETS_B.sh
+   5257 total

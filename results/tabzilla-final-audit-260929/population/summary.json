@@ -1,0 +1,27 @@
+{
+  "study_list_entries": 177,
+  "study_unique_task_ids": 177,
+  "study_unique_dataset_names_with_task_suffix": 177,
+  "study_unique_base_names": 174,
+  "study_duplicate_task_entry_rows": 0,
+  "study_base_collision_rows": 6,
+  "raw_unique_task_ids": 171,
+  "cleaned_unique_task_ids": 104,
+  "study_tasks_missing_from_raw_count": 6,
+  "study_tasks_missing_from_raw_ids": [
+    7593,
+    9890,
+    167121,
+    168329,
+    189355,
+    189356
+  ],
+  "raw_tasks_not_in_study_list_count": 0,
+  "raw_tasks_not_in_study_list_ids": [],
+  "study_tasks_missing_from_cleaned_count": 73,
+  "cleaned_tasks_not_in_study_list_count": 0,
+  "cleaned_tasks_not_in_study_list_ids": [],
+  "cleaned_is_subset_of_raw": true,
+  "raw_is_subset_of_study_list": true,
+  "cleaned_is_subset_of_study_list": true
+}
