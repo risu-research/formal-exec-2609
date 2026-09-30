@@ -1,0 +1,146 @@
+name: tabrepo-matrix-freeze-260930
+
+on:
+  push:
+    branches: [run/tabrepo-replication-260930-work]
+    paths:
+      - '.github/workflows/tabrepo-matrix-freeze-260930.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  matrix-freeze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: run/tabrepo-replication-260930-work
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install pandas==2.2.3 pyarrow==18.1.0 scipy==1.14.1
+      - name: Fetch and verify frozen sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p tmp/tabrepo results/tabrepo-matrix-freeze-260930
+          curl -fL --retry 3 -o tmp/tabrepo/configs.parquet https://tabrepo.s3.us-west-2.amazonaws.com/contexts/2023_11_14/configs.parquet
+          test "$(sha256sum tmp/tabrepo/configs.parquet | awk '{print $1}')" = "6d815d406e0a69d0c1ec1910ac1a9c5b0142ef821bb4a9a544244e006350836f"
+          curl -fL --retry 3 -o tmp/tabrepo/task_metadata_244.csv https://raw.githubusercontent.com/autogluon/tabarena/3785b6f7a7853d992627cf97908081d54d908bd3/data/metadata/task_metadata_244.csv
+          test "$(sha256sum tmp/tabrepo/task_metadata_244.csv | awk '{print $1}')" = "d4d822be62c9fefc63bbe8461132298d0be981cb64683d862f66ecc5542bd40c"
+      - name: Freeze identifiers, support and rectangular config sets without reading outcomes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, math
+          from pathlib import Path
+          import numpy as np
+          import pandas as pd
+          from scipy.stats import ks_2samp
+
+          OUT=Path('results/tabrepo-matrix-freeze-260930')
+          CC18={3,6,11,12,14,15,16,18,22,23,28,29,31,32,37,43,45,49,53,219,2074,2079,3021,3022,3481,3549,3560,3573,3902,3903,3904,3913,3917,3918,7592,9910,9946,9952,9957,9960,9964,9971,9976,9977,9978,9981,9985,10093,10101,14952,14954,14965,14969,14970,125920,125922,146195,146800,146817,146819,146820,146821,146822,146824,146825,167119,167120,167121,167124,167125,167140,167141}
+          # Deliberately do not load metric_error / metric_error_val / timings.
+          cols=['dataset','tid','fold','framework','metric','problem_type']
+          df=pd.read_parquet('tmp/tabrepo/configs.parquet', columns=cols)
+          meta=pd.read_csv('tmp/tabrepo/task_metadata_244.csv')
+          if df.duplicated(['tid','fold','framework']).any():
+              raise RuntimeError('duplicate tid-fold-framework identifier rows')
+          task=df[['dataset','tid','metric','problem_type']].drop_duplicates()
+          if task.duplicated('tid').any(): raise RuntimeError('tid maps to multiple task descriptors')
+          task=task.merge(meta[['tid','NumberOfInstances','NumberOfFeatures','NumberOfClasses','NumberOfNumericFeatures','NumberOfSymbolicFeatures']],on='tid',how='left',validate='one_to_one')
+          task['in_cc18']=task.tid.isin(CC18)
+          task['is_classification']=task.problem_type.isin(['binary','multiclass'])
+          task['log1p_n']=np.log1p(task.NumberOfInstances.astype(float))
+          task['log1p_p']=np.log1p(task.NumberOfFeatures.astype(float))
+          task.to_csv(OUT/'task_frame.csv',index=False)
+
+          cls=task[task.is_classification].copy().sort_values('tid')
+          metric_counts=(cls.groupby('metric').agg(tasks=('tid','nunique'),cc18=('in_cc18','sum')).reset_index())
+          metric_counts['outside']=metric_counts.tasks-metric_counts.cc18
+          metric_counts=metric_counts.sort_values(['tasks','metric'],ascending=[False,True]).reset_index(drop=True)
+          metric_counts.to_csv(OUT/'classification_metric_counts.csv',index=False)
+          primary_raw_metric=str(metric_counts.iloc[0].metric)
+          raw_tasks=set(cls.loc[cls.metric.eq(primary_raw_metric),'tid'].astype(int))
+          cls_tasks=set(cls.tid.astype(int))
+
+          # Coverage only, no outcome values. Require all 3 folds for every task in the relevant frame.
+          cov=df.groupby('framework').agg(task_folds=('tid','size'),tasks=('tid','nunique'),folds=('fold','nunique')).reset_index()
+          def complete_frameworks(task_ids):
+              z=df[df.tid.isin(task_ids)].groupby('framework').agg(rows=('tid','size'),tasks=('tid','nunique'),folds=('fold','nunique')).reset_index()
+              want_rows=len(task_ids)*3
+              return sorted(z.loc[(z.rows.eq(want_rows))&(z.tasks.eq(len(task_ids)))&(z.folds.eq(3)),'framework'].astype(str))
+          cls_fw=complete_frameworks(cls_tasks)
+          raw_fw=complete_frameworks(raw_tasks)
+          pd.DataFrame({'framework':cls_fw}).to_csv(OUT/'complete_frameworks_classification.csv',index=False)
+          pd.DataFrame({'framework':raw_fw}).to_csv(OUT/'complete_frameworks_raw_metric.csv',index=False)
+
+          # Structural support summaries; still no outcome values.
+          def smd(a,b):
+              a=np.asarray(a,float); b=np.asarray(b,float)
+              den=np.sqrt((np.var(a,ddof=1)+np.var(b,ddof=1))/2)
+              return float((np.mean(a)-np.mean(b))/den) if den>0 else None
+          a=cls.loc[cls.in_cc18,'log1p_n'].dropna().to_numpy(); b=cls.loc[~cls.in_cc18,'log1p_n'].dropna().to_numpy()
+          ks=ks_2samp(a,b)
+          lo=max(float(np.min(a)),float(np.min(b))); hi=min(float(np.max(a)),float(np.max(b)))
+          common=cls[cls.log1p_n.between(lo,hi,inclusive='both')]
+          support={
+            'n_classification_tasks':int(len(cls)),
+            'n_cc18':int(cls.in_cc18.sum()),
+            'n_outside':int((~cls.in_cc18).sum()),
+            'primary_raw_metric':primary_raw_metric,
+            'n_raw_metric_tasks':int(len(raw_tasks)),
+            'n_raw_metric_cc18':int(cls.loc[cls.metric.eq(primary_raw_metric),'in_cc18'].sum()),
+            'n_raw_metric_outside':int(len(raw_tasks)-cls.loc[cls.metric.eq(primary_raw_metric),'in_cc18'].sum()),
+            'n_complete_frameworks_classification':int(len(cls_fw)),
+            'n_complete_frameworks_raw_metric':int(len(raw_fw)),
+            'log1p_n_smd_cc18_minus_outside':smd(a,b),
+            'log1p_n_ks':float(ks.statistic),'log1p_n_ks_p':float(ks.pvalue),
+            'common_support_log1p_n':[lo,hi],
+            'n_common_support':int(len(common)),
+            'n_common_support_cc18':int(common.in_cc18.sum()),
+            'n_common_support_outside':int((~common.in_cc18).sum()),
+          }
+          (OUT/'support_summary.json').write_text(json.dumps(support,indent=2)+'\n')
+          freeze={
+            'source_parquet_sha256':'6d815d406e0a69d0c1ec1910ac1a9c5b0142ef821bb4a9a544244e006350836f',
+            'source_metadata_sha256':'d4d822be62c9fefc63bbe8461132298d0be981cb64683d862f66ecc5542bd40c',
+            'classification_problem_types':['binary','multiclass'],
+            'fold_aggregation':'unweighted mean metric_error across exactly 3 folds per tid-framework',
+            'score_orientation':'score = -mean(metric_error); larger is better',
+            'primary_raw_metric_rule':'largest classification metric stratum by total task count; ties lexicographic',
+            'primary_raw_metric':primary_raw_metric,
+            'classification_task_ids':sorted(cls_tasks),
+            'raw_task_ids':sorted(raw_tasks),
+            'classification_frameworks':cls_fw,
+            'raw_frameworks':raw_fw,
+            'normalized_definition':'within-task affine transform of score over the frozen framework set to [0,1], constant row -> 0.5',
+            'rank_definition':'within-task average rank over the frozen framework set, larger score = higher rank score',
+            'support_control':'intersection of observed CC18/outside log1p(NumberOfInstances) ranges, followed by size-stratified permutations using q=3,4,5 bins',
+            'no_outcome_values_read':True,
+          }
+          (OUT/'MATRIX_FREEZE.json').write_text(json.dumps(freeze,indent=2)+'\n')
+          md=f'''# TabRepo replication matrix freeze\n\nThis definition was generated without reading `metric_error`, `metric_error_val`, or timing values.\n\n- Classification tasks: **{len(cls)}** ({int(cls.in_cc18.sum())} CC18 / {int((~cls.in_cc18).sum())} outside)\n- Raw metric fixed mechanically: **{primary_raw_metric}** ({len(raw_tasks)} tasks)\n- Complete frameworks, full classification: **{len(cls_fw)}**\n- Complete frameworks, raw metric frame: **{len(raw_fw)}**\n- Common size support: **{len(common)}** tasks ({int(common.in_cc18.sum())}/{int((~common.in_cc18).sum())})\n- log1p(n) SMD CC18-outside: **{support['log1p_n_smd_cc18_minus_outside']:.4f}**\n- log1p(n) KS: **{support['log1p_n_ks']:.4f}**, p={support['log1p_n_ks_p']:.6g}\n\nNo task, framework, metric, threshold, or support rule may be changed after outcome inspection to improve significance.\n'''
+          (OUT/'MATRIX_FREEZE.md').write_text(md)
+          print(json.dumps(support,indent=2))
+          PY
+      - name: Commit immutable freeze artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp runs/tabrepo-replication-260930/PREREGISTRATION.md results/tabrepo-matrix-freeze-260930/PREREGISTRATION.md
+          find results/tabrepo-matrix-freeze-260930 -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > results/tabrepo-matrix-freeze-260930/SHA256SUMS.txt
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add results/tabrepo-matrix-freeze-260930
+          git commit -m 'Freeze TabRepo matrix before outcome inspection [skip ci]'
+          git push origin HEAD:run/tabrepo-replication-260930-work
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tabrepo-matrix-freeze-260930
+          path: results/tabrepo-matrix-freeze-260930/
+          retention-days: 90
