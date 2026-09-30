@@ -49,9 +49,15 @@ def main():
   if len(c)>=2 and len(o)>=2:
    est,lo,hi=boot(c,o,a.boot,26092900+k); pp=perm(c,o,a.perm,26093900+k); rec.update(delta_cc18=float(c.mean()),delta_outside=float(o.mean()),interaction=est,ci_lo=lo,ci_hi=hi,perm_p=pp,sign_reversal=bool(np.sign(c.mean())!=np.sign(o.mean()) and c.mean()!=0 and o.mean()!=0))
   rows.append(rec)
- P=pd.DataFrame(rows); P['perm_q_bh']=bh(P.perm_p); P['abs_interaction']=P.interaction.abs(); P['ci_excludes_zero']=(P.ci_lo>0)|(P.ci_hi<0); P=P.sort_values(['sign_reversal','abs_interaction'],ascending=[False,False]); P.to_csv(O/'pairwise_raw18.csv',index=False)
- P[P.sign_reversal].to_csv(O/'sign_reversals.csv',index=False); P[P.perm_q_bh<.05].to_csv(O/'interaction_q05.csv',index=False)
- audit.update({'pairs':len(P),'eligible_pairs':int(P.interaction.notna().sum()),'reversals':int(P.sign_reversal.sum()),'q05':int((P.perm_q_bh<.05).sum()),'ci_excludes_zero':int(P.ci_excludes_zero.sum()),'max_abs_interaction':float(P.abs_interaction.max()),'common_task_min':int(P.n_common.min()),'common_task_max':int(P.n_common.max()),'cc18_common_min':int(P.n_cc18.min()),'cc18_common_max':int(P.n_cc18.max()),'outside_common_min':int(P.n_outside.min()),'outside_common_max':int(P.n_outside.max())})
- (O/'summary.json').write_text(json.dumps(audit,indent=2))
+ P=pd.DataFrame(rows); P['perm_q_bh']=bh(P.perm_p); P['abs_interaction']=P.interaction.abs(); P['ci_excludes_zero']=(P.ci_lo>0)|(P.ci_hi<0)
+ # Some raw-matrix pairs can be ineligible because coverage is sparse.  Preserve
+ # those rows as NA instead of letting pandas treat NA as a boolean mask error.
+ reversal_mask=P['sign_reversal'].fillna(False).astype(bool)
+ q05_mask=P['perm_q_bh'].lt(.05).fillna(False)
+ ci_mask=P['ci_excludes_zero'].fillna(False).astype(bool)
+ P=P.sort_values(['sign_reversal','abs_interaction'],ascending=[False,False],na_position='last'); P.to_csv(O/'pairwise_raw18.csv',index=False)
+ P.loc[reversal_mask.reindex(P.index,fill_value=False)].to_csv(O/'sign_reversals.csv',index=False); P.loc[q05_mask.reindex(P.index,fill_value=False)].to_csv(O/'interaction_q05.csv',index=False)
+ audit.update({'pairs':len(P),'eligible_pairs':int(P.interaction.notna().sum()),'reversals':int(reversal_mask.sum()),'q05':int(q05_mask.sum()),'ci_excludes_zero':int(ci_mask.sum()),'max_abs_interaction':float(P.abs_interaction.max()),'common_task_min':int(P.n_common.min()),'common_task_max':int(P.n_common.max()),'cc18_common_min':int(P.n_cc18.min()),'cc18_common_max':int(P.n_cc18.max()),'outside_common_min':int(P.n_outside.min()),'outside_common_max':int(P.n_outside.max())})
+ (O/'summary.json').write_text(json.dumps(audit,indent=2)+'\n')
  print(json.dumps(audit,indent=2)); print(P.head(35).to_string(index=False))
 if __name__=='__main__': main()
