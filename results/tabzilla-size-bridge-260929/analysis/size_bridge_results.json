@@ -1,0 +1,471 @@
+{
+  "n_tasks": 104,
+  "cc18": 46,
+  "outside": 58,
+  "size_summary": {
+    "cc18_n_median": 1263.0,
+    "outside_n_median": 293.25,
+    "cc18_n_mean": 2654.8152173913045,
+    "outside_n_mean": 2142.353448275862,
+    "log_size_smd_outside_minus_cc18": -0.7842749273638272,
+    "common_support": {
+      "z_interval": [
+        -0.41569615567780316,
+        2.545655899222431
+      ],
+      "n": 71,
+      "cc18": 45,
+      "outside": 26,
+      "raw_T": 0.023350047167700012,
+      "unstratified_permutation_p": 0.35913281734365315
+    }
+  },
+  "subsets": {
+    "all18": {
+      "raw_T": 0.03424586502185533,
+      "size_slope_T_per_1sd": 0.02196241539818336,
+      "size_slope_permutation_p": 0.0003599928001439971,
+      "outside_minus_cc18_size_sd": -0.7842749273638272,
+      "size_predicted_membership_T": 0.017224571741144456,
+      "predicted_to_raw_T_ratio": 0.5029679270811798,
+      "predicted_raw_vector_cosine": 0.8718792345431776,
+      "predicted_projection_fraction_of_raw_vector": 0.4385272912633077,
+      "size_linear_adjusted_membership_T": 0.024795622352279133,
+      "size_linear_attenuation": 0.27595280958869506,
+      "size_linear_conditional_p": 0.1495370092598148,
+      "size_quadratic_adjusted_membership_T": 0.028170371791565434,
+      "size_quadratic_attenuation": 0.1774080820096845,
+      "size_quadratic_conditional_p": 0.10497790044199116,
+      "size_slope_by_algorithm": {
+        "CatBoost": -0.00983306104487717,
+        "DANet": 0.0040244688433973075,
+        "DecisionTree": -0.00460395192639196,
+        "FTTransformer": -0.001730028187042068,
+        "KNN": -0.0025679905343382204,
+        "LightGBM": 0.008481986982418421,
+        "LinearModel": -0.015830412341783624,
+        "MLP": -0.005002743978678149,
+        "MLP-rtdl": -0.002874342677288718,
+        "NODE": -0.005272278355763098,
+        "RandomForest": -0.008748114984199898,
+        "ResNet": -0.004851212248234423,
+        "SAINT": -0.010376953344811668,
+        "STG": -0.0076679330810390965,
+        "SVM": -0.008552687979850203,
+        "TabNet": 0.04537547223031226,
+        "VIME": 0.03402982888770405,
+        "XGBoost": -0.00400004625953374
+      },
+      "raw_membership_by_algorithm": {
+        "CatBoost": 0.01982225802278593,
+        "DANet": -0.007788831368571635,
+        "DecisionTree": 0.03172786579960784,
+        "FTTransformer": 0.007893038539281708,
+        "KNN": -0.018346390044851297,
+        "LightGBM": -0.0014625012884905842,
+        "LinearModel": 0.01677045141044698,
+        "MLP": 0.007865141650346748,
+        "MLP-rtdl": 0.006503683090436461,
+        "NODE": -0.009237963230225509,
+        "RandomForest": 0.007566007481162849,
+        "ResNet": 0.011443223180628967,
+        "SAINT": 0.024314090120716947,
+        "STG": 0.011664606469338435,
+        "SVM": -0.008564858350732991,
+        "TabNet": -0.055929436543001844,
+        "VIME": -0.057765029633761476,
+        "XGBoost": 0.013524644694882485
+      },
+      "size_predicted_membership_by_algorithm": {
+        "CatBoost": 0.0077118232367351216,
+        "DANet": -0.0031562900098334092,
+        "DecisionTree": 0.0036107640626576068,
+        "FTTransformer": 0.0013568177307297915,
+        "KNN": 0.0020140105897891035,
+        "LightGBM": -0.006652209724537135,
+        "LinearModel": 0.012415395489491785,
+        "MLP": 0.00392352667049763,
+        "MLP-rtdl": 0.002254274894449358,
+        "NODE": 0.004134915724507982,
+        "RandomForest": 0.006860927243803784,
+        "ResNet": 0.003804684133610561,
+        "SAINT": 0.008138384330759994,
+        "STG": 0.006013767660162625,
+        "SVM": 0.0067076587441624955,
+        "TabNet": -0.035586845187527506,
+        "VIME": -0.02668874157910756,
+        "XGBoost": 0.0031371359896477727
+      }
+    },
+    "minus_TabNet": {
+      "raw_T": 0.028845528119232244,
+      "size_slope_T_per_1sd": 0.01549156283187441,
+      "size_slope_permutation_p": 0.02247955040899182,
+      "outside_minus_cc18_size_sd": -0.7842749273638272,
+      "size_predicted_membership_T": 0.01214964431472047,
+      "predicted_to_raw_T_ratio": 0.42119680612191357,
+      "predicted_raw_vector_cosine": 0.8075326269489269,
+      "predicted_projection_fraction_of_raw_vector": 0.34013016331012674,
+      "size_linear_adjusted_membership_T": 0.024018095481600447,
+      "size_linear_attenuation": 0.1673546283388444,
+      "size_linear_conditional_p": 0.1732365352692946,
+      "size_quadratic_adjusted_membership_T": 0.028973547717559597,
+      "size_quadratic_attenuation": -0.004438109012883551,
+      "size_quadratic_conditional_p": 0.09133817323653527,
+      "size_slope_by_algorithm": {
+        "CatBoost": -0.007163915619564684,
+        "DANet": 0.006693614268709797,
+        "DecisionTree": -0.001934806501079472,
+        "FTTransformer": 0.0009391172382704163,
+        "KNN": 0.0001011548909742658,
+        "LightGBM": 0.01115113240773091,
+        "LinearModel": -0.013161266916471136,
+        "MLP": -0.002333598553365665,
+        "MLP-rtdl": -0.00020519725197623334,
+        "NODE": -0.00260313293045061,
+        "RandomForest": -0.006078969558887413,
+        "ResNet": -0.002182066822921939,
+        "SAINT": -0.007707807919499182,
+        "STG": -0.0049987876557266095,
+        "SVM": -0.0058835425545377155,
+        "VIME": 0.03669897431301653,
+        "XGBoost": -0.0013309008342212581
+      },
+      "raw_membership_by_algorithm": {
+        "CatBoost": 0.016532291167315236,
+        "DANet": -0.011078798224042332,
+        "DecisionTree": 0.02843789894413714,
+        "FTTransformer": 0.004603071683811014,
+        "KNN": -0.021636356900321986,
+        "LightGBM": -0.004752468143961283,
+        "LinearModel": 0.013480484554976278,
+        "MLP": 0.004575174794876053,
+        "MLP-rtdl": 0.0032137162349657675,
+        "NODE": -0.012527930085696207,
+        "RandomForest": 0.004276040625692149,
+        "ResNet": 0.00815325632515827,
+        "SAINT": 0.021024123265246254,
+        "STG": 0.008374639613867738,
+        "SVM": -0.011854825206203694,
+        "VIME": -0.06105499648923217,
+        "XGBoost": 0.010234677839411791
+      },
+      "size_predicted_membership_by_algorithm": {
+        "CatBoost": 0.00561847940217468,
+        "DANet": -0.0052496338443938535,
+        "DecisionTree": 0.0015174202280971636,
+        "FTTransformer": -0.0007365261038306488,
+        "KNN": -7.933324477133817e-05,
+        "LightGBM": -0.008745553559097579,
+        "LinearModel": 0.010322051654931342,
+        "MLP": 0.0018301828359371891,
+        "MLP-rtdl": 0.00016093105988891735,
+        "NODE": 0.0020415718899475387,
+        "RandomForest": 0.004767583409243342,
+        "ResNet": 0.0017113402990501208,
+        "SAINT": 0.0060450404961995535,
+        "STG": 0.003920423825602183,
+        "SVM": 0.004614314909602053,
+        "VIME": -0.028782085413668,
+        "XGBoost": 0.0010437921550873342
+      }
+    },
+    "minus_VIME": {
+      "raw_T": 0.028362701921433878,
+      "size_slope_T_per_1sd": 0.018953254153389682,
+      "size_slope_permutation_p": 0.0012199756004879902,
+      "outside_minus_cc18_size_sd": -0.7842749273638272,
+      "size_predicted_membership_T": 0.014864562024457849,
+      "predicted_to_raw_T_ratio": 0.5240883631479624,
+      "predicted_raw_vector_cosine": 0.8121312858773923,
+      "predicted_projection_fraction_of_raw_vector": 0.4256285562767324,
+      "size_linear_adjusted_membership_T": 0.021794496397250458,
+      "size_linear_attenuation": 0.23157897799644345,
+      "size_linear_conditional_p": 0.22109557808843824,
+      "size_quadratic_adjusted_membership_T": 0.025710798497882922,
+      "size_quadratic_attenuation": 0.09349967541515836,
+      "size_quadratic_conditional_p": 0.13037739245215096,
+      "size_slope_by_algorithm": {
+        "CatBoost": -0.007831306404423992,
+        "DANet": 0.006026223483850486,
+        "DecisionTree": -0.002602197285938777,
+        "FTTransformer": 0.0002717264534111098,
+        "KNN": -0.0005662358938850417,
+        "LightGBM": 0.010483741622871601,
+        "LinearModel": -0.013828657701330445,
+        "MLP": -0.0030009893382249735,
+        "MLP-rtdl": -0.0008725880368355379,
+        "NODE": -0.003270523715309917,
+        "RandomForest": -0.006746360343746718,
+        "ResNet": -0.0028494576077812456,
+        "SAINT": -0.00837519870435849,
+        "STG": -0.005666178440585919,
+        "SVM": -0.0065509333393970245,
+        "TabNet": 0.04737722687076543,
+        "XGBoost": -0.001998291619080565
+      },
+      "raw_membership_by_algorithm": {
+        "CatBoost": 0.016424315103152905,
+        "DANet": -0.011186774288204667,
+        "DecisionTree": 0.028329922879974805,
+        "FTTransformer": 0.004495095619648687,
+        "KNN": -0.021744332964484324,
+        "LightGBM": -0.00486044420812361,
+        "LinearModel": 0.013372508490813945,
+        "MLP": 0.004467198730713721,
+        "MLP-rtdl": 0.0031057401708034383,
+        "NODE": -0.01263590614985854,
+        "RandomForest": 0.004168064561529822,
+        "ResNet": 0.00804528026099594,
+        "SAINT": 0.020916147201083913,
+        "STG": 0.008266663549705414,
+        "SVM": -0.011962801270366027,
+        "TabNet": -0.0593273794626349,
+        "XGBoost": 0.010126701775249462
+      },
+      "size_predicted_membership_by_algorithm": {
+        "CatBoost": 0.006141897261493502,
+        "DANet": -0.00472621598507503,
+        "DecisionTree": 0.0020408380874159826,
+        "FTTransformer": -0.0002131082445118285,
+        "KNN": 0.00044408461454748286,
+        "LightGBM": -0.008222135699778756,
+        "LinearModel": 0.010845469514250163,
+        "MLP": 0.002353600695256011,
+        "MLP-rtdl": 0.0006843489192077361,
+        "NODE": 0.0025649897492663596,
+        "RandomForest": 0.005291001268562161,
+        "ResNet": 0.002234758158368941,
+        "SAINT": 0.006568458355518374,
+        "STG": 0.004443841684921006,
+        "SVM": 0.005137732768920876,
+        "TabNet": -0.03715677116276912,
+        "XGBoost": 0.001567210014406155
+      }
+    },
+    "minus_TabNet_VIME": {
+      "raw_T": 0.01895897784252598,
+      "size_slope_T_per_1sd": 0.008073970658332772,
+      "size_slope_permutation_p": 0.46881062378752425,
+      "outside_minus_cc18_size_sd": -0.7842749273638272,
+      "size_predicted_membership_T": 0.006332212751601607,
+      "predicted_to_raw_T_ratio": 0.33399547191822343,
+      "predicted_raw_vector_cosine": 0.4408758061305585,
+      "predicted_projection_fraction_of_raw_vector": 0.1472505229259031,
+      "size_linear_adjusted_membership_T": 0.020237537282708298,
+      "size_linear_attenuation": -0.06743820530843392,
+      "size_linear_conditional_p": 0.2948541029179416,
+      "size_quadratic_adjusted_membership_T": 0.026404711756876864,
+      "size_quadratic_attenuation": -0.39272865743055574,
+      "size_quadratic_conditional_p": 0.11379772404551909,
+      "size_slope_by_algorithm": {
+        "CatBoost": -0.004870229725001153,
+        "DANet": 0.00898730016327333,
+        "DecisionTree": 0.00035887939348406113,
+        "FTTransformer": 0.00323280313283395,
+        "KNN": 0.0023948407855378,
+        "LightGBM": 0.013444818302294442,
+        "LinearModel": -0.010867581021907607,
+        "MLP": -3.991265880213107e-05,
+        "MLP-rtdl": 0.0020884886425873027,
+        "NODE": -0.00030944703588707686,
+        "RandomForest": -0.0037852836643238793,
+        "ResNet": 0.00011161907164159468,
+        "SAINT": -0.005414122024935649,
+        "STG": -0.002705101761163077,
+        "SVM": -0.003589856659974183,
+        "XGBoost": 0.0009627850603422771
+      },
+      "raw_membership_by_algorithm": {
+        "CatBoost": 0.012716353886738226,
+        "DANet": -0.01489473550461934,
+        "DecisionTree": 0.02462196166356014,
+        "FTTransformer": 0.0007871344032340034,
+        "KNN": -0.025452294180899004,
+        "LightGBM": -0.00856840542453828,
+        "LinearModel": 0.009664547274399275,
+        "MLP": 0.0007592375142990422,
+        "MLP-rtdl": -0.0006022210456112419,
+        "NODE": -0.016343867366273225,
+        "RandomForest": 0.00046010334511513873,
+        "ResNet": 0.00433731904458126,
+        "SAINT": 0.017208185984669243,
+        "STG": 0.004558702333290725,
+        "SVM": -0.015670762486780704,
+        "XGBoost": 0.006418740558834779
+      },
+      "size_predicted_membership_by_algorithm": {
+        "CatBoost": 0.0038195990638204315,
+        "DANet": -0.007048514182748104,
+        "DecisionTree": -0.0002814601102570864,
+        "FTTransformer": -0.002535406442184899,
+        "KNN": -0.0018782135831255887,
+        "LightGBM": -0.010544433897451829,
+        "LinearModel": 0.008523171316577096,
+        "MLP": 3.130249758293856e-05,
+        "MLP-rtdl": -0.0016379492784653349,
+        "NODE": 0.00024269155159328882,
+        "RandomForest": 0.002968703070889092,
+        "ResNet": -8.75400393041295e-05,
+        "SAINT": 0.004246160157845303,
+        "STG": 0.0021215434872479334,
+        "SVM": 0.0028154345712478037,
+        "XGBoost": -0.0007550881832669174
+      }
+    },
+    "classical4": {
+      "raw_T": 0.012809829966872865,
+      "size_slope_T_per_1sd": 0.011873386753086183,
+      "size_slope_permutation_p": 3.999920001599968e-05,
+      "outside_minus_cc18_size_sd": -0.7842749273638272,
+      "size_predicted_membership_T": 0.009311999533339296,
+      "predicted_to_raw_T_ratio": 0.726941696917195,
+      "predicted_raw_vector_cosine": 0.8264546394188408,
+      "predicted_projection_fraction_of_raw_vector": 0.6007843380042205,
+      "size_linear_adjusted_membership_T": 0.008648733192158259,
+      "size_linear_attenuation": 0.3248362222976807,
+      "size_linear_conditional_p": 0.2880142397152057,
+      "size_quadratic_adjusted_membership_T": 0.010538151266507456,
+      "size_quadratic_attenuation": 0.1773387083388407,
+      "size_quadratic_conditional_p": 0.18161636767264655,
+      "size_slope_by_algorithm": {
+        "CatBoost": -0.006308252218329075,
+        "LightGBM": 0.012006795808966521,
+        "RandomForest": -0.005223306157651799,
+        "XGBoost": -0.00047523743298564456
+      },
+      "raw_membership_by_algorithm": {
+        "CatBoost": 0.00995965579520076,
+        "LightGBM": -0.011325103516075753,
+        "RandomForest": -0.0022965947464223197,
+        "XGBoost": 0.0036620424672973175
+      },
+      "size_predicted_membership_by_algorithm": {
+        "CatBoost": 0.004947404050322737,
+        "LightGBM": -0.009416628910949524,
+        "RandomForest": 0.004096508057391396,
+        "XGBoost": 0.0003727168032353881
+      }
+    }
+  },
+  "size_stratified_permutation_all18": {
+    "q4": {
+      "q_bins": 4,
+      "mixed_bins": 3,
+      "observed_T": 0.03424586502185533,
+      "p": 0.17033659326813463,
+      "B": 50000,
+      "bin_counts": [
+        {
+          "bin": 0,
+          "n": 26,
+          "cc18": 0,
+          "outside": 26
+        },
+        {
+          "bin": 1,
+          "n": 26,
+          "cc18": 12,
+          "outside": 14
+        },
+        {
+          "bin": 2,
+          "n": 26,
+          "cc18": 20,
+          "outside": 6
+        },
+        {
+          "bin": 3,
+          "n": 26,
+          "cc18": 14,
+          "outside": 12
+        }
+      ]
+    },
+    "q5": {
+      "q_bins": 5,
+      "mixed_bins": 4,
+      "observed_T": 0.03424586502185533,
+      "p": 0.1129977400451991,
+      "B": 50000,
+      "bin_counts": [
+        {
+          "bin": 0,
+          "n": 21,
+          "cc18": 0,
+          "outside": 21
+        },
+        {
+          "bin": 1,
+          "n": 21,
+          "cc18": 5,
+          "outside": 16
+        },
+        {
+          "bin": 2,
+          "n": 20,
+          "cc18": 14,
+          "outside": 6
+        },
+        {
+          "bin": 3,
+          "n": 21,
+          "cc18": 15,
+          "outside": 6
+        },
+        {
+          "bin": 4,
+          "n": 21,
+          "cc18": 12,
+          "outside": 9
+        }
+      ]
+    },
+    "q6": {
+      "q_bins": 6,
+      "mixed_bins": 5,
+      "observed_T": 0.03424586502185533,
+      "p": 0.1895362092758145,
+      "B": 50000,
+      "bin_counts": [
+        {
+          "bin": 0,
+          "n": 18,
+          "cc18": 0,
+          "outside": 18
+        },
+        {
+          "bin": 1,
+          "n": 18,
+          "cc18": 1,
+          "outside": 17
+        },
+        {
+          "bin": 2,
+          "n": 16,
+          "cc18": 11,
+          "outside": 5
+        },
+        {
+          "bin": 3,
+          "n": 18,
+          "cc18": 13,
+          "outside": 5
+        },
+        {
+          "bin": 4,
+          "n": 16,
+          "cc18": 12,
+          "outside": 4
+        },
+        {
+          "bin": 5,
+          "n": 18,
+          "cc18": 9,
+          "outside": 9
+        }
+      ]
+    }
+  },
+  "guardrail": "Size is an observed historical task property. These bridge, adjustment, and stratified-permutation analyses support descriptive mechanism plausibility, not causal identification of benchmark curation effects."
+}
