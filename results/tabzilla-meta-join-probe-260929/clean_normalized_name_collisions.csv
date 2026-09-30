@@ -1,0 +1,5 @@
+dataset_name,task_id,base,norm
+openml__blood-transfusion-service-center__10101,10101,blood-transfusion-service-center,blood-transfusion-service-center
+openml__blood-transfusion-service-center__145836,145836,blood-transfusion-service-center,blood-transfusion-service-center
+openml__colic__25,25,colic,colic
+openml__colic__27,27,colic,colic

@@ -1,0 +1,144 @@
+# Historical metafeature join probe
+
+- Cleaned tasks: **104**
+- Meta rows/names: **1830 / 1830**
+- Exact basename matched tasks: **0**
+- Normalized matched tasks: **0**
+- Unique normalized matches: **0**
+- Unmatched: **104**
+- Ambiguous: **0**
+
+## First 25 historical meta dataset names
+
+- `openml__cjs__14967__fold_0`
+- `openml__cjs__14967__fold_1`
+- `openml__cjs__14967__fold_2`
+- `openml__cjs__14967__fold_3`
+- `openml__cjs__14967__fold_4`
+- `openml__cjs__14967__fold_5`
+- `openml__cjs__14967__fold_6`
+- `openml__cjs__14967__fold_7`
+- `openml__cjs__14967__fold_8`
+- `openml__cjs__14967__fold_9`
+- `openml__Click_prediction_small__190408__fold_0`
+- `openml__Click_prediction_small__190408__fold_1`
+- `openml__Click_prediction_small__190408__fold_2`
+- `openml__Click_prediction_small__190408__fold_3`
+- `openml__Click_prediction_small__190408__fold_4`
+- `openml__Click_prediction_small__190408__fold_5`
+- `openml__Click_prediction_small__190408__fold_6`
+- `openml__Click_prediction_small__190408__fold_7`
+- `openml__Click_prediction_small__190408__fold_8`
+- `openml__Click_prediction_small__190408__fold_9`
+- `openml__LED-display-domain-7digit__125921__fold_0`
+- `openml__LED-display-domain-7digit__125921__fold_1`
+- `openml__LED-display-domain-7digit__125921__fold_2`
+- `openml__LED-display-domain-7digit__125921__fold_3`
+- `openml__LED-display-domain-7digit__125921__fold_4`
+
+## Unmatched tasks
+
+- 3: `kr-vs-kp`
+- 4: `labor`
+- 5: `arrhythmia`
+- 7: `audiology`
+- 9: `autos`
+- 10: `lymph`
+- 11: `balance-scale`
+- 12: `mfeat-factors`
+- 14: `mfeat-fourier`
+- 15: `breast-w`
+- 16: `mfeat-karhunen`
+- 18: `mfeat-morphological`
+- 22: `mfeat-zernike`
+- 23: `cmc`
+- 24: `mushroom`
+- 25: `colic`
+- 27: `colic`
+- 29: `credit-approval`
+- 30: `page-blocks`
+- 35: `dermatology`
+- 37: `diabetes`
+- 39: `sonar`
+- 40: `glass`
+- 43: `spambase`
+- 45: `splice`
+- 47: `tae`
+- 48: `heart-c`
+- 49: `tic-tac-toe`
+- 50: `heart-h`
+- 53: `vehicle`
+- 59: `iris`
+- 2074: `satimage`
+- 2079: `eucalyptus`
+- 2867: `anneal`
+- 3021: `sick`
+- 3022: `vowel`
+- 3485: `scene`
+- 3512: `synthetic_control`
+- 3540: `analcatdata_boxing1`
+- 3543: `irish`
+- 3549: `analcatdata_authorship`
+- 3560: `analcatdata_dmft`
+- 3561: `profb`
+- 3567: `collins`
+- 3602: `visualizing_environmental`
+- 3620: `fri_c0_100_5`
+- 3647: `rabe_266`
+- 3711: `elevators`
+- 3731: `visualizing_livestock`
+- 3739: `analcatdata_chlamydia`
+- 3748: `transplant`
+- 3779: `fri_c3_100_5`
+- 3797: `socmob`
+- 3896: `ada_agnostic`
+- 3902: `pc4`
+- 3903: `pc3`
+- 3904: `jm1`
+- 3913: `kc2`
+- 3917: `kc1`
+- 3918: `pc1`
+- 3950: `musk`
+- 3953: `adult-census`
+- 9946: `wdbc`
+- 9952: `phoneme`
+- 9957: `qsar-biodeg`
+- 9960: `wall-robot-navigation`
+- 9964: `semeion`
+- 9971: `ilpd`
+- 9978: `ozone-level-8hr`
+- 9979: `cardiotocography`
+- 9984: `fertility`
+- 10089: `acute-inflammations`
+- 10093: `banknote-authentication`
+- 10101: `blood-transfusion-service-center`
+- 14952: `PhishingWebsites`
+- 14954: `cylinder-bands`
+- 14965: `bank-marketing`
+- 14967: `cjs`
+- 125920: `dresses-sales`
+- 125921: `LED-display-domain-7digit`
+- 145793: `yeast`
+- 145799: `breast-cancer`
+- 145836: `blood-transfusion-service-center`
+- 145847: `hill-valley`
+- 145977: `ecoli`
+- 145984: `ionosphere`
+- 146024: `lung-cancer`
+- 146032: `primary-tumor`
+- 146063: `hayes-roth`
+- 146065: `monks-problems-2`
+- 146192: `car-evaluation`
+- 146210: `postoperative-patient-data`
+- 146607: `SpeedDating`
+- 146800: `MiceProtein`
+- 146817: `steel-plates-fault`
+- 146818: `Australian`
+- 146820: `wilt`
+- 146821: `car`
+- 167140: `dna`
+- 167141: `churn`
+- 167211: `Satellite`
+- 168911: `jasmine`
+- 190408: `Click_prediction_small`
+- 360948: `libras`
