@@ -2,4 +2,5 @@ Trigger: TabZilla size bridge + nonparametric common-support closeout
 Date: 2026-09-30
 Execution branch: run/tabzilla-transport-260929
 Historical source commit: feca5e554148bdc4ac17c3379984c2a71244cd32
-Workflow fix: YAML heredoc replaced; retrigger after 38e69329fe6ff9897328423f13ed29ebc130ee67
+Workflow: diagnostic preflights for both parametric and nonparametric analyses before full inference
+Workflow commit: 24a69a06acb434ea6626d4b678385a2b2f2cc04b
