@@ -1,0 +1,30 @@
+name: j-d28a5c3
+
+on:
+  push:
+    branches:
+      - exec/j-d28a5c3
+
+permissions:
+  contents: read
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start retrieval stores
+        run: |
+          docker run -d --rm --name jch2 -p 8000:8000 chromadb/chroma:latest
+          docker run -d --rm --name jq2 -p 6333:6333 qdrant/qdrant:latest
+      - name: Execute composed stack
+        run: |
+          docker run --rm --network host -v "$PWD:/work" -w /work ghcr.io/astral-sh/uv:python3.12-bookworm-slim \
+            uv run --with langgraph python run.py | tee result.log
+      - name: Upload result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j-d28a5c3-result
+          path: result.log
