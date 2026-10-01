@@ -1,0 +1,28 @@
+name: j-e67c4a2
+
+on:
+  push:
+    branches:
+      - exec/j-e67c4a2
+
+permissions:
+  contents: read
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start PostgreSQL
+        run: docker run -d --rm --name jpg -e POSTGRES_PASSWORD=localpass -p 5432:5432 postgres:16
+      - name: Execute production checkpointer capsule
+        run: |
+          docker run --rm --network host -v "$PWD:/work" -w /work ghcr.io/astral-sh/uv:python3.12-bookworm-slim \
+            uv run --with langgraph --with langgraph-checkpoint-postgres python run.py | tee result.log
+      - name: Upload result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j-e67c4a2-result
+          path: result.log
