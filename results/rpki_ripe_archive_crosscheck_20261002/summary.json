@@ -1,0 +1,12 @@
+{
+  "headline_input_inversions_n": 16,
+  "cases_crosschecked_n": 16,
+  "full_5_tal_archive_available_n": 16,
+  "ripe_reproduced_policy_inversion_n": 15,
+  "ripe_reproduced_policy_inversion_fraction": 0.9375,
+  "A_status_agreement_n": 15,
+  "B_status_agreement_n": 15,
+  "both_status_agreement_n": 15,
+  "download_errors_n": 0,
+  "guardrail": "Independent reconstruction from RIPE NCC daily validated VRP CSVs across five RIR trust anchors. A route is Valid if any covering VRP matches origin ASN and permits route prefix length; Invalid if covered but no VRP validates it; Unknown if no covering VRP is present."
+}

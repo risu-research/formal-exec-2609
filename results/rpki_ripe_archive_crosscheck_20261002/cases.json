@@ -1,0 +1,560 @@
+[
+  {
+    "representative_prefix": "79.172.200.0/24",
+    "A": 198831,
+    "B": 211615,
+    "exact_event_date": "2025-10-24",
+    "bgpkit_A": "valid",
+    "bgpkit_B": "invalid",
+    "ripe_A": "valid",
+    "ripe_B": "invalid",
+    "ripe_policy_inversion": true,
+    "agreement_A": true,
+    "agreement_B": true,
+    "covering_vrp_n": 2,
+    "covering_vrps": [
+      {
+        "tal": "ripencc.tal",
+        "vrp_prefix": "79.172.200.0/24",
+        "asn": 198831,
+        "max_length": 24,
+        "uri": "rsync://rpki.ripe.net/repository/DEFAULT/57/26728e-ddc7-4b0f-9d1e-9593a488afcc/1/3r_EWVoBd4jJROvtne5unIz1q1s.roa"
+      },
+      {
+        "tal": "ripencc.tal",
+        "vrp_prefix": "79.172.200.0/23",
+        "asn": 834,
+        "max_length": 24,
+        "uri": "rsync://rpki.ripe.net/repository/DEFAULT/57/26728e-ddc7-4b0f-9d1e-9593a488afcc/1/BDiNQGp6uvky-DDtUcQLdosEYN0.roa"
+      }
+    ],
+    "available_tals": [
+      "afrinic.tal",
+      "lacnic.tal",
+      "apnic.tal",
+      "ripencc.tal",
+      "arin.tal"
+    ],
+    "missing_tals": []
+  },
+  {
+    "representative_prefix": "50.217.41.0/24",
+    "A": 33491,
+    "B": 30302,
+    "exact_event_date": "2025-10-25",
+    "bgpkit_A": "valid",
+    "bgpkit_B": "invalid",
+    "ripe_A": "valid",
+    "ripe_B": "invalid",
+    "ripe_policy_inversion": true,
+    "agreement_A": true,
+    "agreement_B": true,
+    "covering_vrp_n": 2,
+    "covering_vrps": [
+      {
+        "tal": "arin.tal",
+        "vrp_prefix": "50.217.41.0/24",
+        "asn": 33491,
+        "max_length": 24,
+        "uri": "rsync://rpki.arin.net/repository/arin-rpki-ta/5e4a23ea-e80a-403e-b08c-2171da2157d3/2a246947-2d62-4a6c-ba05-87187f0099b2/4e95a28e-27fe-479a-b086-2cc9809d54f6/5583a2bf-7261-3d50-a2c6-4f0f515eeb0c.roa"
+      },
+      {
+        "tal": "arin.tal",
+        "vrp_prefix": "50.128.0.0/9",
+        "asn": 7922,
+        "max_length": 9,
+        "uri": "rsync://rpki.arin.net/repository/arin-rpki-ta/5e4a23ea-e80a-403e-b08c-2171da2157d3/2a246947-2d62-4a6c-ba05-87187f0099b2/4e95a28e-27fe-479a-b086-2cc9809d54f6/ef81bdf0-b3aa-3f94-9347-f03be15c2bd1.roa"
+      }
+    ],
+    "available_tals": [
+      "afrinic.tal",
+      "lacnic.tal",
+      "apnic.tal",
+      "arin.tal",
+      "ripencc.tal"
+    ],
+    "missing_tals": []
+  },
+  {
+    "representative_prefix": "100.43.0.0/24",
+    "A": 395597,
+    "B": 22773,
+    "exact_event_date": "2025-11-05",
+    "bgpkit_A": "valid",
+    "bgpkit_B": "invalid",
+    "ripe_A": "valid",
+    "ripe_B": "invalid",
+    "ripe_policy_inversion": true,
+    "agreement_A": true,
+    "agreement_B": true,
+    "covering_vrp_n": 1,
+    "covering_vrps": [
+      {
+        "tal": "arin.tal",
+        "vrp_prefix": "100.43.0.0/24",
+        "asn": 395597,
+        "max_length": 24,
+        "uri": "rsync://rpki.arin.net/repository/arin-rpki-ta/5e4a23ea-e80a-403e-b08c-2171da2157d3/d9d1572f-6cbb-4cf7-b599-e9d0e981d9bf/12380a37-68ce-4e9c-9585-53cd09071ada/42321e29-98ec-3d33-a59d-35f73ae16b53.roa"
+      }
+    ],
+    "available_tals": [
+      "afrinic.tal",
+      "lacnic.tal",
+      "apnic.tal",
+      "arin.tal",
+      "ripencc.tal"
+    ],
+    "missing_tals": []
+  },
+  {
+    "representative_prefix": "89.185.29.0/24",
+    "A": 202662,
+    "B": 401434,
+    "exact_event_date": "2025-11-12",
+    "bgpkit_A": "valid",
+    "bgpkit_B": "invalid",
+    "ripe_A": "valid",
+    "ripe_B": "invalid",
+    "ripe_policy_inversion": true,
+    "agreement_A": true,
+    "agreement_B": true,
+    "covering_vrp_n": 2,
+    "covering_vrps": [
+      {
+        "tal": "ripencc.tal",
+        "vrp_prefix": "89.185.28.0/22",
+        "asn": 202662,
+        "max_length": 24,
+        "uri": "rsync://rpki.ripe.net/repository/DEFAULT/cd/6168d7-946c-4574-91ea-82ad14555eaa/1/OOYkNDqqDn1Unj3M-yrjf_S9VlU.roa"
+      },
+      {
+        "tal": "ripencc.tal",
+        "vrp_prefix": "89.185.28.0/22",
+        "asn": 396856,
+        "max_length": 24,
+        "uri": "rsync://rpki.ripe.net/repository/DEFAULT/cd/6168d7-946c-4574-91ea-82ad14555eaa/1/QJvPeNzFvPANqEbfkIc8-3zDQLs.roa"
+      }
+    ],
+    "available_tals": [
+      "afrinic.tal",
+      "lacnic.tal",
+      "apnic.tal",
+      "arin.tal",
+      "ripencc.tal"
+    ],
+    "missing_tals": []
+  },
+  {
+    "representative_prefix": "136.0.242.0/24",
+    "A": 401152,
+    "B": 834,
+    "exact_event_date": "2025-11-21",
+    "bgpkit_A": "valid",
+    "bgpkit_B": "invalid",
+    "ripe_A": "unknown",
+    "ripe_B": "unknown",
+    "ripe_policy_inversion": false,
+    "agreement_A": false,
+    "agreement_B": false,
+    "covering_vrp_n": 0,
+    "covering_vrps": [],
+    "available_tals": [
+      "afrinic.tal",
+      "lacnic.tal",
+      "apnic.tal",
+      "arin.tal",
+      "ripencc.tal"
+    ],
+    "missing_tals": []
+  },
+  {
+    "representative_prefix": "147.78.2.0/24",
+    "A": 136258,
+    "B": 35758,
+    "exact_event_date": "2025-12-09",
+    "bgpkit_A": "valid",
+    "bgpkit_B": "invalid",
+    "ripe_A": "valid",
+    "ripe_B": "invalid",
+    "ripe_policy_inversion": true,
+    "agreement_A": true,
+    "agreement_B": true,
+    "covering_vrp_n": 1,
+    "covering_vrps": [
+      {
+        "tal": "ripencc.tal",
+        "vrp_prefix": "147.78.2.0/24",
+        "asn": 136258,
+        "max_length": 24,
+        "uri": "rsync://rpki.ripe.net/repository/DEFAULT/ab/99ae2f-39cc-43f3-941d-51920373353c/1/p0veRdP0JvJvQmVsHebDlIAh9qg.roa"
+      }
+    ],
+    "available_tals": [
+      "afrinic.tal",
+      "lacnic.tal",
+      "apnic.tal",
+      "arin.tal",
+      "ripencc.tal"
+    ],
+    "missing_tals": []
+  },
+  {
+    "representative_prefix": "45.135.195.0/24",
+    "A": 205899,
+    "B": 198584,
+    "exact_event_date": "2025-12-12",
+    "bgpkit_A": "valid",
+    "bgpkit_B": "invalid",
+    "ripe_A": "valid",
+    "ripe_B": "invalid",
+    "ripe_policy_inversion": true,
+    "agreement_A": true,
+    "agreement_B": true,
+    "covering_vrp_n": 3,
+    "covering_vrps": [
+      {
+        "tal": "ripencc.tal",
+        "vrp_prefix": "45.135.195.0/24",
+        "asn": 198154,
+        "max_length": 24,
+        "uri": "rsync://rpki.ripe.net/repository/DEFAULT/39/293a2f-3997-497f-9ef1-4852c8ff8af2/1/1wei3P__YsLq8D2DZQdx3r5Se8Q.roa"
+      },
+      {
+        "tal": "ripencc.tal",
+        "vrp_prefix": "45.135.195.0/24",
+        "asn": 205899,
+        "max_length": 24,
+        "uri": "rsync://rpki.ripe.net/repository/DEFAULT/39/293a2f-3997-497f-9ef1-4852c8ff8af2/1/bvT0XxpWvjhSrsyJnY-pHBlHicQ.roa"
+      },
+      {
+        "tal": "ripencc.tal",
+        "vrp_prefix": "45.135.195.0/24",
+        "asn": 207350,
+        "max_length": 24,
+        "uri": "rsync://rpki.ripe.net/repository/DEFAULT/39/293a2f-3997-497f-9ef1-4852c8ff8af2/1/QhTNtcmMP2d8JHj8beOVtwBfn-8.roa"
+      }
+    ],
+    "available_tals": [
+      "afrinic.tal",
+      "lacnic.tal",
+      "apnic.tal",
+      "arin.tal",
+      "ripencc.tal"
+    ],
+    "missing_tals": []
+  },
+  {
+    "representative_prefix": "185.232.36.0/22",
+    "A": 203936,
+    "B": 34696,
+    "exact_event_date": "2025-12-23",
+    "bgpkit_A": "valid",
+    "bgpkit_B": "invalid",
+    "ripe_A": "valid",
+    "ripe_B": "invalid",
+    "ripe_policy_inversion": true,
+    "agreement_A": true,
+    "agreement_B": true,
+    "covering_vrp_n": 1,
+    "covering_vrps": [
+      {
+        "tal": "ripencc.tal",
+        "vrp_prefix": "185.232.36.0/22",
+        "asn": 203936,
+        "max_length": 22,
+        "uri": "rsync://rpki.ripe.net/repository/DEFAULT/96/68fbaf-45f1-4946-a346-686a01888d29/1/pQlM2OtK0QxqZYQEu_V-X_TzrUw.roa"
+      }
+    ],
+    "available_tals": [
+      "afrinic.tal",
+      "lacnic.tal",
+      "apnic.tal",
+      "arin.tal",
+      "ripencc.tal"
+    ],
+    "missing_tals": []
+  },
+  {
+    "representative_prefix": "43.227.184.0/23",
+    "A": 132750,
+    "B": 154297,
+    "exact_event_date": "2026-01-24",
+    "bgpkit_A": "valid",
+    "bgpkit_B": "invalid",
+    "ripe_A": "valid",
+    "ripe_B": "invalid",
+    "ripe_policy_inversion": true,
+    "agreement_A": true,
+    "agreement_B": true,
+    "covering_vrp_n": 1,
+    "covering_vrps": [
+      {
+        "tal": "apnic.tal",
+        "vrp_prefix": "43.227.184.0/23",
+        "asn": 132750,
+        "max_length": 24,
+        "uri": "rsync://rpki.apnic.net/member_repository/A918EDB2/2A43E30C70E911E2B36D4B6B2979BB20/62553A7A452F11F0B2E1925AC4F9AE02.roa"
+      }
+    ],
+    "available_tals": [
+      "afrinic.tal",
+      "lacnic.tal",
+      "apnic.tal",
+      "arin.tal",
+      "ripencc.tal"
+    ],
+    "missing_tals": []
+  },
+  {
+    "representative_prefix": "202.154.17.0/24",
+    "A": 141607,
+    "B": 154314,
+    "exact_event_date": "2026-05-20",
+    "bgpkit_A": "valid",
+    "bgpkit_B": "invalid",
+    "ripe_A": "valid",
+    "ripe_B": "invalid",
+    "ripe_policy_inversion": true,
+    "agreement_A": true,
+    "agreement_B": true,
+    "covering_vrp_n": 2,
+    "covering_vrps": [
+      {
+        "tal": "apnic.tal",
+        "vrp_prefix": "202.154.17.0/24",
+        "asn": 141607,
+        "max_length": 24,
+        "uri": "rsync://rpki-rsync.idnic.net/repo/5c0c14a9-3a77-49e2-9194-48d0913458b2/0/3230322e3135342e31372e302f32342d3234203d3e20313431363037.roa"
+      },
+      {
+        "tal": "apnic.tal",
+        "vrp_prefix": "202.154.0.0/18",
+        "asn": 4434,
+        "max_length": 21,
+        "uri": "rsync://rpki-rsync.idnic.net/repo/5c0c14a9-3a77-49e2-9194-48d0913458b2/0/3230322e3135342e302e302f31382d3231203d3e2034343334.roa"
+      }
+    ],
+    "available_tals": [
+      "afrinic.tal",
+      "lacnic.tal",
+      "apnic.tal",
+      "arin.tal",
+      "ripencc.tal"
+    ],
+    "missing_tals": []
+  },
+  {
+    "representative_prefix": "49.238.35.0/24",
+    "A": 17771,
+    "B": 150008,
+    "exact_event_date": "2026-05-26",
+    "bgpkit_A": "valid",
+    "bgpkit_B": "invalid",
+    "ripe_A": "valid",
+    "ripe_B": "invalid",
+    "ripe_policy_inversion": true,
+    "agreement_A": true,
+    "agreement_B": true,
+    "covering_vrp_n": 1,
+    "covering_vrps": [
+      {
+        "tal": "apnic.tal",
+        "vrp_prefix": "49.238.32.0/19",
+        "asn": 17771,
+        "max_length": 24,
+        "uri": "rsync://rpki.apnic.net/member_repository/A918EDB2/2A43E30C70E911E2B36D4B6B2979BB20/CB42B95CBD4511EB9A852313C4F9AE02.roa"
+      }
+    ],
+    "available_tals": [
+      "afrinic.tal",
+      "lacnic.tal",
+      "apnic.tal",
+      "arin.tal",
+      "ripencc.tal"
+    ],
+    "missing_tals": []
+  },
+  {
+    "representative_prefix": "213.220.60.0/23",
+    "A": 8311,
+    "B": 41397,
+    "exact_event_date": "2026-06-03",
+    "bgpkit_A": "valid",
+    "bgpkit_B": "invalid",
+    "ripe_A": "valid",
+    "ripe_B": "invalid",
+    "ripe_policy_inversion": true,
+    "agreement_A": true,
+    "agreement_B": true,
+    "covering_vrp_n": 1,
+    "covering_vrps": [
+      {
+        "tal": "ripencc.tal",
+        "vrp_prefix": "213.220.60.0/23",
+        "asn": 8311,
+        "max_length": 24,
+        "uri": "rsync://rpki.ripe.net/repository/DEFAULT/ea/1f9493-d468-4a7c-8c4b-1ddec4cce24c/1/8FqA2ZF4hxliA1oSbnxrFuSzN9E.roa"
+      }
+    ],
+    "available_tals": [
+      "afrinic.tal",
+      "lacnic.tal",
+      "apnic.tal",
+      "arin.tal",
+      "ripencc.tal"
+    ],
+    "missing_tals": []
+  },
+  {
+    "representative_prefix": "31.172.142.0/24",
+    "A": 1820,
+    "B": 31035,
+    "exact_event_date": "2026-06-05",
+    "bgpkit_A": "valid",
+    "bgpkit_B": "invalid",
+    "ripe_A": "valid",
+    "ripe_B": "invalid",
+    "ripe_policy_inversion": true,
+    "agreement_A": true,
+    "agreement_B": true,
+    "covering_vrp_n": 2,
+    "covering_vrps": [
+      {
+        "tal": "ripencc.tal",
+        "vrp_prefix": "31.172.142.0/24",
+        "asn": 1820,
+        "max_length": 32,
+        "uri": "rsync://rpki.ripe.net/repository/DEFAULT/e6/e01285-660d-4cd2-ad1f-625245a00abf/1/vSu8iiUcq5a5nc1_0VzuD_Ju4sw.roa"
+      },
+      {
+        "tal": "ripencc.tal",
+        "vrp_prefix": "31.172.136.0/21",
+        "asn": 1820,
+        "max_length": 32,
+        "uri": "rsync://rpki.ripe.net/repository/DEFAULT/e6/e01285-660d-4cd2-ad1f-625245a00abf/1/vSu8iiUcq5a5nc1_0VzuD_Ju4sw.roa"
+      }
+    ],
+    "available_tals": [
+      "afrinic.tal",
+      "lacnic.tal",
+      "apnic.tal",
+      "arin.tal",
+      "ripencc.tal"
+    ],
+    "missing_tals": []
+  },
+  {
+    "representative_prefix": "87.58.192.0/24",
+    "A": 198790,
+    "B": 219436,
+    "exact_event_date": "2026-06-15",
+    "bgpkit_A": "valid",
+    "bgpkit_B": "invalid",
+    "ripe_A": "valid",
+    "ripe_B": "invalid",
+    "ripe_policy_inversion": true,
+    "agreement_A": true,
+    "agreement_B": true,
+    "covering_vrp_n": 1,
+    "covering_vrps": [
+      {
+        "tal": "ripencc.tal",
+        "vrp_prefix": "87.58.192.0/24",
+        "asn": 198790,
+        "max_length": 24,
+        "uri": "rsync://rpki.ripe.net/repository/DEFAULT/fb/474f27-b286-46f0-ae45-132ffc8bde46/1/3Kg7_xEICbZcx2TnvFlE8qZj9EQ.roa"
+      }
+    ],
+    "available_tals": [
+      "afrinic.tal",
+      "lacnic.tal",
+      "apnic.tal",
+      "arin.tal",
+      "ripencc.tal"
+    ],
+    "missing_tals": []
+  },
+  {
+    "representative_prefix": "194.165.37.0/24",
+    "A": 16509,
+    "B": 198365,
+    "exact_event_date": "2026-06-27",
+    "bgpkit_A": "valid",
+    "bgpkit_B": "invalid",
+    "ripe_A": "valid",
+    "ripe_B": "invalid",
+    "ripe_policy_inversion": true,
+    "agreement_A": true,
+    "agreement_B": true,
+    "covering_vrp_n": 4,
+    "covering_vrps": [
+      {
+        "tal": "ripencc.tal",
+        "vrp_prefix": "194.165.37.0/24",
+        "asn": 14618,
+        "max_length": 24,
+        "uri": "rsync://rpki.ripe.net/repository/DEFAULT/35/e49ae7-a51a-4764-85c8-a7810e3a1beb/1/1-qgEtfD7o34ZK5y_c1RY5TzHJL8.roa"
+      },
+      {
+        "tal": "ripencc.tal",
+        "vrp_prefix": "194.165.37.0/24",
+        "asn": 16509,
+        "max_length": 24,
+        "uri": "rsync://rpki.ripe.net/repository/DEFAULT/35/e49ae7-a51a-4764-85c8-a7810e3a1beb/1/KS3gSsDRatqoleacB_dktcBbY2M.roa"
+      },
+      {
+        "tal": "ripencc.tal",
+        "vrp_prefix": "194.165.37.0/24",
+        "asn": 31898,
+        "max_length": 24,
+        "uri": "rsync://rpki.ripe.net/repository/DEFAULT/35/e49ae7-a51a-4764-85c8-a7810e3a1beb/1/Zw5WYMZLpFX4Ksnc0ifaTvkcsXY.roa"
+      },
+      {
+        "tal": "ripencc.tal",
+        "vrp_prefix": "194.165.37.0/24",
+        "asn": 400318,
+        "max_length": 24,
+        "uri": "rsync://rpki.ripe.net/repository/DEFAULT/35/e49ae7-a51a-4764-85c8-a7810e3a1beb/1/_ussT5RkZH-7W87cA2uGw42C8U0.roa"
+      }
+    ],
+    "available_tals": [
+      "afrinic.tal",
+      "lacnic.tal",
+      "apnic.tal",
+      "arin.tal",
+      "ripencc.tal"
+    ],
+    "missing_tals": []
+  },
+  {
+    "representative_prefix": "197.221.253.0/24",
+    "A": 37204,
+    "B": 56696,
+    "exact_event_date": "2026-07-16",
+    "bgpkit_A": "valid",
+    "bgpkit_B": "invalid",
+    "ripe_A": "valid",
+    "ripe_B": "invalid",
+    "ripe_policy_inversion": true,
+    "agreement_A": true,
+    "agreement_B": true,
+    "covering_vrp_n": 1,
+    "covering_vrps": [
+      {
+        "tal": "afrinic.tal",
+        "vrp_prefix": "197.221.224.0/19",
+        "asn": 37204,
+        "max_length": 24,
+        "uri": "rsync://rpki.afrinic.net/repository/member_repository/F36406B8/16691BB26FE511ED854B599FF1222468/309F4CEE6FE611ED945B4DA2F1222468.roa"
+      }
+    ],
+    "available_tals": [
+      "afrinic.tal",
+      "lacnic.tal",
+      "apnic.tal",
+      "arin.tal",
+      "ripencc.tal"
+    ],
+    "missing_tals": []
+  }
+]
