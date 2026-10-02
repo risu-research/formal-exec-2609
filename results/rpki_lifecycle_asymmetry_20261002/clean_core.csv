@@ -1,0 +1,14 @@
+prefix,A,B,B_median,rrc_n,peer_n,B_auth_range_start,B_auth_lead_floor_calendar_days,activation_class,A_valid_at_event_date,A_valid_at_cutoff_20261002,retirement_class,retirement_lag_right_censor_floor_calendar_days
+141.11.150.0/24,214026,154859,2026-09-03T16:36:03Z,23,293,2026-09-01,2,B_preauthorized_before_event_day,True,True,A_authorization_right_censored_at_cutoff,29
+155.94.165.0/24,62998,36352,2026-09-07T02:56:20Z,23,331,2025-05-06,489,B_preauthorized_before_event_day,True,True,A_authorization_right_censored_at_cutoff,25
+156.238.93.0/24,17561,401362,2026-09-05T06:27:35Z,23,319,,,no_covering_B_history,True,True,A_authorization_right_censored_at_cutoff,27
+176.125.0.0/19,12663,1273,2026-09-01T15:11:13Z,22,229,,,no_covering_B_history,True,True,A_authorization_right_censored_at_cutoff,31
+185.220.248.0/24,197537,174,2026-09-04T15:42:49Z,23,331,,,no_covering_B_history,True,True,A_authorization_right_censored_at_cutoff,28
+188.119.156.0/23,207743,206273,2026-09-01T13:53:03Z,23,342,2026-08-29,3,B_preauthorized_before_event_day,True,True,A_authorization_right_censored_at_cutoff,31
+207.89.18.0/24,205775,219200,2026-09-05T22:14:50Z,23,332,2026-08-02,34,B_preauthorized_before_event_day,True,True,A_authorization_right_censored_at_cutoff,27
+38.60.218.0/24,138915,154177,2026-09-03T03:17:08Z,23,362,2026-07-17,48,B_preauthorized_before_event_day,True,True,A_authorization_right_censored_at_cutoff,29
+45.176.188.0/24,139235,28423,2026-09-04T14:31:52Z,23,334,2025-01-26,586,B_preauthorized_before_event_day,True,True,A_authorization_right_censored_at_cutoff,28
+5.45.169.0/24,60203,41368,2026-09-02T06:01:49Z,8,13,,,no_covering_B_history,True,True,A_authorization_right_censored_at_cutoff,30
+80.174.124.0/24,216138,174,2026-09-04T15:42:47Z,23,332,2026-09-03,1,B_preauthorized_before_event_day,True,True,A_authorization_right_censored_at_cutoff,28
+91.103.124.0/22,61317,29802,2026-09-01T20:06:10Z,23,319,2026-02-11,202,B_preauthorized_before_event_day,True,True,A_authorization_right_censored_at_cutoff,31
+96.62.12.0/22,23532,174,2026-09-04T16:35:33Z,23,333,2026-09-03,1,B_preauthorized_before_event_day,True,True,A_authorization_right_censored_at_cutoff,28

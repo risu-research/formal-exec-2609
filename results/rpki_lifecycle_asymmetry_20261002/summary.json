@@ -1,0 +1,17 @@
+{
+  "clean_core_n": 13,
+  "activation_classes": {
+    "B_preauthorized_before_event_day": 9,
+    "no_covering_B_history": 4
+  },
+  "B_preauthorized_at_least_previous_day_n": 9,
+  "B_auth_same_event_calendar_day_n": 0,
+  "A_valid_at_event_date_n": 13,
+  "A_still_valid_at_cutoff_n": 13,
+  "retirement_classes": {
+    "A_authorization_right_censored_at_cutoff": 13
+  },
+  "B_lead_floor_calendar_days_median": 34,
+  "retirement_right_censor_floor_days_median": 28,
+  "guardrail": "ROA date ranges are date-granular observations. A range ending at the Oct 2 study cutoff is treated as right-censored, not as an actual withdrawal date. Same-day B authorization cannot be ordered against BGP without RPKISPOOL sub-day CCR snapshots."
+}
