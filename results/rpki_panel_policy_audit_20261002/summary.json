@@ -1,0 +1,27 @@
+{
+  "panel_design": "500-case month-stratified deterministic audit; top 2 largest clusters per month retained, remaining slots selected by deterministic SHA-256 ordering",
+  "screened_panel_n": 500,
+  "clean_context_n": 419,
+  "cluster_state_counts": {
+    "A_not_valid|B_not_valid": 132,
+    "A_not_valid|B_valid": 138,
+    "A_valid|B_valid": 139,
+    "A_valid|B_not_valid": 10
+  },
+  "clean_panel_policy_inversion_n": 10,
+  "clean_panel_policy_inversion_fraction": 0.02386634844868735,
+  "cluster_prefix_weighted_state_counts": {
+    "A_not_valid|B_not_valid": 1681,
+    "A_not_valid|B_valid": 739,
+    "A_valid|B_valid": 843,
+    "A_valid|B_not_valid": 15
+  },
+  "clean_panel_prefix_weight_n": 3278,
+  "policy_inversion_prefix_weight_n": 15,
+  "policy_inversion_prefix_weight_fraction": 0.004575960951799878,
+  "interpretation": {
+    "logic": "At the date-granular weekly transition checkpoint, A_auth_at_event=true means a covering VRP validates the observed prefix for old origin A. If B_auth_at_event=false for that same prefix, at least that A VRP covers the route but no matching B VRP validates it; therefore the new B route is ROV Invalid, not NotFound.",
+    "sampling_guardrail": "This deterministic audit is substantially less selected on lifecycle outcome than the exact-timing subset, but it deliberately retains two largest clusters per month and is not a probability sample. Report it as an audit-panel rate, not an ecosystem prevalence estimate.",
+    "timing_guardrail": "Weekly event_date is a checkpoint, not the exact BGP transition time. The 185-case multi-RRC replay provides exact-date confirmation of the mechanism."
+  }
+}
