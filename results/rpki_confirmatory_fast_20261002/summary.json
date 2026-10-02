@@ -1,0 +1,59 @@
+{
+  "design": {
+    "tail_definition": "B remains origin in Sep08/Sep15/Sep22/Sep29 daily snapshots and old A remains RPKI-valid on Sep29",
+    "tail_cases_all": 36,
+    "controls": 24,
+    "bgp_exact_source": "RIPEstat BGPlay all RRCs, Sep01 11:00Z to Sep09 12:00Z",
+    "intent_guardrail": "context_class is evidence-backed operational context, not subjective intent"
+  },
+  "overall": {
+    "n": 60,
+    "exact_resolved": 57,
+    "multi_rrc_ge2": 50,
+    "multi_rrc_ge3": 50,
+    "same_org": 5,
+    "A_recurrence": 32,
+    "transfer_evidence": 19,
+    "classes": {
+      "unresolved": 8,
+      "registry_transfer_evidence": 19,
+      "observed_A_recurrence": 21,
+      "same_org": 5,
+      "persistent_cross_org_or_unresolved": 7
+    }
+  },
+  "tail3w": {
+    "n": 36,
+    "exact_resolved": 33,
+    "multi_rrc_ge2": 31,
+    "multi_rrc_ge3": 31,
+    "same_org": 2,
+    "A_recurrence": 19,
+    "transfer_evidence": 19,
+    "classes": {
+      "unresolved": 4,
+      "registry_transfer_evidence": 19,
+      "observed_A_recurrence": 10,
+      "same_org": 2,
+      "persistent_cross_org_or_unresolved": 1
+    }
+  },
+  "controls": {
+    "n": 24,
+    "exact_resolved": 24,
+    "multi_rrc_ge2": 19,
+    "multi_rrc_ge3": 19,
+    "same_org": 3,
+    "A_recurrence": 13,
+    "transfer_evidence": 0,
+    "classes": {
+      "observed_A_recurrence": 11,
+      "same_org": 3,
+      "persistent_cross_org_or_unresolved": 6,
+      "unresolved": 4
+    }
+  },
+  "B_spread_s_median": 2196.0,
+  "errors_n": 0,
+  "peer_rows": 15579
+}
