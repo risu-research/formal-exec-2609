@@ -1,0 +1,30 @@
+name: j-6d4f-h
+on:
+  push:
+    branches: ["exec/j-6d4f"]
+    paths: ["jobs/j-6d4f/start-h"]
+permissions:
+  contents: write
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - name: Run
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf runs/j-6d4f/a6
+          mkdir -p runs/j-6d4f/a6
+          python jobs/j-6d4f/r6.py runs/j-6d4f/a2/y.csv runs/j-6d4f/a6 | tee runs/j-6d4f/a6/stdout.txt
+          sha256sum runs/j-6d4f/a6/r6.json > runs/j-6d4f/a6/manifest.txt
+      - name: Seal
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add runs/j-6d4f/a6
+          git commit -m 'Seal j-6d4f-h output' || true
+          git push origin HEAD:exec/j-6d4f
