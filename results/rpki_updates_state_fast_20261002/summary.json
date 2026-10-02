@@ -1,0 +1,54 @@
+{
+  "design": {
+    "method": "independent RIPEstat BGP State at Sep01 11Z + BGP Updates through Sep09 12Z",
+    "workers": 6,
+    "tail_cases_all": 36,
+    "controls": 18,
+    "guardrail": "context_class is an operational-context proxy, not operator intent"
+  },
+  "tail3w": {
+    "n": 36,
+    "resolved": 33,
+    "multi_rrc_ge2": 31,
+    "multi_rrc_ge3": 31,
+    "same_org": 2,
+    "A_recurrence": 19,
+    "classes": {
+      "observed_A_recurrence": 17,
+      "unresolved": 4,
+      "persistent_cross_org_or_unresolved": 13,
+      "same_org": 2
+    }
+  },
+  "controls": {
+    "n": 18,
+    "resolved": 18,
+    "multi_rrc_ge2": 16,
+    "multi_rrc_ge3": 16,
+    "same_org": 3,
+    "A_recurrence": 9,
+    "classes": {
+      "persistent_cross_org_or_unresolved": 6,
+      "observed_A_recurrence": 7,
+      "same_org": 3,
+      "unresolved": 2
+    }
+  },
+  "overall": {
+    "n": 54,
+    "resolved": 51,
+    "multi_rrc_ge2": 47,
+    "multi_rrc_ge3": 47,
+    "same_org": 5,
+    "A_recurrence": 28,
+    "classes": {
+      "observed_A_recurrence": 24,
+      "persistent_cross_org_or_unresolved": 19,
+      "unresolved": 6,
+      "same_org": 5
+    }
+  },
+  "B_spread_s_median": 2196.0,
+  "peer_rows": 14827,
+  "errors_n": 0
+}
