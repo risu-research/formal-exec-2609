@@ -11,11 +11,12 @@
       "20260908": "2026/09/routeviews-rv2-20260908-1000.pfx2as.gz",
       "20260915": "2026/09/routeviews-rv2-20260915-1200.pfx2as.gz"
     },
-    "filter": "exact prefix, single-origin snapshot at all retained dates; A at d0, B at d1 and d2; deterministic sha256 sample",
+    "filter": "exact prefix, single-origin; A at d0, B at d1 and d2; collapse persistent prefixes by A->B origin pair; one deterministic representative per pair; deterministic sha256 pair sample",
     "sample_n": 100,
     "raw_changes": 692,
-    "persistent_changes": 576,
-    "guardrail": "Snapshot pilot only. A_lingering_valid means authorization persisted after observed routing replacement; it does not establish that authorization is unnecessary, stale, malicious, or misconfigured."
+    "persistent_prefixes": 576,
+    "distinct_origin_pairs": 221,
+    "guardrail": "Daily-snapshot feasibility pilot. A_lingering_valid means authorization persisted after observed routing replacement; it does not establish that authorization is unnecessary, stale, malicious, or misconfigured."
   },
   "rpki_anchors_used": {
     "20260901": [
@@ -41,19 +42,25 @@
     ]
   },
   "counts": {
-    "B_preauthorized_d0": 17,
-    "B_invalid_d1": 3,
-    "B_notvalid_d1": 22,
-    "A_lingering_valid_d1": 43,
-    "A_lingering_valid_d2": 41,
-    "dual_valid_d1": 40
+    "B_preauthorized_d0": 22,
+    "B_invalid_d1": 4,
+    "B_notfound_d1": 25,
+    "B_valid_d1": 71,
+    "A_lingering_valid_d1": 34,
+    "A_lingering_valid_d2": 32,
+    "dual_valid_d1": 30
   },
   "rates": {
-    "B_preauthorized_d0": 0.17,
-    "B_invalid_d1": 0.03,
-    "B_notvalid_d1": 0.22,
-    "A_lingering_valid_d1": 0.43,
-    "A_lingering_valid_d2": 0.41,
-    "dual_valid_d1": 0.4
+    "B_preauthorized_d0": 0.22,
+    "B_invalid_d1": 0.04,
+    "B_notfound_d1": 0.25,
+    "B_valid_d1": 0.71,
+    "A_lingering_valid_d1": 0.34,
+    "A_lingering_valid_d2": 0.32,
+    "dual_valid_d1": 0.3
+  },
+  "conditional": {
+    "rpki_covered_at_d1_n": 75,
+    "new_origin_invalid_among_rpki_covered_d1": 0.05333333333333334
   }
 }
