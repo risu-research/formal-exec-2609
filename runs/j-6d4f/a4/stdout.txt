@@ -1,0 +1,173 @@
+{
+  "calls": 2760,
+  "files": {
+    "gpt-4o-airline.json": {
+      "calls": 140,
+      "ci": [
+        0.10289350642004402,
+        0.20048667530781522
+      ],
+      "failure_h": 18,
+      "failure_n": 116,
+      "groups": 29,
+      "hits": 29,
+      "max_n": 9,
+      "median_n": 5,
+      "success_h": 11,
+      "success_n": 84,
+      "traces": 200
+    },
+    "gpt-4o-retail.json": {
+      "calls": 558,
+      "ci": [
+        0.3414488114678883,
+        0.43002482896627525
+      ],
+      "failure_h": 70,
+      "failure_n": 182,
+      "groups": 181,
+      "hits": 177,
+      "max_n": 6,
+      "median_n": 3,
+      "success_h": 107,
+      "success_n": 278,
+      "traces": 460
+    },
+    "sonnet-35-new-airline.json": {
+      "calls": 703,
+      "ci": [
+        0.3386231845670135,
+        0.4335646431298747
+      ],
+      "failure_h": 90,
+      "failure_n": 216,
+      "groups": 156,
+      "hits": 154,
+      "max_n": 10,
+      "median_n": 4.0,
+      "success_h": 64,
+      "success_n": 184,
+      "traces": 400
+    },
+    "sonnet-35-new-retail.json": {
+      "calls": 1359,
+      "ci": [
+        0.4547798784746211,
+        0.519241638127766
+      ],
+      "failure_h": 139,
+      "failure_n": 283,
+      "groups": 458,
+      "hits": 448,
+      "max_n": 6,
+      "median_n": 3.0,
+      "success_h": 309,
+      "success_n": 637,
+      "traces": 920
+    }
+  },
+  "groups": 824,
+  "local_k2": 1.7726396917148362,
+  "local_k4": 2.768304914744233,
+  "local_kinf": 3.349514563106796,
+  "max_n": 10,
+  "mean_n": 3.349514563106796,
+  "median_n": 3.0,
+  "p90_n": 5.0,
+  "pair_counts": {
+    "7a43c2e85273>36a06f3f9625": 24,
+    "9fbdd2fdb746>36a06f3f9625": 21,
+    "e340b9804de8>7a43c2e85273": 594,
+    "e340b9804de8>9d5edb5fc022": 185
+  },
+  "schema": "j6d4f-p4",
+  "summary": {
+    "airline": {
+      "failure_ci95": [
+        0.27715490111833163,
+        0.3774440265800725
+      ],
+      "failure_frac": 0.3253012048192771,
+      "failure_h": 108,
+      "failure_n": 332,
+      "success_ci95": [
+        0.2295051184614061,
+        0.33641834107302604
+      ],
+      "success_frac": 0.2798507462686567,
+      "success_h": 75,
+      "success_n": 268,
+      "task_trial_frac_median": 0.08333333333333333,
+      "tasks": 50,
+      "tasks_any": 29,
+      "tasks_any_frac": 0.58,
+      "tasks_majority": 18,
+      "tasks_majority_frac": 0.36,
+      "trace_ci95": [
+        0.2694973623831972,
+        0.34298370101214615
+      ],
+      "trace_frac": 0.305,
+      "trace_hits": 183,
+      "traces": 600
+    },
+    "all": {
+      "failure_ci95": [
+        0.3643310652799086,
+        0.4321330185850411
+      ],
+      "failure_frac": 0.397741530740276,
+      "failure_h": 317,
+      "failure_n": 797,
+      "success_ci95": [
+        0.38728768056819685,
+        0.4433552427084102
+      ],
+      "success_frac": 0.4150464919695689,
+      "success_h": 491,
+      "success_n": 1183,
+      "task_trial_frac_median": 0.4166666666666667,
+      "tasks": 165,
+      "tasks_any": 124,
+      "tasks_any_frac": 0.7515151515151515,
+      "tasks_majority": 79,
+      "tasks_majority_frac": 0.47878787878787876,
+      "trace_ci95": [
+        0.38663093483753996,
+        0.42988666117218266
+      ],
+      "trace_frac": 0.4080808080808081,
+      "trace_hits": 808,
+      "traces": 1980
+    },
+    "retail": {
+      "failure_ci95": [
+        0.4048473094413441,
+        0.4949055833206954
+      ],
+      "failure_frac": 0.44946236559139785,
+      "failure_h": 209,
+      "failure_n": 465,
+      "success_ci95": [
+        0.42263774180971814,
+        0.4870311143316579
+      ],
+      "success_frac": 0.4546448087431694,
+      "success_h": 416,
+      "success_n": 915,
+      "task_trial_frac_median": 0.5,
+      "tasks": 115,
+      "tasks_any": 95,
+      "tasks_any_frac": 0.8260869565217391,
+      "tasks_majority": 61,
+      "tasks_majority_frac": 0.5304347826086957,
+      "trace_ci95": [
+        0.4268025369032475,
+        0.4792560660014627
+      ],
+      "trace_frac": 0.4528985507246377,
+      "trace_hits": 625,
+      "traces": 1380
+    }
+  }
+}
