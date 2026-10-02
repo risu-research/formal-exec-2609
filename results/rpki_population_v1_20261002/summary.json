@@ -1,0 +1,24 @@
+{
+  "window": {
+    "start": "2025-10-06",
+    "end": "2026-09-28",
+    "weekly_snapshots": 52
+  },
+  "frozen_rules": {
+    "address_family": "IPv4",
+    "snapshot_route": "exact-prefix single-origin numeric ASN only",
+    "pre_stability": ">=3 consecutive weekly observations under A before change",
+    "post_persistence": "B at event plus >=4 further consecutive weekly observations (>=28d lower bound)",
+    "unit": "cluster all qualifying prefixes sharing transition week and A->B pair; deterministic representative prefix",
+    "recurrence": "flag/exclude if old A is observed again at a weekly checkpoint within 8 weeks"
+  },
+  "counts": {
+    "raw_single_origin_changes": 35938,
+    "prestable_changes": 28678,
+    "confirmed_prefix_events": 20648,
+    "event_clusters": 7198,
+    "clusters_no_A_recurrence_8w": 7046,
+    "clusters_with_A_recurrence_8w": 152
+  },
+  "guardrail": "This enumerator detects persistent observed single-origin replacements in weekly RouteViews rv2 snapshots. It does not by itself establish transfer intent, stale authorization, or global visibility."
+}
