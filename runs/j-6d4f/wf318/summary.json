@@ -1,0 +1,164 @@
+{
+  "apps": {
+    "helloworld/helloworld": {
+      "max": 3.3469026548672565,
+      "median": 2.1734513274336282,
+      "n": 2,
+      "p90": 3.112212389380531
+    },
+    "makeflow/blast": {
+      "max": 268.7976585084909,
+      "median": 81.27638037433803,
+      "n": 15,
+      "p90": 265.7946227868503
+    },
+    "makeflow/bwa": {
+      "max": 26.398491411569992,
+      "median": 8.007441491368047,
+      "n": 15,
+      "p90": 25.629078435138815
+    },
+    "nextflow/legacy": {
+      "max": 8.331462924567301,
+      "median": 4.58297958413118,
+      "n": 15,
+      "p90": 7.85699178698857
+    },
+    "nextflow/ro-crate": {
+      "max": 2.8617524964421017,
+      "median": 2.8617524964421017,
+      "n": 1,
+      "p90": 2.8617524964421017
+    },
+    "nextflow/sarek_germline": {
+      "max": 11.374867985567729,
+      "median": 5.2993553589490325,
+      "n": 50,
+      "p90": 9.44796443049687
+    },
+    "nextflow/sarek_somatic": {
+      "max": 9.266878289347174,
+      "median": 4.219104473721923,
+      "n": 50,
+      "p90": 6.617090516101285
+    },
+    "pegasus/1000genome": {
+      "max": 170.10518185871712,
+      "median": 73.5209630798638,
+      "n": 22,
+      "p90": 127.9215185962631
+    },
+    "pegasus/cycles": {
+      "max": 148.3214937682435,
+      "median": 38.164729005934504,
+      "n": 24,
+      "p90": 102.88414239751694
+    },
+    "pegasus/epigenomics": {
+      "max": 96.39956657633073,
+      "median": 43.40457926826298,
+      "n": 26,
+      "p90": 92.99663786034415
+    },
+    "pegasus/montage": {
+      "max": 234.28154833200904,
+      "median": 58.1778107202601,
+      "n": 17,
+      "p90": 192.73600066323783
+    },
+    "pegasus/seismology": {
+      "max": 112.85245425501017,
+      "median": 71.84769671589154,
+      "n": 11,
+      "p90": 107.39687786960513
+    },
+    "pegasus/soykb": {
+      "max": 6.21134963828977,
+      "median": 3.5675128120802384,
+      "n": 10,
+      "p90": 5.909518859513119
+    },
+    "pegasus/srasearch": {
+      "max": 24.173854140714518,
+      "median": 12.926173907080786,
+      "n": 25,
+      "p90": 22.444519410403537
+    },
+    "snakemake/RASflow": {
+      "max": 7.738563046457825,
+      "median": 1.672246684502463,
+      "n": 7,
+      "p90": 5.301428204128612
+    },
+    "snakemake/rna-seq-star-deseq2": {
+      "max": 45.7066522461076,
+      "median": 17.060236776340865,
+      "n": 19,
+      "p90": 34.65163946405476
+    },
+    "snakemake/varlociraptor": {
+      "max": 1.1890232776239775,
+      "median": 1.0509171852620633,
+      "n": 8,
+      "p90": 1.1493040219191808
+    },
+    "streamflow/streamflow": {
+      "max": 5.871258169909112,
+      "median": 5.871258169909112,
+      "n": 1,
+      "p90": 5.871258169909112
+    }
+  },
+  "instances_parsed": 318,
+  "overall": {
+    "fraction_parallelism_gt10": 0.48427672955974843,
+    "fraction_parallelism_gt2": 0.949685534591195,
+    "max_width_median": 143.0,
+    "n": 318,
+    "parallelism_max": 268.7976585084909,
+    "parallelism_mean": 30.532068431585724,
+    "parallelism_median": 8.992446495470148,
+    "parallelism_p10": 2.9967640161101685,
+    "parallelism_p90": 84.97550618799164,
+    "tasks_median": 413.0
+  },
+  "systems": {
+    "helloworld": {
+      "n": 2,
+      "parallelism_max": 3.3469026548672565,
+      "parallelism_median": 2.1734513274336282,
+      "parallelism_p90": 3.112212389380531
+    },
+    "makeflow": {
+      "n": 30,
+      "parallelism_max": 268.7976585084909,
+      "parallelism_median": 29.969283040240036,
+      "parallelism_p90": 263.96527967191923
+    },
+    "nextflow": {
+      "n": 116,
+      "parallelism_max": 11.374867985567729,
+      "parallelism_median": 4.84696489057518,
+      "parallelism_p90": 7.836859581892389
+    },
+    "pegasus": {
+      "n": 135,
+      "parallelism_max": 234.28154833200904,
+      "parallelism_median": 33.459779335006345,
+      "parallelism_p90": 103.16657534016487
+    },
+    "snakemake": {
+      "n": 34,
+      "parallelism_max": 45.7066522461076,
+      "parallelism_median": 8.552294914293702,
+      "parallelism_p90": 31.754183883372576
+    },
+    "streamflow": {
+      "n": 1,
+      "parallelism_max": 5.871258169909112,
+      "parallelism_median": 5.871258169909112,
+      "parallelism_p90": 5.871258169909112
+    }
+  },
+  "weighted_complete": 318
+}
