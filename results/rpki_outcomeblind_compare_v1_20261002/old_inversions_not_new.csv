@@ -1,0 +1,2 @@
+representative_prefix,A,B,exact_event_date,exact_rrc_n,B_validation_event,A_validation_event,A_valid_B_invalid,B_invalid_event,B_unknown_event,B_valid_event,B_next_matching_auth_start,daily_trace_n,event_start_invalid_run_days_observed,first_noninvalid_day,first_valid_day
+136.0.242.0/24,401152,834,2025-11-21,3,invalid,valid,True,True,False,False,2026-03-14,114,42,2026-01-02,2026-01-02
