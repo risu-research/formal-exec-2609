@@ -1,7 +1,21 @@
 # Confirmatory longitudinal design: federated capability readiness
 
-Campaign ID: `SIGMETRICS-READINESS-LONGITUDINAL-v1`  
-Frozen before the first longitudinal observation on 2026-10-02.
+Campaign ID: `SIGMETRICS-READINESS-LONGITUDINAL-v1.1`  
+Original v1 frozen before the first longitudinal observation on 2026-10-02.
+
+## Prospective amendment v1.1 — 2026-10-02
+
+The first completed longitudinal wave was inspected only for instrument validation (field presence, artifact integrity, and whether the proposed latency/coverage axes were non-degenerate). To remove any ambiguity introduced by that inspection, **that first wave is permanently excluded from primary confirmatory inference**.
+
+Starting with the first wave collected after this amendment commit, all observations are prospectively confirmatory for the already-fixed population, P0–P5 policies, deadline grid, primary estimands, Pareto metrics, and confirmatory thresholds below. The previous calendar split (days 1–7 calibration / days 8–14 held-out confirmation) is superseded for these fixed primary claims.
+
+Rationale: no model or policy parameter is fitted from the longitudinal outcomes for the primary analysis. A calendar holdout would discard roughly half of the repeated observations without protecting against an overfitting pathway that is no longer present. Temporal dependence is handled inferentially rather than by sacrificing half the data.
+
+No endpoint, primary metric, P0–P5 policy, deadline, weighting view, or success threshold may be changed in response to post-amendment outcomes.
+
+Any **new adaptive policy** invented after this amendment is exploratory unless it receives its own prospective confirmation. Such secondary adaptive work must use blocked/interleaved temporal cross-fitting or a later prospective holdout; it may not borrow the primary all-wave confirmatory label.
+
+Submission/readiness decisions should be based on data integrity and inferential precision, not on whether an effect is favorable. Looking at a running point estimate is not a license to stop because a desired threshold has been crossed.
 
 ## Why this design
 
@@ -71,6 +85,16 @@ On the full panel:
 
 p99 is reported as coarse unless at least 100 successful observations exist for the unit being estimated.
 
+## Dependence-aware inference
+
+Primary point estimates use every eligible post-amendment confirmatory wave.
+
+Policy comparisons are paired within the same realized wave. Temporal uncertainty must not treat hourly observations as independent. Report dependence-aware uncertainty using temporal block resampling and/or HAC-style wave-level inference, with sensitivity to more than one reasonable block/bandwidth choice. Endpoint-level and wave-level variability are reported separately rather than collapsed into an i.i.d. standard error.
+
+For quantiles and rare failures, report observation counts and empirical/order-statistic uncertainty explicitly; do not imply tail precision that the sample size cannot support.
+
+The original pre-campaign exploratory rounds remain external exploratory evidence and are not pooled into confirmatory confidence intervals.
+
 ## Freshness ground truth
 
 The campaign records full normalized tool-schema hashes, not only cache age.
@@ -136,29 +160,28 @@ Report Pareto frontiers for:
 
 A policy is dominated only when another policy is no worse on every displayed dimension and strictly better on at least one.
 
-## Time split
+## Adaptive-secondary rule
 
-- Days 1–7: calibration/exploration for secondary adaptive-policy ideas only.
-- Days 8–14: held-out temporal confirmation.
-- The fixed P0–P5 policies and deadline grid above are evaluated on both halves without retuning.
+There is no calendar split for the fixed primary claims.
 
-Any new adaptive policy invented after data collection starts must be clearly labeled exploratory and evaluated on the held-out second half only if its parameters were fixed from the first half.
+If a new policy, deadline rule, caching heuristic, or adaptive parameter is developed from the longitudinal outcomes, it must be labeled exploratory or evaluated under a separate prospectively frozen blocked/interleaved scheme. For example, all hourly sentinel waves belonging to the same 6-hour full-panel macroblock can be kept in the same fold so nearby observations are not split across training and validation folds.
 
 ## Robustness checks
 
-- remove the slowest 1–4 operators by calibration-period median latency;
+- remove the slowest 1–4 operators as identified from the **pre-campaign exploratory rounds**, not from post-amendment confirmatory outcomes;
 - analyze sentinel and full-panel waves separately;
 - control/stratify by recorded runner egress vantage;
 - discovery-only vs tools-list-only components;
 - server-weighted vs tool-count-weighted coverage;
 - complete-case latency analysis plus failures treated explicitly as failures, never silently dropped;
-- exclude endpoints whose public URL changed only in a sensitivity analysis, not from the primary frozen population.
+- exclude endpoints whose public URL changed only in a sensitivity analysis, not from the primary frozen population;
+- temporal-block/HAC sensitivity for serial dependence.
 
 ## Confirmatory success criteria
 
-The original composition claim is supported if, on held-out days 8–14:
+The original composition claim is supported on the prospectively collected post-amendment confirmatory waves if:
 1. median Tall/T50 at k=16 remains > 1.5 in both server- and tool-weighted views; and
 2. P(T90 < Tall) at k=16 remains > 0.70; and
-3. the result survives removal of the four slowest operators.
+3. the result survives removal of the four slowest operators identified from the pre-campaign exploratory rounds.
 
 The intervention claim is descriptive/Pareto-based rather than a winner-take-all hypothesis. We will not declare one policy universally best; we will quantify the trade-off surface.
