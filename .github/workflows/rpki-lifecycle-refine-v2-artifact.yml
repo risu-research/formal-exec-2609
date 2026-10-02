@@ -1,0 +1,32 @@
+name: rpki-lifecycle-refine-v2-artifact
+on:
+  workflow_dispatch:
+  push:
+    branches: [rpki-pilot-20261002]
+    paths:
+      - .github/workflows/rpki-lifecycle-refine-v2-artifact.yml
+permissions:
+  contents: read
+  actions: read
+jobs:
+  refine:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: rpki-pilot-20261002
+      - name: Recover corrected lifecycle artifact
+        run: |
+          mkdir -p results/rpki_lifecycle_panel_v1_20261002
+          gh api repos/risu-research/formal-exec-2609/actions/artifacts/11250075385/zip > /tmp/lifecycle.zip
+          unzip -o /tmp/lifecycle.zip -d results/rpki_lifecycle_panel_v1_20261002
+          test -s results/rpki_lifecycle_panel_v1_20261002/exact_lifecycle.csv
+      - name: Realign ROA lifecycle to exact BGP date
+        run: python3 rpki_lifecycle_refine_v2.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rpki-lifecycle-refine-v2-20261002
+          path: results/rpki_lifecycle_refine_v2_20261002
