@@ -33,16 +33,38 @@ jobs:
           wc -l results/rpki_lifecycle_refine_v2_20261002/exact_lifecycle_v2.csv
       - name: Run historical ROV consequence replay
         run: python rpki_policy_consequence_v1.py
+      - name: Probe independent historical RPKI spool mirrors for headline inversions
+        run: python rpki_inversion_spool_probe.py
+      - name: Correct delayed-subset duration summary
+        run: |
+          python - <<'PY'
+          import csv,json,math
+          from pathlib import Path
+          p=Path('results/rpki_policy_consequence_v1_20261002')
+          rows=list(csv.DictReader(open(p/'cases.csv',encoding='utf8')))
+          delayed=[r for r in rows if r.get('B_next_matching_auth_start')]
+          runs=[int(r['event_start_invalid_run_days_observed']) for r in delayed if int(r.get('event_start_invalid_run_days_observed') or 0)>0]
+          def q(v,q):
+              if not v:return None
+              x=sorted(v);return x[int(math.ceil(q*(len(x)-1)))]
+          s=json.load(open(p/'summary.json'))
+          s['delayed_matching_authorization_subset']['event_start_invalid_run_days']={
+              'n':len(runs),'min':min(runs) if runs else None,'median':q(runs,.5),'p90':q(runs,.9),'p99':q(runs,.99),'max':max(runs) if runs else None}
+          (p/'summary.json').write_text(json.dumps(s,indent=2),encoding='utf8')
+          print(json.dumps(s['delayed_matching_authorization_subset'],indent=2))
+          PY
       - name: Commit results
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add results/rpki_policy_consequence_v1_20261002
-          git diff --cached --quiet || git commit -m 'add corrected RPKI policy consequence replay [skip ci]'
+          git add results/rpki_policy_consequence_v1_20261002 results/rpki_inversion_spool_probe_20261002
+          git diff --cached --quiet || git commit -m 'add RPKI consequence replay and independent spool probe [skip ci]'
           git pull --rebase origin rpki-pilot-20261002
           git push origin HEAD:rpki-pilot-20261002
       - uses: actions/upload-artifact@v4
         with:
           name: rpki-policy-consequence-v1-corrected-20261002
-          path: results/rpki_policy_consequence_v1_20261002
+          path: |
+            results/rpki_policy_consequence_v1_20261002
+            results/rpki_inversion_spool_probe_20261002
           retention-days: 90
