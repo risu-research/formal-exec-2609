@@ -1,0 +1,59 @@
+{
+  "design": {
+    "source": "CAIDA RouteViews pfx2as daily snapshots",
+    "dates": [
+      "20260901",
+      "20260908",
+      "20260915"
+    ],
+    "files": {
+      "20260901": "2026/09/routeviews-rv2-20260901-1200.pfx2as.gz",
+      "20260908": "2026/09/routeviews-rv2-20260908-1000.pfx2as.gz",
+      "20260915": "2026/09/routeviews-rv2-20260915-1200.pfx2as.gz"
+    },
+    "filter": "exact prefix, single-origin snapshot at all retained dates; A at d0, B at d1 and d2; deterministic sha256 sample",
+    "sample_n": 100,
+    "raw_changes": 692,
+    "persistent_changes": 576,
+    "guardrail": "Snapshot pilot only. A_lingering_valid means authorization persisted after observed routing replacement; it does not establish that authorization is unnecessary, stale, malicious, or misconfigured."
+  },
+  "rpki_anchors_used": {
+    "20260901": [
+      "afrinic.tal",
+      "apnic.tal",
+      "arin.tal",
+      "lacnic.tal",
+      "ripencc.tal"
+    ],
+    "20260908": [
+      "afrinic.tal",
+      "apnic.tal",
+      "arin.tal",
+      "lacnic.tal",
+      "ripencc.tal"
+    ],
+    "20260915": [
+      "afrinic.tal",
+      "apnic.tal",
+      "arin.tal",
+      "lacnic.tal",
+      "ripencc.tal"
+    ]
+  },
+  "counts": {
+    "B_preauthorized_d0": 17,
+    "B_invalid_d1": 3,
+    "B_notvalid_d1": 22,
+    "A_lingering_valid_d1": 43,
+    "A_lingering_valid_d2": 41,
+    "dual_valid_d1": 40
+  },
+  "rates": {
+    "B_preauthorized_d0": 0.17,
+    "B_invalid_d1": 0.03,
+    "B_notvalid_d1": 0.22,
+    "A_lingering_valid_d1": 0.43,
+    "A_lingering_valid_d2": 0.41,
+    "dual_valid_d1": 0.4
+  }
+}
