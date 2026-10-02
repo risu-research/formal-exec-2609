@@ -1,0 +1,32 @@
+name: rpki-updates-state-fast
+on:
+  workflow_dispatch:
+  push:
+    branches: [rpki-pilot-20261002]
+    paths:
+      - rpki_updates_state_fast.py
+      - .github/workflows/rpki-updates-state-fast.yml
+permissions:
+  contents: write
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: rpki-pilot-20261002
+      - name: Run independent state plus updates reconstruction
+        run: python3 rpki_updates_state_fast.py
+      - name: Commit independent evidence
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git pull --rebase origin rpki-pilot-20261002 || true
+          git add results/rpki_updates_state_fast_20261002
+          git commit -m "add independent BGP state-updates validation [skip ci]" || exit 0
+          git push origin HEAD:rpki-pilot-20261002
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rpki-updates-state-fast-20261002
+          path: results/rpki_updates_state_fast_20261002
