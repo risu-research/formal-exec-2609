@@ -1,0 +1,15 @@
+{
+  "bad": [],
+  "calls": 2760,
+  "digest": "cb49cfbc4cc2bdc9e14fd063e157b761c76c1b4d27d93531363e9dc9b187181d",
+  "fails": 0,
+  "groups": 824,
+  "kinds": {
+    "36a06f3f9625": 45,
+    "7a43c2e85273": 594,
+    "9d5edb5fc022": 185
+  },
+  "passes": 824,
+  "repetitions": 3,
+  "schema": "j6d4f-v8"
+}
