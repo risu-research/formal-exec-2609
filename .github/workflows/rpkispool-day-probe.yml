@@ -1,0 +1,32 @@
+name: rpkispool-day-probe
+on:
+  workflow_dispatch:
+  push:
+    branches: [rpki-pilot-20261002]
+    paths:
+      - rpkispool_day_probe.py
+      - .github/workflows/rpkispool-day-probe.yml
+permissions:
+  contents: write
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: rpki-pilot-20261002
+      - name: Inspect day-level RPKISPOOL snapshots
+        run: python3 rpkispool_day_probe.py
+      - name: Commit day inventory
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git pull --rebase origin rpki-pilot-20261002 || true
+          git add results/rpkispool_day_probe_20261002
+          git commit -m "add RPKISPOOL day-level inventory [skip ci]" || exit 0
+          git push origin HEAD:rpki-pilot-20261002
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rpkispool-day-probe-20261002
+          path: results/rpkispool_day_probe_20261002
