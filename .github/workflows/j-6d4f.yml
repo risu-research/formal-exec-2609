@@ -1,0 +1,75 @@
+name: j-6d4f
+on:
+  push:
+    branches: ["exec/j-6d4f"]
+    paths: ["jobs/j-6d4f/start"]
+permissions:
+  contents: write
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Prepare A
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/src"
+          git -C "$RUNNER_TEMP/src" init -q at
+          git -C "$RUNNER_TEMP/src/at" remote add origin https://github.com/pagarsky/agent-trace.git
+          git -C "$RUNNER_TEMP/src/at" fetch -q --depth 1 origin 3411e2358dee4744a9741715cd80a4a030cd7d0d
+          git -C "$RUNNER_TEMP/src/at" checkout -q FETCH_HEAD
+          test "$(git -C "$RUNNER_TEMP/src/at" rev-parse HEAD)" = "3411e2358dee4744a9741715cd80a4a030cd7d0d"
+      - name: Prepare B
+        shell: bash
+        run: |
+          set -euo pipefail
+          git -C "$RUNNER_TEMP/src" init -q tau
+          git -C "$RUNNER_TEMP/src/tau" remote add origin https://github.com/sierra-research/tau-bench.git
+          git -C "$RUNNER_TEMP/src/tau" fetch -q --depth 1 origin 59a200c6d575d595120f1cb70fea53cef0632f6b
+          git -C "$RUNNER_TEMP/src/tau" checkout -q FETCH_HEAD
+          test "$(git -C "$RUNNER_TEMP/src/tau" rev-parse HEAD)" = "59a200c6d575d595120f1cb70fea53cef0632f6b"
+      - name: Prepare C
+        shell: bash
+        run: |
+          set -euo pipefail
+          git -C "$RUNNER_TEMP/src" init -q wf
+          git -C "$RUNNER_TEMP/src/wf" remote add origin https://github.com/wfcommons/WfInstances.git
+          git -C "$RUNNER_TEMP/src/wf" config core.sparseCheckout true
+          mkdir -p "$RUNNER_TEMP/src/wf/.git/info"
+          printf 'pegasus/montage/\npegasus/cycles/\npegasus/epigenomics/\n' > "$RUNNER_TEMP/src/wf/.git/info/sparse-checkout"
+          git -C "$RUNNER_TEMP/src/wf" fetch -q --depth 1 origin 44236594dc5e5448d8f6d584b7f598626641d46c
+          git -C "$RUNNER_TEMP/src/wf" checkout -q FETCH_HEAD
+          test "$(git -C "$RUNNER_TEMP/src/wf" rev-parse HEAD)" = "44236594dc5e5448d8f6d584b7f598626641d46c"
+      - name: Measure
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile jobs/j-6d4f/measure.py
+          rm -rf runs/j-6d4f/work
+          mkdir -p runs/j-6d4f/work
+          python jobs/j-6d4f/measure.py runs/j-6d4f/work "$RUNNER_TEMP/src" | tee runs/j-6d4f/work/stdout.txt
+          {
+            echo 'A_COMMIT 3411e2358dee4744a9741715cd80a4a030cd7d0d'
+            echo 'B_COMMIT 59a200c6d575d595120f1cb70fea53cef0632f6b'
+            echo 'C_COMMIT 44236594dc5e5448d8f6d584b7f598626641d46c'
+            find "$RUNNER_TEMP/src/at/datasets" -maxdepth 1 -type f -name '*.jsonl' -print0 | sort -z | xargs -0 sha256sum
+            find "$RUNNER_TEMP/src/tau/historical_trajectories" -maxdepth 1 -type f -name '*.json' -print0 | sort -z | xargs -0 sha256sum
+          } > runs/j-6d4f/work/source_manifest.txt
+          sha256sum runs/j-6d4f/work/result.json runs/j-6d4f/work/*.csv > runs/j-6d4f/work/result_manifest.txt
+      - name: Seal
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add runs/j-6d4f/work
+          git commit -m 'Seal j-6d4f output' || true
+          git push origin HEAD:exec/j-6d4f
+      - uses: actions/upload-artifact@v4
+        with:
+          name: j-6d4f
+          path: runs/j-6d4f/work
+          if-no-files-found: error
