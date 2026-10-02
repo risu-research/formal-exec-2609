@@ -1,0 +1,70 @@
+{
+  "design": {
+    "selection": "all 419 clean-context cases from deterministic 500-case audit panel",
+    "selection_outcome_blind": true,
+    "selection_sha256": "230971175c21e6abd249baeaec483df9e7cf5b24bfc720d47a667e92f7252de5",
+    "exact_source": "RIPEstat BGPlay / RIPE RIS",
+    "exact_window": "+/-7 days around weekly event checkpoint",
+    "exact_requirement": ">=3 distinct RIS RRCs with reconstructed A->B transition",
+    "primary_rpki_source": "BGPKIT historical ROA search, queried only after exact sample is frozen",
+    "independent_crosscheck": "RIPE NCC daily validated ROA archive across five trust anchors for primary inversions"
+  },
+  "selection_n": 419,
+  "exact_attempted_n": 419,
+  "exact_returned_n": 419,
+  "exact_errors_n": 0,
+  "exact_any_transition_n": 364,
+  "exact_ge3_rrc_n": 309,
+  "exact_rrc_histogram": {
+    "0": 55,
+    "1": 36,
+    "2": 19,
+    "3": 6,
+    "4": 6,
+    "5": 2,
+    "6": 3,
+    "7": 3,
+    "8": 2,
+    "9": 1,
+    "10": 1,
+    "11": 2,
+    "12": 1,
+    "13": 3,
+    "14": 3,
+    "15": 3,
+    "16": 1,
+    "18": 6,
+    "19": 3,
+    "20": 4,
+    "21": 7,
+    "22": 13,
+    "23": 239
+  },
+  "rpki_classified_n": 309,
+  "rpki_errors_n": 0,
+  "joint_state_matrix": {
+    "invalid/invalid": 2,
+    "invalid/valid": 27,
+    "notfound/notfound": 127,
+    "valid/invalid": 47,
+    "valid/valid": 106
+  },
+  "old_valid_new_invalid_n": 47,
+  "old_valid_new_invalid_fraction_of_classified": 0.15210355987055016,
+  "old_valid_new_invalid_fraction_of_selected_lower_bound": 0.11217183770883055,
+  "independent_archive_crosscheck_cases_n": 47,
+  "independent_archive_reproduced_n": 46,
+  "independent_archive_errors_n": 0,
+  "visibility_spread_seconds": {
+    "n": 309,
+    "median": 55494.0,
+    "p90": 480761.0,
+    "max": 1148402.0
+  },
+  "guardrails": [
+    "No RPKI authorization field is used to select or rank cases.",
+    "The full clean audit panel is attempted, avoiding a post-selection 100-150 case sample unless API failure makes the full run incomplete.",
+    "Fractions over exact-resolved cases describe the deterministic audit panel, not Internet-wide prevalence.",
+    "The selected-denominator fraction is reported only as a conservative lower bound when exact reconstruction is unresolved for some cases."
+  ]
+}

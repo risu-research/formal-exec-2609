@@ -1,0 +1,23 @@
+{
+  "input": "results/rpki_lifecycle_panel_v1_20261002/screened_panel.csv",
+  "rule": "context_class == clean_context_proxy; include every case; sort by event_date,prefix,A,B",
+  "fields_used": [
+    "context_class",
+    "event_date",
+    "representative_prefix",
+    "A",
+    "B",
+    "cluster_prefix_n"
+  ],
+  "forbidden_for_selection": [
+    "A_auth_at_event",
+    "B_auth_at_event",
+    "B_auth_start",
+    "B_next_auth_start",
+    "A_auth_last_observed_date",
+    "A_linger_observed_days"
+  ],
+  "selected_n": 419,
+  "selection_sha256": "230971175c21e6abd249baeaec483df9e7cf5b24bfc720d47a667e92f7252de5",
+  "minimum_exact_rrcs": 3
+}
