@@ -1,0 +1,34 @@
+name: rpki-class-jump
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [rpki-pilot-20261002]
+    paths:
+      - rpki_class_jump.py
+      - .github/workflows/rpki-class-jump.yml
+
+permissions:
+  contents: write
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: rpki-pilot-20261002
+      - name: Run multi-collector and intent pilot
+        run: python3 rpki_class_jump.py
+      - name: Commit evidence bundle
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add results/rpki_class_jump_20261002
+          git commit -m "add multi-collector RPKI class-jump results [skip ci]" || exit 0
+          git push origin HEAD:rpki-pilot-20261002
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rpki-class-jump-20261002
+          path: results/rpki_class_jump_20261002
