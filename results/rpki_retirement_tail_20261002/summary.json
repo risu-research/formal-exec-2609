@@ -1,0 +1,85 @@
+{
+  "design": {
+    "dates": [
+      "20260901",
+      "20260908",
+      "20260915",
+      "20260922",
+      "20260929"
+    ],
+    "caida_files": {
+      "20260901": "2026/09/routeviews-rv2-20260901-1200.pfx2as.gz",
+      "20260908": "2026/09/routeviews-rv2-20260908-1000.pfx2as.gz",
+      "20260915": "2026/09/routeviews-rv2-20260915-1200.pfx2as.gz",
+      "20260922": "2026/09/routeviews-rv2-20260922-1200.pfx2as.gz",
+      "20260929": "2026/09/routeviews-rv2-20260929-1200.pfx2as.gz"
+    },
+    "raw_changed_prefixes": 692,
+    "persistent_prefixes_through_plus3w": 505,
+    "distinct_origin_pairs": 190,
+    "sample_n": 100,
+    "sampling": "one deterministic representative per A->B pair; sha256 pair sample",
+    "guardrail": "Persistent routing replacement plus lingering old-origin validity does not prove that authorization is unnecessary or erroneous; intent/failover/organization classification remains required."
+  },
+  "rpki_anchors_used": {
+    "20260901": [
+      "afrinic.tal",
+      "apnic.tal",
+      "arin.tal",
+      "lacnic.tal",
+      "ripencc.tal"
+    ],
+    "20260908": [
+      "afrinic.tal",
+      "apnic.tal",
+      "arin.tal",
+      "lacnic.tal",
+      "ripencc.tal"
+    ],
+    "20260915": [
+      "afrinic.tal",
+      "apnic.tal",
+      "arin.tal",
+      "lacnic.tal",
+      "ripencc.tal"
+    ],
+    "20260922": [
+      "afrinic.tal",
+      "apnic.tal",
+      "arin.tal",
+      "lacnic.tal",
+      "ripencc.tal"
+    ],
+    "20260929": [
+      "afrinic.tal",
+      "apnic.tal",
+      "arin.tal",
+      "lacnic.tal",
+      "ripencc.tal"
+    ]
+  },
+  "counts": {
+    "B_preauthorized_d0": 25,
+    "B_invalid_at_takeover": 2,
+    "B_notfound_at_takeover": 26,
+    "A_valid_at_takeover": 39,
+    "A_valid_plus1w": 37,
+    "A_valid_plus2w": 37,
+    "A_valid_plus3w": 36,
+    "dual_valid_at_takeover": 37
+  },
+  "rates": {
+    "B_preauthorized_d0": 0.25,
+    "B_invalid_at_takeover": 0.02,
+    "B_notfound_at_takeover": 0.26,
+    "A_valid_at_takeover": 0.39,
+    "A_valid_plus1w": 0.37,
+    "A_valid_plus2w": 0.37,
+    "A_valid_plus3w": 0.36,
+    "dual_valid_at_takeover": 0.37
+  },
+  "conditional": {
+    "rpki_covered_at_takeover_n": 74,
+    "B_invalid_given_covered": 0.02702702702702703
+  }
+}
