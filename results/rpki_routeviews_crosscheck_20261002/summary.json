@@ -1,0 +1,56 @@
+{
+  "clean_core_n": 13,
+  "sample_n": 5,
+  "collectors": [
+    "route-views2",
+    "route-views.eqix",
+    "route-views.linx"
+  ],
+  "cases": [
+    {
+      "prefix": "188.119.156.0/23",
+      "routeviews_collectors_corroborated": 3,
+      "collectors_tested": 3,
+      "max_abs_B_delta_s": 0.9021420478820801,
+      "within_10min_collectors": 3,
+      "within_30min_collectors": 3
+    },
+    {
+      "prefix": "207.89.18.0/24",
+      "routeviews_collectors_corroborated": 3,
+      "collectors_tested": 3,
+      "max_abs_B_delta_s": 1.3832778930664062,
+      "within_10min_collectors": 3,
+      "within_30min_collectors": 3
+    },
+    {
+      "prefix": "38.60.218.0/24",
+      "routeviews_collectors_corroborated": 3,
+      "collectors_tested": 3,
+      "max_abs_B_delta_s": 8.914947032928467,
+      "within_10min_collectors": 3,
+      "within_30min_collectors": 3
+    },
+    {
+      "prefix": "45.176.188.0/24",
+      "routeviews_collectors_corroborated": 3,
+      "collectors_tested": 3,
+      "max_abs_B_delta_s": 0.8560020923614502,
+      "within_10min_collectors": 3,
+      "within_30min_collectors": 3
+    },
+    {
+      "prefix": "96.62.12.0/22",
+      "routeviews_collectors_corroborated": 3,
+      "collectors_tested": 3,
+      "max_abs_B_delta_s": 2.6859850883483887,
+      "within_10min_collectors": 3,
+      "within_30min_collectors": 3
+    }
+  ],
+  "cases_any_routeviews": 5,
+  "cases_ge2_routeviews": 5,
+  "cases_all3_routeviews": 5,
+  "errors_n": 0,
+  "guardrail": "RouteViews cross-check corroborates independent-project observation of B announcements near the RIS transition. It does not by itself reconstruct the complete A\u2192B per-peer state transition."
+}
