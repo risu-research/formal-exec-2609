@@ -1,0 +1,119 @@
+{
+  "a": {
+    "by_file": {
+      "gpt-4o-airline.json": {
+        "group_calls": 325,
+        "group_traces": 68,
+        "groups": 92,
+        "tool_calls": 1164,
+        "traces": 200
+      },
+      "gpt-4o-retail.json": {
+        "group_calls": 810,
+        "group_traces": 249,
+        "groups": 277,
+        "tool_calls": 3274,
+        "traces": 460
+      },
+      "sonnet-35-new-airline.json": {
+        "group_calls": 1011,
+        "group_traces": 230,
+        "groups": 284,
+        "tool_calls": 2761,
+        "traces": 400
+      },
+      "sonnet-35-new-retail.json": {
+        "group_calls": 2359,
+        "group_traces": 690,
+        "groups": 804,
+        "tool_calls": 7086,
+        "traces": 920
+      }
+    },
+    "group_calls": 4505,
+    "group_size_max": 10,
+    "group_size_mean": 3.0919698009608787,
+    "group_size_median": 3,
+    "groups": 1457,
+    "k2_local_factor": 1.7855727308759413,
+    "k4_local_factor": 2.6911589008363204,
+    "kinf_local_factor": 3.0919698009608787,
+    "tool_calls": 14285,
+    "traces": 1980,
+    "traces_with_groups": 1237
+  },
+  "b": {
+    "by_file": {
+      "mbpp_0_6B_20260328T133144Z.jsonl": {
+        "group_traces": 0,
+        "groups": 0,
+        "multi_tool": 70,
+        "saved_ms_inf": 0.0,
+        "saved_ms_k2": 0.0,
+        "saved_ms_k4": 0.0,
+        "serial_ms": 0.0,
+        "tool_calls": 278,
+        "total_trace_ms": 26307823.107239008,
+        "traces": 500
+      },
+      "mbpp_1_7B_20260403T211347Z.jsonl": {
+        "group_traces": 0,
+        "groups": 0,
+        "multi_tool": 174,
+        "saved_ms_inf": 0.0,
+        "saved_ms_k2": 0.0,
+        "saved_ms_k4": 0.0,
+        "serial_ms": 0.0,
+        "tool_calls": 1167,
+        "total_trace_ms": 160689937.430945,
+        "traces": 500
+      },
+      "nl2bash_0_6B_20260328T133144Z.jsonl": {
+        "group_traces": 8,
+        "groups": 8,
+        "multi_tool": 51,
+        "saved_ms_inf": 181.487249,
+        "saved_ms_k2": 181.487249,
+        "saved_ms_k4": 181.487249,
+        "serial_ms": 389.747748,
+        "tool_calls": 269,
+        "total_trace_ms": 9605815.78120599,
+        "traces": 200
+      },
+      "nl2bash_1_7B_20260403T211347Z.jsonl": {
+        "group_traces": 25,
+        "groups": 25,
+        "multi_tool": 115,
+        "saved_ms_inf": 453.3779589999999,
+        "saved_ms_k2": 385.663666,
+        "saved_ms_k4": 447.6736259999999,
+        "serial_ms": 1009.1750859999996,
+        "tool_calls": 582,
+        "total_trace_ms": 29703302.917832002,
+        "traces": 200
+      }
+    },
+    "counterfactual_e2e_factor_inf": 1.000002805336679,
+    "counterfactual_e2e_factor_k2": 1.0000025061206193,
+    "counterfactual_e2e_factor_k4": 1.0000027801303533,
+    "group_traces": 33,
+    "groups": 33,
+    "multi_tool": 410,
+    "saved_ms_inf": 634.8652079999999,
+    "saved_ms_k2": 567.1509149999999,
+    "saved_ms_k4": 629.1608749999999,
+    "serial_ms": 1398.9228339999995,
+    "tool_calls": 2296,
+    "total_trace_ms": 226306879.23722202,
+    "traces": 1400
+  },
+  "c": {
+    "by_app": {},
+    "instances": 0,
+    "levels_median": 0,
+    "max_width_mean": 0,
+    "max_width_median": 0,
+    "tasks_median": 0
+  },
+  "schema": "j6d4f-v1"
+}
