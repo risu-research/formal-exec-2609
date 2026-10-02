@@ -1,0 +1,35 @@
+{
+  "input_exact_multi_rrc_n": 0,
+  "completed_n": 0,
+  "errors_n": 0,
+  "B_event_validation_counts": {},
+  "A_event_validation_counts": {},
+  "joint_A_B_event_validation": {},
+  "strict_rov_consequence": {
+    "new_B_invalid_on_exact_transition_day_n": 0,
+    "new_B_invalid_fraction": null,
+    "old_A_valid_new_B_invalid_n": 0,
+    "old_A_valid_new_B_invalid_fraction": null,
+    "new_B_unknown_on_transition_day_n": 0,
+    "new_B_valid_on_transition_day_n": 0
+  },
+  "delayed_matching_authorization_subset": {
+    "n": 0,
+    "invalid_on_event_n": 0,
+    "invalid_on_event_fraction": null,
+    "event_start_invalid_run_days": {
+      "n": 0,
+      "min": null,
+      "median": null,
+      "p90": null,
+      "p99": null,
+      "max": null
+    }
+  },
+  "interpretation_guardrails": [
+    "RPKI validation is historical BGPKIT route-origin validation on the exact multi-RRC transition calendar date.",
+    "Invalid is an operationally consequential state for networks that reject RPKI Invalid routes; Unknown/NotFound is not treated as rejected.",
+    "A_valid_B_invalid is a counterfactual policy inversion: the observed new origin would be rejected under strict ROV while the old origin remains cryptographically authorized. It does not prove that a specific AS actually enforced ROV or that traffic was lost.",
+    "Daily invalid-run calculations are limited to cases with a later matching B authorization in historical ROA records and report the contiguous run beginning on the transition date."
+  ]
+}
