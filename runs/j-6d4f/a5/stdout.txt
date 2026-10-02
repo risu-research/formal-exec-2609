@@ -1,0 +1,24 @@
+{
+  "airline": {
+    "both_any": 13,
+    "both_any_frac_all": 0.26,
+    "both_ge25pct": 13,
+    "both_ge25pct_frac_all": 0.26,
+    "either_any": 29,
+    "g_any": 14,
+    "jaccard": 0.4482758620689655,
+    "s_any": 28,
+    "tasks": 50
+  },
+  "retail": {
+    "both_any": 61,
+    "both_any_frac_all": 0.5304347826086957,
+    "both_ge25pct": 60,
+    "both_ge25pct_frac_all": 0.5217391304347826,
+    "either_any": 95,
+    "g_any": 71,
+    "jaccard": 0.6421052631578947,
+    "s_any": 85,
+    "tasks": 115
+  }
+}
