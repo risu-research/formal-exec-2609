@@ -1,0 +1,32 @@
+name: rpki-population-v1
+on:
+  workflow_dispatch:
+  push:
+    branches: [rpki-pilot-20261002]
+    paths:
+      - rpki_population_v1.py
+      - .github/workflows/rpki-population-v1.yml
+permissions:
+  contents: write
+jobs:
+  enumerate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: rpki-pilot-20261002
+      - name: Enumerate 12-month persistent transition population
+        run: python3 rpki_population_v1.py
+      - name: Commit result bundle
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git pull --rebase origin rpki-pilot-20261002 || true
+          git add results/rpki_population_v1_20261002
+          git commit -m "add frozen 12-month RPKI transition population [skip ci]" || exit 0
+          git push origin HEAD:rpki-pilot-20261002
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rpki-population-v1-20261002
+          path: results/rpki_population_v1_20261002
