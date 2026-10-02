@@ -1,0 +1,63 @@
+name: rpki-full-census-v1
+on:
+  workflow_dispatch:
+  push:
+    branches: [rpki-pilot-20261002]
+    paths:
+      - rpki_full_census_v1.py
+      - .github/workflows/rpki-full-census-v1.yml
+permissions:
+  contents: write
+jobs:
+  census-shard:
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        shard: [0,1,2,3,4,5,6,7]
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: rpki-pilot-20261002
+      - name: Run census shard
+        run: python3 rpki_full_census_v1.py --mode shard --shard-index ${{ matrix.shard }} --shard-count 8 --workers 4
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rpki-full-census-shard-${{ matrix.shard }}
+          path: |
+            /tmp/rpki_census_shard_*.csv
+            /tmp/rpki_census_shard_*_errors.json
+          if-no-files-found: error
+  aggregate:
+    needs: census-shard
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: rpki-pilot-20261002
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: rpki-full-census-shard-*
+          path: /tmp/census-parts
+          merge-multiple: true
+      - name: Aggregate, exact-calibrate, independently crosscheck
+        run: python3 rpki_full_census_v1.py --mode aggregate --parts-root /tmp/census-parts
+      - name: Commit census evidence
+        run: |
+          test -f results/rpki_full_census_v1_20261002/summary.json
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git pull --rebase origin rpki-pilot-20261002 || true
+          git add results/rpki_full_census_v1_20261002
+          git commit -m "add full 7046-case RPKI census evidence [skip ci]" || exit 0
+          git push origin HEAD:rpki-pilot-20261002
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rpki-full-census-v1-20261002
+          path: results/rpki_full_census_v1_20261002
+          if-no-files-found: error
