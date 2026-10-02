@@ -1,0 +1,17 @@
+{
+  "campaign_id": "SIGMETRICS-READINESS-LONGITUDINAL-v1",
+  "wave_id": "20261002T121208Z-37005273929",
+  "mode": "full",
+  "n": 90,
+  "created_at": "2026-10-02T12:12:35.984Z",
+  "vantage": {
+    "ok": true,
+    "colo": "LAX",
+    "country": "US",
+    "ip_hash": "aef2e7a572e8620d",
+    "ms": 572.458
+  },
+  "successes": 85,
+  "tools_successes": 88,
+  "discover_successes": 85
+}
