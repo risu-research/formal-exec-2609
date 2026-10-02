@@ -1,0 +1,46 @@
+name: j-6d4f-e
+on:
+  push:
+    branches: ["exec/j-6d4f"]
+    paths: ["jobs/j-6d4f/start-e"]
+permissions:
+  contents: write
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - name: Prepare
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/src"
+          git -C "$RUNNER_TEMP/src" init -q tau
+          git -C "$RUNNER_TEMP/src/tau" remote add origin https://github.com/sierra-research/tau-bench.git
+          git -C "$RUNNER_TEMP/src/tau" fetch -q --depth 1 origin 59a200c6d575d595120f1cb70fea53cef0632f6b
+          git -C "$RUNNER_TEMP/src/tau" checkout -q FETCH_HEAD
+          test "$(git -C "$RUNNER_TEMP/src/tau" rev-parse HEAD)" = "59a200c6d575d595120f1cb70fea53cef0632f6b"
+      - name: Run
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf runs/j-6d4f/a4
+          mkdir -p runs/j-6d4f/a4
+          python -m py_compile jobs/j-6d4f/p4.py
+          python jobs/j-6d4f/p4.py runs/j-6d4f/a4 "$RUNNER_TEMP/src" | tee runs/j-6d4f/a4/stdout.txt
+          sha256sum runs/j-6d4f/a4/r.json runs/j-6d4f/a4/g.csv runs/j-6d4f/a4/t.csv runs/j-6d4f/a4/z.csv runs/j-6d4f/a4/s.json > runs/j-6d4f/a4/manifest.txt
+      - name: Seal
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add runs/j-6d4f/a4
+          git commit -m 'Seal j-6d4f-e output' || true
+          git push origin HEAD:exec/j-6d4f
+      - uses: actions/upload-artifact@v4
+        with:
+          name: j-6d4f-e
+          path: runs/j-6d4f/a4
+          if-no-files-found: error
