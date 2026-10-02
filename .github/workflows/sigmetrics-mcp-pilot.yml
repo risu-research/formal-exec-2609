@@ -4,7 +4,6 @@ on:
   push:
     paths:
       - '.github/workflows/sigmetrics-mcp-pilot.yml'
-      - 'sigmetrics_mcp_pilot/**'
   workflow_dispatch:
 
 permissions:
@@ -13,14 +12,14 @@ permissions:
 jobs:
   pilot:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
-      - name: Freeze operator-distinct public sample and live probe
+      - name: Freeze disjoint operator sample and live probe
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p out
-          curl -fsSL --retry 2 -A 'RISU-SIGMETRICS-Pilot/0.1' \
+          curl -fsSL --retry 2 -A 'RISU-SIGMETRICS-Pilot/0.2' \
             https://raw.githubusercontent.com/Neeeophytee/mcp-stateless-conformance/main/results.json \
             -o out/results.json
           cat > out/probe.mjs <<'JS'
@@ -30,149 +29,108 @@ jobs:
 
           const SPEC='2026-07-28';
           const TIMEOUT=8000;
-          const N=40;
-          const ROUNDS=3;
-          const CONC=4;
+          const N=50, SKIP=40, ROUNDS=3, CONC=2;
           const data=JSON.parse(readFileSync('out/results.json','utf8'));
           const all=data.results || [];
           const hash=s=>createHash('sha256').update('SIGMETRICS-2027-PILOT-v1|'+s).digest('hex');
           const op=r=>(r.name||'').split('/')[0].toLowerCase();
-          const eligible=all.filter(r=>
-            ['conformant','partial-2026'].includes(r.verdict) &&
-            r.checks?.coldToolsList &&
-            /^https:\/\//.test(r.url||'') && !/[{}]/.test(r.url||''));
+          const eligible=all.filter(r=>['conformant','partial-2026'].includes(r.verdict) && r.checks?.coldToolsList && /^https:\/\//.test(r.url||'') && !/[{}]/.test(r.url||''));
           eligible.sort((a,b)=>hash(a.name).localeCompare(hash(b.name)));
-          const chosen=[]; const seen=new Set();
-          for (const r of eligible) {
-            const o=op(r); if (!o || seen.has(o)) continue;
-            seen.add(o); chosen.push({operator:o,name:r.name,url:r.url,priorVerdict:r.verdict,priorToolCount:r.toolCount??null});
-            if (chosen.length===N) break;
-          }
-          if (chosen.length < N) throw new Error(`only ${chosen.length} eligible operators`);
-          writeFileSync('out/frozen_endpoints.json',JSON.stringify({sourceProbeAt:data.probedAt,spec:data.spec,selectionSeed:'SIGMETRICS-2027-PILOT-v1',eligible:eligible.length,endpoints:chosen},null,2));
-          console.log('ELIGIBLE',eligible.length,'FROZEN',chosen.length,'SOURCE_PROBED_AT',data.probedAt);
+          const uniq=[]; const seen=new Set();
+          for (const r of eligible) { const o=op(r); if(!o||seen.has(o)) continue; seen.add(o); uniq.push({operator:o,name:r.name,url:r.url,priorVerdict:r.verdict,priorToolCount:r.toolCount??null}); }
+          const chosen=uniq.slice(SKIP,SKIP+N);
+          if(chosen.length<N) throw new Error(`only ${chosen.length} disjoint operators`);
+          writeFileSync('out/frozen_endpoints.json',JSON.stringify({sourceProbeAt:data.probedAt,spec:data.spec,selectionSeed:'SIGMETRICS-2027-PILOT-v1',skip:SKIP,eligibleServerEntries:eligible.length,eligibleUniqueOperators:uniq.length,endpoints:chosen},null,2));
+          console.log('ELIGIBLE_ENTRIES',eligible.length,'UNIQUE_OPERATORS',uniq.length,'SKIP',SKIP,'FROZEN',chosen.length,'SOURCE_PROBED_AT',data.probedAt);
           console.log('FROZEN_NAMES',chosen.map(x=>x.name).join(','));
 
-          const meta={
-            'io.modelcontextprotocol/protocolVersion':SPEC,
-            'io.modelcontextprotocol/clientInfo':{name:'risu-sigmetrics-readiness-pilot',version:'0.1'},
-            'io.modelcontextprotocol/clientCapabilities':{}
-          };
+          const meta={'io.modelcontextprotocol/protocolVersion':SPEC,'io.modelcontextprotocol/clientInfo':{name:'risu-sigmetrics-readiness-pilot',version:'0.2'},'io.modelcontextprotocol/clientCapabilities':{}};
           async function call(url,method) {
-            const ctl=new AbortController(); const timer=setTimeout(()=>ctl.abort(),TIMEOUT);
-            const body={jsonrpc:'2.0',id:1,method,params:{_meta:meta}};
-            const t0=performance.now();
+            const ctl=new AbortController(); const timer=setTimeout(()=>ctl.abort(),TIMEOUT); const body={jsonrpc:'2.0',id:1,method,params:{_meta:meta}}; const t0=performance.now();
             try {
-              const res=await fetch(url,{method:'POST',headers:{
-                'content-type':'application/json','accept':'application/json, text/event-stream',
-                'user-agent':'RISU-SIGMETRICS-Pilot/0.1','mcp-protocol-version':SPEC,
-                'mcp-method':method,'mcp-name':''
-              },body:JSON.stringify(body),signal:ctl.signal,redirect:'follow'});
-              const text=await res.text(); const ms=performance.now()-t0;
-              let obj=null;
-              try {
-                if ((res.headers.get('content-type')||'').includes('text/event-stream')) {
-                  for (const line of text.split(/\r?\n/)) if (line.startsWith('data:')) { try {obj=JSON.parse(line.slice(5).trim());break;} catch {} }
-                } else obj=JSON.parse(text);
-              } catch {}
+              const res=await fetch(url,{method:'POST',headers:{'content-type':'application/json','accept':'application/json, text/event-stream','user-agent':'RISU-SIGMETRICS-Pilot/0.2','mcp-protocol-version':SPEC,'mcp-method':method,'mcp-name':''},body:JSON.stringify(body),signal:ctl.signal,redirect:'follow'});
+              const text=await res.text(); const ms=performance.now()-t0; let obj=null;
+              try { if((res.headers.get('content-type')||'').includes('text/event-stream')) { for(const line of text.split(/\r?\n/)) if(line.startsWith('data:')) { try{obj=JSON.parse(line.slice(5).trim());break}catch{} } } else obj=JSON.parse(text); } catch{}
               return {ok:res.status===200 && !!obj?.result,status:res.status,ms:+ms.toFixed(3),obj};
-            } catch(e) {
-              return {ok:false,status:0,ms:+(performance.now()-t0).toFixed(3),error:e.name==='AbortError'?'timeout':String(e.message)};
-            } finally { clearTimeout(timer); }
+            } catch(e) { return {ok:false,status:0,ms:+(performance.now()-t0).toFixed(3),error:e.name==='AbortError'?'timeout':String(e.message)}; }
+            finally { clearTimeout(timer); }
           }
           const rows=[];
           async function one(ep,round) {
-            const d=await call(ep.url,'server/discover');
-            const t=await call(ep.url,'tools/list');
-            const tools=Array.isArray(t.obj?.result?.tools)?t.obj.result.tools.length:null;
+            const d=await call(ep.url,'server/discover'); const t=await call(ep.url,'tools/list'); const tools=Array.isArray(t.obj?.result?.tools)?t.obj.result.tools.length:null;
             const row={round,operator:ep.operator,name:ep.name,url:ep.url,discover_ok:d.ok,discover_status:d.status,discover_ms:d.ms,tools_ok:t.ok,tools_status:t.status,tools_ms:t.ms,tool_count:tools,readiness_ok:d.ok&&t.ok,readiness_ms:d.ok&&t.ok?+(d.ms+t.ms).toFixed(3):null,discover_error:d.error||'',tools_error:t.error||''};
             rows.push(row); console.log('PROBE',JSON.stringify(row));
           }
-          for (let round=1; round<=ROUNDS; round++) {
-            let idx=0;
-            await Promise.all(Array.from({length:CONC},async()=>{while(true){const i=idx++; if(i>=chosen.length)break; await one(chosen[i],round);}}));
-            if (round<ROUNDS) await new Promise(r=>setTimeout(r,10000));
-          }
+          for(let round=1;round<=ROUNDS;round++) { let idx=0; await Promise.all(Array.from({length:CONC},async()=>{while(true){const i=idx++; if(i>=chosen.length)break; await one(chosen[i],round);}})); if(round<ROUNDS) await new Promise(r=>setTimeout(r,10000)); }
           rows.sort((a,b)=>a.round-b.round||a.operator.localeCompare(b.operator));
-          const cols=['round','operator','name','url','discover_ok','discover_status','discover_ms','tools_ok','tools_status','tools_ms','tool_count','readiness_ok','readiness_ms','discover_error','tools_error'];
-          const esc=v=>'"'+String(v??'').replaceAll('"','""')+'"';
-          writeFileSync('out/live_probe.csv',cols.join(',')+'\n'+rows.map(r=>cols.map(c=>esc(r[c])).join(',')).join('\n')+'\n');
-          writeFileSync('out/live_probe.json',JSON.stringify(rows,null,2));
+          const cols=['round','operator','name','url','discover_ok','discover_status','discover_ms','tools_ok','tools_status','tools_ms','tool_count','readiness_ok','readiness_ms','discover_error','tools_error']; const esc=v=>'"'+String(v??'').replaceAll('"','""')+'"';
+          writeFileSync('out/live_probe.csv',cols.join(',')+'\n'+rows.map(r=>cols.map(c=>esc(r[c])).join(',')).join('\n')+'\n'); writeFileSync('out/live_probe.json',JSON.stringify(rows,null,2));
           JS
           node out/probe.mjs
 
-      - name: Analyze readiness composition
+      - name: Analyze mixed cold warm and component effects
         shell: bash
         run: |
           python3 - <<'PY'
           import csv,math,random,statistics,json,pathlib
           rows=list(csv.DictReader(open('out/live_probe.csv',encoding='utf-8')))
           for r in rows:
-              r['round']=int(r['round']); r['ok']=r['readiness_ok']=='true'
-              r['lat']=float(r['readiness_ms']) if r['readiness_ms'] else math.nan
+              r['round']=int(r['round']); r['ok']=r['readiness_ok']=='true'; r['discover_ok']=r['discover_ok']=='true'; r['tools_ok']=r['tools_ok']=='true'
+              for k in ('readiness_ms','discover_ms','tools_ms'): r[k]=float(r[k]) if r[k] else math.nan
               r['tools']=int(r['tool_count']) if r['tool_count'] else 0
-          eps=sorted({r['operator'] for r in rows})
-          success=sum(r['ok'] for r in rows)
-          stable=[]
-          for e in eps:
-              rr=[r for r in rows if r['operator']==e]
-              if len(rr)==3 and all(x['ok'] for x in rr): stable.append(e)
-          print('RAW_OBSERVATIONS',len(rows),'SUCCESS',success,'SUCCESS_RATE',round(success/len(rows),4),'STABLE_ENDPOINTS_3OF3',len(stable))
-          # endpoint summaries
-          summ=[]
-          for e in eps:
-              rr=[r for r in rows if r['operator']==e]
-              ok=[x for x in rr if x['ok']]
-              vals=[x['lat'] for x in ok]
-              tools=[x['tools'] for x in ok if x['tools']>0]
-              summ.append({'operator':e,'n_success':len(vals),'median_ms':statistics.median(vals) if vals else None,'min_ms':min(vals) if vals else None,'max_ms':max(vals) if vals else None,'tool_count':int(statistics.median(tools)) if tools else 0})
-          cols=['operator','n_success','median_ms','min_ms','max_ms','tool_count']
-          with open('out/endpoint_summary.csv','w',newline='') as f:
-              w=csv.DictWriter(f,fieldnames=cols);w.writeheader();w.writerows(summ)
-          # round-specific empirical portfolio bootstrap, using only stable endpoints for comparable k
-          byround={rd:{r['operator']:r for r in rows if r['round']==rd and r['ok'] and r['operator'] in stable} for rd in (1,2,3)}
-          rng=random.Random(20271002)
-          def tq(sel,q):
-              z=sorted((x['lat'],max(1,x['tools'])) for x in sel); total=sum(w for _,w in z); target=q*total; c=0
+          eps=sorted({r['operator'] for r in rows}); stable=[e for e in eps if len([r for r in rows if r['operator']==e and r['ok']])==3]
+          print('RAW_OBSERVATIONS',len(rows),'FULL_READY',sum(r['ok'] for r in rows),'SUCCESS_RATE',round(sum(r['ok'] for r in rows)/len(rows),4),'STABLE_3OF3',len(stable))
+          byround={rd:{r['operator']:r for r in rows if r['round']==rd and r['operator'] in stable and r['ok']} for rd in (1,2,3)}
+          ratios=[]
+          for e in stable:
+              vals=[byround[rd][e]['readiness_ms'] for rd in (1,2,3)]; ratios.append(max(vals)/min(vals))
+          print('TEMPORAL_MAX_MIN_MEDIAN',statistics.median(ratios))
+          rng=random.Random(20271003)
+          def pct(a,p): a=sorted(a); return a[min(len(a)-1,max(0,int(math.ceil(p*len(a)))-1))]
+          def tq(sel,q,field='readiness_ms',weighted=True):
+              z=sorted((x[field],max(1,x['tools']) if weighted else 1) for x in sel); total=sum(w for _,w in z); target=q*total; c=0
               for lat,w in z:
                   c+=w
                   if c+1e-12>=target:return lat
               return z[-1][0]
+          def analyze(label,rounds,field='readiness_ms'):
+              out=[]
+              for k in (1,2,4,8,16):
+                  if len(stable)<k: continue
+                  M={m:[] for m in ['Tall','T50','T75','T90','T99','S90','S99']}
+                  for _ in range(30000):
+                      rd=rng.choice(rounds); ids=rng.sample(stable,k); sel=[byround[rd][e] for e in ids]
+                      M['Tall'].append(max(x[field] for x in sel))
+                      for q,n in [(.5,'T50'),(.75,'T75'),(.9,'T90'),(.99,'T99')]:M[n].append(tq(sel,q,field,True))
+                      M['S90'].append(tq(sel,.9,field,False)); M['S99'].append(tq(sel,.99,field,False))
+                  rec={'view':label,'field':field,'k':k}
+                  for n,a in M.items(): rec[n+'_median']=statistics.median(a); rec[n+'_p90']=pct(a,.9); rec[n+'_p99']=pct(a,.99)
+                  gaps=[a-b for a,b in zip(M['Tall'],M['T90'])]; rec['Tall_minus_T90_median']=statistics.median(gaps); rec['P_T90_lt_Tall']=sum(g>1e-9 for g in gaps)/len(gaps)
+                  rec['Tall_over_T50_median']=statistics.median(a/b for a,b in zip(M['Tall'],M['T50']) if b>0)
+                  out.append(rec); print('BOOTSTRAP',json.dumps(rec))
+              return out
           out=[]
-          for k in (1,2,4,8,16):
-              if len(stable)<k: continue
-              metrics={m:[] for m in ['Tall','T50','T75','T90','T99']}
-              for _ in range(30000):
-                  rd=rng.choice((1,2,3)); ids=rng.sample(stable,k); sel=[byround[rd][e] for e in ids]
-                  metrics['Tall'].append(max(x['lat'] for x in sel))
-                  for q,nm in [(.50,'T50'),(.75,'T75'),(.90,'T90'),(.99,'T99')]:metrics[nm].append(tq(sel,q))
-              def pct(a,p):
-                  a=sorted(a); return a[min(len(a)-1,max(0,int(math.ceil(p*len(a)))-1))]
-              rec={'k':k}
-              for m,a in metrics.items():
-                  rec[m+'_median']=statistics.median(a);rec[m+'_p90']=pct(a,.90);rec[m+'_p99']=pct(a,.99)
-              gaps=[a-b for a,b in zip(metrics['Tall'],metrics['T90'])]
-              rec['Tall_minus_T90_median']=statistics.median(gaps)
-              rec['P_T90_lt_Tall']=sum(g>1e-9 for g in gaps)/len(gaps)
-              ratios=[a/b for a,b in zip(metrics['Tall'],metrics['T50']) if b>0]
-              rec['Tall_over_T50_median']=statistics.median(ratios)
-              out.append(rec)
-              print('BOOTSTRAP',json.dumps(rec))
-          with open('out/bootstrap_summary.csv','w',newline='') as f:
+          out += analyze('cold_round1',(1,),'readiness_ms')
+          out += analyze('warm_rounds2_3',(2,3),'readiness_ms')
+          out += analyze('all_rounds',(1,2,3),'readiness_ms')
+          out += analyze('cold_discover_only',(1,),'discover_ms')
+          out += analyze('cold_tools_only',(1,),'tools_ms')
+          with open('out/bootstrap_views.csv','w',newline='') as f:
               w=csv.DictWriter(f,fieldnames=list(out[0].keys()));w.writeheader();w.writerows(out)
-          # temporal variability among stable endpoints
-          ranges=[]
-          for e in stable:
-              vals=[byround[rd][e]['lat'] for rd in (1,2,3)]
-              med=statistics.median(vals); ranges.append(max(vals)/min(vals) if min(vals)>0 else math.nan)
-          analysis={'observations':len(rows),'success':success,'success_rate':success/len(rows),'frozen_endpoints':len(eps),'stable_3of3':len(stable),'median_endpoint_max_min_ratio':statistics.median(ranges) if ranges else None,'bootstrap':out}
-          pathlib.Path('out/analysis.json').write_text(json.dumps(analysis,indent=2))
-          print('ANALYSIS',json.dumps(analysis))
+          # endpoint summary
+          summ=[]
+          for e in eps:
+              rr=[r for r in rows if r['operator']==e]; ok=[r for r in rr if r['ok']]; vals=[r['readiness_ms'] for r in ok]; tc=[r['tools'] for r in ok if r['tools']>0]
+              summ.append({'operator':e,'n_success':len(ok),'median_ms':statistics.median(vals) if vals else None,'round1_ms':next((r['readiness_ms'] for r in rr if r['round']==1 and r['ok']),None),'round2_ms':next((r['readiness_ms'] for r in rr if r['round']==2 and r['ok']),None),'round3_ms':next((r['readiness_ms'] for r in rr if r['round']==3 and r['ok']),None),'tool_count':int(statistics.median(tc)) if tc else 0})
+          with open('out/endpoint_summary.csv','w',newline='') as f:
+              w=csv.DictWriter(f,fieldnames=list(summ[0].keys()));w.writeheader();w.writerows(summ)
+          analysis={'observations':len(rows),'success_rate':sum(r['ok'] for r in rows)/len(rows),'stable_3of3':len(stable),'median_endpoint_max_min_ratio':statistics.median(ratios),'bootstrap':out}
+          pathlib.Path('out/analysis.json').write_text(json.dumps(analysis,indent=2)); print('ANALYSIS_SUMMARY',json.dumps({k:v for k,v in analysis.items() if k!='bootstrap'}))
           PY
 
-      - name: Upload live pilot evidence
+      - name: Upload replication evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: sigmetrics-mcp-live-pilot
+          name: sigmetrics-mcp-live-pilot-replication
           path: out/
