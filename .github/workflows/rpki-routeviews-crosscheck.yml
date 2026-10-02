@@ -1,0 +1,34 @@
+name: rpki-routeviews-crosscheck
+on:
+  workflow_dispatch:
+  push:
+    branches: [rpki-pilot-20261002]
+    paths:
+      - rpki_routeviews_crosscheck.py
+      - .github/workflows/rpki-routeviews-crosscheck.yml
+permissions:
+  contents: write
+jobs:
+  crosscheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: rpki-pilot-20261002
+      - name: Install BGPKIT parser
+        run: python3 -m pip install --quiet pybgpkit-parser
+      - name: Run RouteViews cross-project corroboration
+        run: python3 rpki_routeviews_crosscheck.py
+      - name: Commit cross-project evidence
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git pull --rebase origin rpki-pilot-20261002 || true
+          git add results/rpki_routeviews_crosscheck_20261002
+          git commit -m "add RouteViews cross-project corroboration [skip ci]" || exit 0
+          git push origin HEAD:rpki-pilot-20261002
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rpki-routeviews-crosscheck-20261002
+          path: results/rpki_routeviews_crosscheck_20261002
