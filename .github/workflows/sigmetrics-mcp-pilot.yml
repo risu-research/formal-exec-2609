@@ -1,0 +1,56 @@
+name: sigmetrics-mcp-pilot
+
+on:
+  push:
+    paths:
+      - '.github/workflows/sigmetrics-mcp-pilot.yml'
+      - 'sigmetrics_mcp_pilot/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pilot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Fetch open MCP dataset and inspect schema
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          python3 - <<'PY'
+          import csv, urllib.request, pathlib, json
+          urls=[
+            'https://mcpbeat.com/static/data/servers.csv',
+            'https://mcpbeat.com/data/latest/servers.csv',
+          ]
+          raw=None; used=None
+          for u in urls:
+              try:
+                  req=urllib.request.Request(u, headers={'User-Agent':'RISU-SIGMETRICS-Pilot/0.1'})
+                  with urllib.request.urlopen(req, timeout=30) as r:
+                      raw=r.read()
+                  if raw:
+                      used=u; break
+              except Exception as e:
+                  print('FETCH_FAIL',u,repr(e))
+          if not raw:
+              raise SystemExit('could not fetch servers.csv')
+          p=pathlib.Path('out/servers.csv'); p.write_bytes(raw)
+          text=raw.decode('utf-8-sig',errors='replace')
+          rows=list(csv.DictReader(text.splitlines()))
+          print('SOURCE',used)
+          print('ROWS',len(rows))
+          print('COLUMNS',json.dumps(list(rows[0].keys()) if rows else [],ensure_ascii=False))
+          for r in rows[:3]:
+              print('SAMPLE',json.dumps(r,ensure_ascii=False)[:4000])
+          pathlib.Path('out/schema.json').write_text(json.dumps({'source':used,'rows':len(rows),'columns':list(rows[0].keys()) if rows else []},indent=2))
+          PY
+      - name: Upload schema evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sigmetrics-mcp-schema
+          path: out/
