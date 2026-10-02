@@ -1,0 +1,144 @@
+{
+  "a": {
+    "by_file": {
+      "gpt-4o-airline.json": {
+        "calls_in_strict": 247,
+        "groups": 70,
+        "mixed_groups": 4,
+        "route_groups": 8,
+        "strict_groups": 58,
+        "success_mean_with_group": 0.3508771929824561,
+        "success_mean_without_group": 0.44755244755244755,
+        "tasks_any": 21,
+        "tasks_strict": 19,
+        "traces": 200,
+        "traces_any": 57,
+        "traces_strict": 54,
+        "unique_tasks": 50
+      },
+      "gpt-4o-retail.json": {
+        "calls_in_strict": 794,
+        "groups": 278,
+        "mixed_groups": 9,
+        "route_groups": 0,
+        "strict_groups": 269,
+        "success_mean_with_group": 0.612,
+        "success_mean_without_group": 0.5952380952380952,
+        "tasks_any": 84,
+        "tasks_strict": 84,
+        "traces": 460,
+        "traces_any": 250,
+        "traces_strict": 248,
+        "unique_tasks": 115
+      },
+      "sonnet-35-new-airline.json": {
+        "calls_in_strict": 0,
+        "groups": 246,
+        "mixed_groups": 246,
+        "route_groups": 0,
+        "strict_groups": 0,
+        "success_mean_with_group": 0.36893203883495146,
+        "success_mean_without_group": 0.5567010309278351,
+        "tasks_any": 33,
+        "tasks_strict": 0,
+        "traces": 400,
+        "traces_any": 206,
+        "traces_strict": 0,
+        "unique_tasks": 50
+      },
+      "sonnet-35-new-retail.json": {
+        "calls_in_strict": 0,
+        "groups": 797,
+        "mixed_groups": 797,
+        "route_groups": 0,
+        "strict_groups": 0,
+        "success_mean_with_group": 0.6935251798561151,
+        "success_mean_without_group": 0.6888888888888889,
+        "tasks_any": 104,
+        "tasks_strict": 0,
+        "traces": 920,
+        "traces_any": 695,
+        "traces_strict": 0,
+        "unique_tasks": 115
+      }
+    },
+    "groups": 1391,
+    "mixed_groups": 1056,
+    "route_groups": 8,
+    "strict_anchor_roles": {
+      "assistant": 49,
+      "tool": 261,
+      "user": 17
+    },
+    "strict_calls": 1041,
+    "strict_groups": 327,
+    "strict_round_ratio_inf": 3.18348623853211,
+    "strict_round_ratio_k2": 1.7704081632653061,
+    "strict_round_ratio_k4": 2.6829896907216493,
+    "strict_size_max": 9,
+    "strict_size_mean": 3.18348623853211,
+    "strict_size_median": 3,
+    "strict_size_p90": 5.0,
+    "traces": 1980,
+    "unique_task_slots": 330
+  },
+  "b": {
+    "by_file": {
+      "mbpp_0_6B_20260328T133144Z.jsonl": {
+        "groups": 0,
+        "multi": 70,
+        "tool_calls": 278,
+        "traces": 500
+      },
+      "mbpp_1_7B_20260403T211347Z.jsonl": {
+        "groups": 0,
+        "multi": 174,
+        "tool_calls": 1167,
+        "traces": 500
+      },
+      "nl2bash_0_6B_20260328T133144Z.jsonl": {
+        "groups": 8,
+        "multi": 51,
+        "tool_calls": 269,
+        "traces": 200
+      },
+      "nl2bash_1_7B_20260403T211347Z.jsonl": {
+        "groups": 25,
+        "multi": 115,
+        "tool_calls": 582,
+        "traces": 200
+      }
+    },
+    "candidate_fraction": 0.023571428571428573,
+    "candidate_traces": 33,
+    "conditional_e2e_factor_median": 1.0001560028526215,
+    "conditional_local_factor_mean": 1.9697005612602834,
+    "conditional_local_factor_median": 1.911205521774907,
+    "conditional_local_factor_p90": 2.448523112688206,
+    "sensitivity_added_ms_per_tool": {
+      "0": {
+        "global_factor": 1.000002805336679,
+        "saved_ms": 634.8652079999999
+      },
+      "10": {
+        "global_factor": 1.000004749132135,
+        "saved_ms": 1074.865208
+      },
+      "100": {
+        "global_factor": 1.0000222258999052,
+        "saved_ms": 5034.865208
+      },
+      "1000": {
+        "global_factor": 1.0001952887997134,
+        "saved_ms": 44634.865208
+      },
+      "500": {
+        "global_factor": 1.0000995235537973,
+        "saved_ms": 22634.865208
+      }
+    },
+    "tool_calls": 2296,
+    "traces": 1400
+  },
+  "schema": "j6d4f-v2"
+}
