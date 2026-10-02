@@ -1,0 +1,46 @@
+{
+  "status": "class-jump experiment complete",
+  "core_population": {
+    "frozen_12_month_clusters": 7046,
+    "screened_panel_n": 500,
+    "clean_context_panel_n": 419,
+    "exact_multi_rrc_n": 185
+  },
+  "exact_policy_consequence_replay": {
+    "completed_n": 185,
+    "errors_n": 0,
+    "new_B_invalid_n": 40,
+    "new_B_invalid_fraction": 0.21621621621621623,
+    "BGPKIT_old_A_valid_new_B_invalid_n": 16,
+    "BGPKIT_old_A_valid_new_B_invalid_fraction": 0.08648648648648649,
+    "new_B_valid_n": 87,
+    "new_B_unknown_n": 58
+  },
+  "independent_RIPE_daily_VRP_crosscheck": {
+    "headline_cases_checked_n": 16,
+    "full_five_TAL_archive_available_n": 16,
+    "reproduced_A_valid_B_invalid_n": 15,
+    "reproduced_fraction": 0.9375,
+    "source_discrepant_n": 1,
+    "conservative_headline_exact_inversion_n": 15,
+    "conservative_headline_exact_inversion_fraction_of_185": 0.08108108108108109,
+    "download_errors_n": 0
+  },
+  "broader_clean_panel_audit": {
+    "clean_context_n": 419,
+    "weekly_checkpoint_A_valid_B_not_valid_n": 10,
+    "weekly_checkpoint_policy_inversion_fraction": 0.02386634844868735,
+    "sampling_guardrail": "The panel is month-stratified deterministic and deliberately retains two largest clusters per month; this is an audit-panel rate, not an ecosystem prevalence estimate.",
+    "timing_guardrail": "Weekly event date is a checkpoint rather than exact BGP transition time; exact multi-RRC replay supplies the precise-date mechanism confirmation."
+  },
+  "novelty_guardrails": {
+    "do_not_claim": "Do not claim discovery of the possibility that an old covering ROA can make a new origin Invalid during transfer/migration. RFC 6907 already describes this operational risk and recommends issuing the new ROA before BGP advertisement.",
+    "closest_propagation_neighbor": "RPKI Time-of-Flight (PAM 2023) measures controlled ROA propagation and data-plane reaction, generally minutes to about an hour; our months-long old-origin authorization observations are operator authorization lifecycle, not propagation latency.",
+    "defensible_contribution": "Systematically enumerate natural persistent BGP origin handoffs over one year; measure asymmetric old/new authorization lifecycles; align a multi-RRC exact transition subset; demonstrate naturally occurring strict-ROV policy inversions; independently reproduce headline inversions from RIPE NCC daily validated VRP archives; and show why a fixed symmetric delay is the wrong handoff abstraction."
+  },
+  "recommended_paper_thesis": "Persistent BGP origin handoffs are not atomic authorization transitions. In natural handoffs, routing can enter a policy-inverted state where the new origin is RPKI Invalid while the displaced origin remains Valid, while old-origin authorization can persist long after routing moves. This motivates a state-gated make-before-break procedure rather than a fixed symmetric delay.",
+  "operational_rule": {
+    "activation": "Create the new-origin authorization before the BGP switch and verify that it is visible to RPKI validation before activating the new origin.",
+    "retirement": "Do not revoke the old authorization after a fixed timer alone; combine multi-collector routing quiescence, fallback/intent checks, and an independently measured RPKI propagation budget."
+  }
+}
