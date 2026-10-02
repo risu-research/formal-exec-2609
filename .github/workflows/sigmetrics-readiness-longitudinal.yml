@@ -1,0 +1,90 @@
+name: sigmetrics-readiness-longitudinal
+
+on:
+  schedule:
+    - cron: '17 * * * *'
+  push:
+    paths:
+      - '.github/workflows/sigmetrics-readiness-longitudinal.yml'
+      - 'experiments/sigmetrics-readiness/frozen_operator_panel_v1.csv'
+      - 'experiments/sigmetrics-readiness/probe_longitudinal.mjs'
+      - 'experiments/sigmetrics-readiness/DESIGN.md'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'sentinel or full'
+        required: false
+        default: 'full'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sigmetrics-readiness-longitudinal
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve campaign mode
+        id: mode
+        shell: bash
+        run: |
+          set -euo pipefail
+          NOW="$(date -u +%s)"
+          END="$(date -u -d '2026-10-16T12:00:00Z' +%s)"
+          if [ "$NOW" -gt "$END" ]; then
+            echo "active=false" >> "$GITHUB_OUTPUT"
+            echo "Campaign window complete; no probe."
+            exit 0
+          fi
+          echo "active=true" >> "$GITHUB_OUTPUT"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            MODE="${{ inputs.mode }}"
+          elif [ "${{ github.event_name }}" = "push" ]; then
+            MODE="full"
+          else
+            HOUR="$(date -u +%H)"
+            if [ $((10#$HOUR % 6)) -eq 0 ]; then MODE="full"; else MODE="sentinel"; fi
+          fi
+          WAVE_ID="$(date -u +%Y%m%dT%H%M%SZ)-${GITHUB_RUN_ID}"
+          echo "mode=$MODE" >> "$GITHUB_OUTPUT"
+          echo "wave_id=$WAVE_ID" >> "$GITHUB_OUTPUT"
+          echo "Resolved mode=$MODE wave=$WAVE_ID"
+
+      - name: Probe frozen panel
+        if: steps.mode.outputs.active == 'true'
+        env:
+          MODE: ${{ steps.mode.outputs.mode }}
+          WAVE_ID: ${{ steps.mode.outputs.wave_id }}
+        run: node experiments/sigmetrics-readiness/probe_longitudinal.mjs
+
+      - name: Persist immutable wave
+        if: steps.mode.outputs.active == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          WAVE="${{ steps.mode.outputs.wave_id }}"
+          mkdir -p experiments/sigmetrics-readiness/data
+          cp out/wave.jsonl "experiments/sigmetrics-readiness/data/${WAVE}.jsonl"
+          cp out/wave_meta.json "experiments/sigmetrics-readiness/data/${WAVE}.meta.json"
+          git config user.name "risu-research-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add experiments/sigmetrics-readiness/data/
+          git commit -m "sigmetrics longitudinal wave ${WAVE}" || exit 0
+          git pull --rebase origin "${GITHUB_REF_NAME}"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+
+      - name: Upload wave artifact
+        if: always() && steps.mode.outputs.active == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: sigmetrics-readiness-${{ steps.mode.outputs.wave_id }}
+          path: out/
+          retention-days: 30
