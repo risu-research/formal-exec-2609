@@ -1,0 +1,43 @@
+name: rpki-handoff-pilot
+
+on:
+  push:
+    branches: [rpki-pilot-20261002]
+    paths:
+      - .github/workflows/rpki-handoff-pilot.yml
+      - RPkiPilotTrigger.txt
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  pilot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: rpki-pilot-20261002
+      - name: Install parser
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bgpdump xz-utils
+      - name: Fetch frozen public pilot code
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/risu-research/frb-exec-2609/rpki-pilot-20261002/rpki_pilot.py -o rpki_pilot.py
+          sha256sum rpki_pilot.py | tee rpki_pilot.sha256
+      - name: Run deterministic pilot
+        run: python3 rpki_pilot.py
+      - name: Commit result bundle to execution branch
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add results/rpki_handoff_pilot_20261002 rpki_pilot.sha256
+          git commit -m "add RPKI handoff pilot results [skip ci]" || exit 0
+          git push origin HEAD:rpki-pilot-20261002
+      - name: Upload result artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rpki-handoff-pilot-20261002
+          path: results/rpki_handoff_pilot_20261002
