@@ -6,18 +6,32 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   bundle:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
     steps:
-      - name: Download generic Python dependency
+      - uses: actions/checkout@v4
+        with:
+          ref: rpki-pilot-20261002
+      - name: Recover corrected lifecycle artifact
         run: |
-          mkdir -p wheels
-          python3 -m pip download --only-binary=:all: z3-solver -d wheels
-          ls -l wheels
-      - name: Upload dependency bundle
+          mkdir -p results/rpki_lifecycle_panel_v1_20261002
+          gh api repos/risu-research/formal-exec-2609/actions/artifacts/11250075385/zip > /tmp/lifecycle.zip
+          unzip -o /tmp/lifecycle.zip -d results/rpki_lifecycle_panel_v1_20261002
+          test -s results/rpki_lifecycle_panel_v1_20261002/exact_lifecycle.csv
+      - name: Exact-date lifecycle refinement
+        run: python3 rpki_lifecycle_refine_v2.py
+      - name: Operational delta frontier
+        run: python3 rpki_delta_policy_v2.py
+      - name: Upload exact-date evidence bundle
         uses: actions/upload-artifact@v4
         with:
-          name: python-deps-linux-x64
-          path: wheels/
+          name: rpki-exact-date-delta-v2-20261002
+          path: |
+            results/rpki_lifecycle_refine_v2_20261002
+            results/rpki_delta_policy_v2_20261002
