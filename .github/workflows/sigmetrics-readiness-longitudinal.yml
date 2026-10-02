@@ -17,7 +17,7 @@ on:
         default: 'full'
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: sigmetrics-readiness-longitudinal
@@ -29,8 +29,6 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Resolve campaign mode
         id: mode
@@ -38,10 +36,11 @@ jobs:
         run: |
           set -euo pipefail
           NOW="$(date -u +%s)"
+          START="$(date -u -d '2026-10-02T12:00:00Z' +%s)"
           END="$(date -u -d '2026-10-16T12:00:00Z' +%s)"
-          if [ "$NOW" -gt "$END" ]; then
+          if [ "$NOW" -lt "$START" ] || [ "$NOW" -gt "$END" ]; then
             echo "active=false" >> "$GITHUB_OUTPUT"
-            echo "Campaign window complete; no probe."
+            echo "Outside frozen campaign window; no probe."
             exit 0
           fi
           echo "active=true" >> "$GITHUB_OUTPUT"
@@ -65,26 +64,20 @@ jobs:
           WAVE_ID: ${{ steps.mode.outputs.wave_id }}
         run: node experiments/sigmetrics-readiness/probe_longitudinal.mjs
 
-      - name: Persist immutable wave
-        if: steps.mode.outputs.active == 'true'
+      - name: Add evidence manifest
+        if: always() && steps.mode.outputs.active == 'true'
         shell: bash
         run: |
           set -euo pipefail
-          WAVE="${{ steps.mode.outputs.wave_id }}"
-          mkdir -p experiments/sigmetrics-readiness/data
-          cp out/wave.jsonl "experiments/sigmetrics-readiness/data/${WAVE}.jsonl"
-          cp out/wave_meta.json "experiments/sigmetrics-readiness/data/${WAVE}.meta.json"
-          git config user.name "risu-research-bot"
-          git config user.email "actions@users.noreply.github.com"
-          git add experiments/sigmetrics-readiness/data/
-          git commit -m "sigmetrics longitudinal wave ${WAVE}" || exit 0
-          git pull --rebase origin "${GITHUB_REF_NAME}"
-          git push origin "HEAD:${GITHUB_REF_NAME}"
+          if [ -d out ]; then
+            (cd out && sha256sum * > SHA256SUMS.txt)
+          fi
 
-      - name: Upload wave artifact
+      - name: Upload immutable wave artifact
         if: always() && steps.mode.outputs.active == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: sigmetrics-readiness-${{ steps.mode.outputs.wave_id }}
           path: out/
-          retention-days: 30
+          retention-days: 90
+          if-no-files-found: warn
