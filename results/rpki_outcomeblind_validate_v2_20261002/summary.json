@@ -1,0 +1,25 @@
+{
+  "design": {
+    "input": "frozen outcome-blind exact reconstruction",
+    "exact_ge3_n": 309,
+    "validator": "same BGPKIT /v3/roas/validate endpoint and parser as prior 185-case run",
+    "independent_crosscheck": "RIPE NCC daily validated ROA archive, five trust anchors"
+  },
+  "completed_n": 309,
+  "errors_n": 0,
+  "joint_state_matrix": {
+    "invalid/invalid": 41,
+    "invalid/valid": 27,
+    "unknown/unknown": 79,
+    "valid/invalid": 41,
+    "valid/valid": 121
+  },
+  "old_valid_new_invalid_n": 41,
+  "old_valid_new_invalid_fraction_exact": 0.13268608414239483,
+  "old_valid_new_invalid_fraction_all419_lower_bound": 0.09785202863961814,
+  "archive_crosscheck_n": 41,
+  "archive_reproduced_n": 39,
+  "archive_discrepancy_n": 2,
+  "archive_errors_n": 0,
+  "guardrail": "This rerun changes no case selection or exact timing. It replaces only the local history-range classifier with the same historical validation endpoint used in the prior policy-consequence experiment."
+}
