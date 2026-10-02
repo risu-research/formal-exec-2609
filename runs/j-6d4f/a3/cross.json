@@ -1,0 +1,80 @@
+{
+  "by_file": {
+    "gpt-4o-airline.json": {
+      "calls": 247,
+      "groups": 58,
+      "max_n": 9,
+      "median_n": 4.0,
+      "names": {
+        "get_reservation_details": 58
+      },
+      "reward_hit": 0.37037037037037035,
+      "reward_no": 0.4383561643835616,
+      "task_slots": 50,
+      "tasks_hit": 19,
+      "traces": 200,
+      "traces_hit": 54
+    },
+    "gpt-4o-retail.json": {
+      "calls": 801,
+      "groups": 270,
+      "max_n": 10,
+      "median_n": 3.0,
+      "names": {
+        "get_order_details": 234,
+        "get_product_details": 36
+      },
+      "reward_hit": 0.608,
+      "reward_no": 0.6,
+      "task_slots": 115,
+      "tasks_hit": 84,
+      "traces": 460,
+      "traces_hit": 250
+    },
+    "sonnet-35-new-airline.json": {
+      "calls": 806,
+      "groups": 192,
+      "max_n": 10,
+      "median_n": 4.0,
+      "names": {
+        "get_reservation_details": 192
+      },
+      "reward_hit": 0.37988826815642457,
+      "reward_no": 0.5248868778280543,
+      "task_slots": 50,
+      "tasks_hit": 28,
+      "traces": 400,
+      "traces_hit": 179
+    },
+    "sonnet-35-new-retail.json": {
+      "calls": 2359,
+      "groups": 797,
+      "max_n": 6,
+      "median_n": 3,
+      "names": {
+        "get_order_details": 667,
+        "get_product_details": 130
+      },
+      "reward_hit": 0.6914119359534207,
+      "reward_no": 0.6952789699570815,
+      "task_slots": 115,
+      "tasks_hit": 101,
+      "traces": 920,
+      "traces_hit": 687
+    }
+  },
+  "calls": 4213,
+  "groups": 1317,
+  "local_k2": 1.7738947368421052,
+  "local_k4": 2.7428385416666665,
+  "local_kinf": 3.1989369779802583,
+  "max_n": 10,
+  "mean_n": 3.1989369779802583,
+  "median_n": 3,
+  "p90_n": 5.0,
+  "schema": "j6d4f-v3-independent",
+  "task_slots": 330,
+  "tasks_hit": 232,
+  "traces": 1980,
+  "traces_hit": 1170
+}
