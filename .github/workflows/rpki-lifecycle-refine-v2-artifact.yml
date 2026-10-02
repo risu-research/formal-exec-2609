@@ -30,3 +30,4 @@ jobs:
         with:
           name: rpki-lifecycle-refine-v2-20261002
           path: results/rpki_lifecycle_refine_v2_20261002
+# trigger exact-date refinement after corrected RIS artifact
