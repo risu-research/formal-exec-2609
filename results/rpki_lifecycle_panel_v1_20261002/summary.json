@@ -1,0 +1,39 @@
+{
+  "population_clusters_input": 7046,
+  "panel_n": 500,
+  "panel_mode": "month_stratified_deterministic",
+  "screened_n": 500,
+  "context_counts": {
+    "exclude_same_org": 69,
+    "clean_context_proxy": 419,
+    "exclude_transfer_near30": 12
+  },
+  "clean_context_n": 419,
+  "exact_attempt_n": 220,
+  "exact_resolved_n": 0,
+  "exact_multi_rrc_ge3_n": 0,
+  "B_authorized_event_n": 0,
+  "B_authorization_observed_after_event_day_n": 0,
+  "A_authorized_event_n": 0,
+  "A_retirement_right_censored_n": 0,
+  "B_lead_days": {
+    "n": 0,
+    "median": null,
+    "p10": null,
+    "p90": null,
+    "p99": null
+  },
+  "A_linger_observed_days": {
+    "n": 0,
+    "median": null,
+    "p10": null,
+    "p90": null,
+    "p99": null
+  },
+  "guardrails": [
+    "ROA authorization requires observed prefix subnet_of VRP prefix and observed prefix length <= maxLength.",
+    "same-organization and RIR transfer within +/-30 calendar days are excluded from clean context proxy; this is not operator-intent ground truth.",
+    "ROA history date ranges are date-granular; same-day ordering is not inferred.",
+    "A retirement observations ending at the Oct 2 cutoff are right-censored, not withdrawal dates."
+  ]
+}
