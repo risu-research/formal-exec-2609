@@ -1,0 +1,12 @@
+{
+  "tail_n": 36,
+  "audited_n": 36,
+  "transfer_near7": 0,
+  "transfer_near30": 0,
+  "transfer_near180": 1,
+  "same_org": 2,
+  "A_recurrence": 19,
+  "clean_crossorg_no_recurrence_no_transfer30_multi3": 13,
+  "errors_n": 0,
+  "guardrail": "Transfer evidence requires resource overlap and local comparison of transferTime to exact BGP handoff; API query time filters are not assumed. ROA history is independent date-range corroboration, not sub-day publication timing."
+}
