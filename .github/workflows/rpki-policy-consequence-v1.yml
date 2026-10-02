@@ -11,7 +11,7 @@ permissions:
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
         with:
@@ -35,6 +35,8 @@ jobs:
         run: python rpki_policy_consequence_v1.py
       - name: Probe independent historical RPKI spool mirrors for headline inversions
         run: python rpki_inversion_spool_probe.py
+      - name: Cross-check headline inversions against RIPE daily validated VRP archive
+        run: python rpki_ripe_archive_crosscheck.py
       - name: Correct delayed-subset duration summary
         run: |
           python - <<'PY'
@@ -57,8 +59,8 @@ jobs:
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add results/rpki_policy_consequence_v1_20261002 results/rpki_inversion_spool_probe_20261002
-          git diff --cached --quiet || git commit -m 'add RPKI consequence replay and independent spool probe [skip ci]'
+          git add results/rpki_policy_consequence_v1_20261002 results/rpki_inversion_spool_probe_20261002 results/rpki_ripe_archive_crosscheck_20261002
+          git diff --cached --quiet || git commit -m 'add RPKI consequence replay and independent archive checks [skip ci]'
           git pull --rebase origin rpki-pilot-20261002
           git push origin HEAD:rpki-pilot-20261002
       - uses: actions/upload-artifact@v4
@@ -67,4 +69,5 @@ jobs:
           path: |
             results/rpki_policy_consequence_v1_20261002
             results/rpki_inversion_spool_probe_20261002
+            results/rpki_ripe_archive_crosscheck_20261002
           retention-days: 90
