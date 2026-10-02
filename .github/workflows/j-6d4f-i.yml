@@ -1,0 +1,41 @@
+name: j-6d4f-i
+on:
+  push:
+    branches: ["exec/j-6d4f"]
+    paths: ["jobs/j-6d4f/start-i"]
+permissions:
+  contents: write
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - name: Prepare
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/src"
+          git -C "$RUNNER_TEMP/src" init -q tau
+          git -C "$RUNNER_TEMP/src/tau" remote add origin https://github.com/sierra-research/tau-bench.git
+          git -C "$RUNNER_TEMP/src/tau" fetch -q --depth 1 origin 59a200c6d575d595120f1cb70fea53cef0632f6b
+          git -C "$RUNNER_TEMP/src/tau" checkout -q FETCH_HEAD
+          test "$(git -C "$RUNNER_TEMP/src/tau" rev-parse HEAD)" = "59a200c6d575d595120f1cb70fea53cef0632f6b"
+      - name: Validate
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf runs/j-6d4f/a7
+          mkdir -p runs/j-6d4f/a7
+          python -m py_compile jobs/j-6d4f/v7.py
+          python jobs/j-6d4f/v7.py "$RUNNER_TEMP/src" runs/j-6d4f/a7 | tee runs/j-6d4f/a7/stdout.txt
+          sha256sum runs/j-6d4f/a7/v7.json > runs/j-6d4f/a7/manifest.txt
+      - name: Seal
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add runs/j-6d4f/a7
+          git commit -m 'Seal j-6d4f-i output' || true
+          git push origin HEAD:exec/j-6d4f
