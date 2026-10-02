@@ -1,0 +1,1 @@
+run standalone RIPE NCC daily validated VRP reconstruction for the 16 A-valid/B-invalid transition cases
