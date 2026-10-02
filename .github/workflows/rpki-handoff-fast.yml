@@ -1,5 +1,6 @@
 name: rpki-handoff-fast
 
+# v2: origin-pair deduplicated pilot
 on:
   push:
     branches: [rpki-pilot-20261002]
@@ -29,7 +30,7 @@ jobs:
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add results/rpki_handoff_fast_20261002 rpki_fast_pilot.sha256
-          git commit -m "add fast RPKI handoff pilot results [skip ci]" || exit 0
+          git commit -m "add deduplicated RPKI handoff pilot results [skip ci]" || exit 0
           git push origin HEAD:rpki-pilot-20261002
       - name: Upload result artifact
         uses: actions/upload-artifact@v4
