@@ -1,0 +1,104 @@
+{
+  "closeout_date": "2026-10-02",
+  "scope": "RPKI authorization lifecycle during persistent observed IPv4 single-origin A->B transitions",
+  "authority": {
+    "branch": "rpki-pilot-20261002",
+    "final_head_before_closeout": "e52e921b3e84eff5f6b986bb3d737df661618e5e",
+    "corrected_exact_run_id": 37059101942,
+    "corrected_exact_artifact_id": 11249727883,
+    "corrected_exact_artifact_name": "rpki-exact-date-delta-v2-20261002",
+    "refinement_errors_n": 0,
+    "supersedes_note": "For exact-resolution/lifecycle figures, use v2 corrected artifact and this closeout, not the exact-resolution zeros in committed v1 summary. The v1 numeric RIPEstat timestamp bug was fixed before the v2 exact refinement."
+  },
+  "population": {
+    "window_start": "2025-10-06",
+    "window_end": "2026-09-28",
+    "weekly_snapshots": 52,
+    "rules": {
+      "address_family": "IPv4",
+      "snapshot_route": "exact-prefix single-origin numeric ASN only",
+      "pre_stability": ">=3 consecutive weekly observations under A before change",
+      "post_persistence": "B at event plus >=4 further consecutive weekly observations (>=28d lower bound)",
+      "unit": "cluster all qualifying prefixes sharing transition week and A->B pair; deterministic representative prefix",
+      "recurrence": "exclude if old A is observed again at a weekly checkpoint within 8 weeks"
+    },
+    "raw_single_origin_changes": 35938,
+    "prestable_changes": 28678,
+    "confirmed_prefix_events": 20648,
+    "event_clusters": 7198,
+    "clusters_no_A_recurrence_8w": 7046,
+    "clusters_with_A_recurrence_8w": 152
+  },
+  "audit_panel": {
+    "population_input_n": 7046,
+    "panel_n": 500,
+    "panel_mode": "month_stratified_deterministic",
+    "exclude_same_org_n": 69,
+    "exclude_transfer_near30_n": 12,
+    "clean_context_proxy_n": 419,
+    "note": "Context proxy is not operator-intent ground truth."
+  },
+  "exact_multi_rrc_clean_subset": {
+    "n": 185,
+    "selection_note": "Prioritized exact subset from the audit panel; mechanism/distribution evidence, not an unbiased ecosystem prevalence estimator.",
+    "activation": {
+      "authorized_on_exact_event_date_n": 80,
+      "authorization_first_observed_after_exact_event_date_n": 30,
+      "no_B_authorization_history_on_or_after_event_n": 75,
+      "same_day_unordered_n": 11,
+      "lead_calendar_days": {"n": 80, "p10": 0, "p25": 3, "median": 13, "p75": 170, "p90": 667, "p95": 1323, "p99": 2130},
+      "preauthorization_support_curve": [
+        {"preauthorize_at_least_days": 0, "n": 80, "authorized_cases_with_lead_n": 80, "fraction": 1.0},
+        {"preauthorize_at_least_days": 1, "n": 69, "authorized_cases_with_lead_n": 80, "fraction": 0.8625},
+        {"preauthorize_at_least_days": 2, "n": 64, "authorized_cases_with_lead_n": 80, "fraction": 0.8},
+        {"preauthorize_at_least_days": 3, "n": 64, "authorized_cases_with_lead_n": 80, "fraction": 0.8},
+        {"preauthorize_at_least_days": 7, "n": 54, "authorized_cases_with_lead_n": 80, "fraction": 0.675},
+        {"preauthorize_at_least_days": 14, "n": 37, "authorized_cases_with_lead_n": 80, "fraction": 0.4625},
+        {"preauthorize_at_least_days": 30, "n": 32, "authorized_cases_with_lead_n": 80, "fraction": 0.4},
+        {"preauthorize_at_least_days": 60, "n": 27, "authorized_cases_with_lead_n": 80, "fraction": 0.3375},
+        {"preauthorize_at_least_days": 90, "n": 27, "authorized_cases_with_lead_n": 80, "fraction": 0.3375}
+      ],
+      "delayed_authorization_underlap_lower_bound_days": {"n": 30, "min": 1, "median": 2, "p90": 136, "max": 170}
+    },
+    "retirement": {
+      "A_authorized_on_exact_event_date_n": 98,
+      "right_censored_at_cutoff_n": 83,
+      "linger_observed_calendar_days": {"n": 98, "p10": 45, "p25": 86, "median": 137, "p75": 219, "p90": 294, "p95": 325, "p99": 345},
+      "old_authorization_survival_curve": [
+        {"days_after_exact_transition": 1, "observable_n": 98, "old_A_authorization_still_observed_n": 95, "observed_survival_fraction": 0.9693877551020408},
+        {"days_after_exact_transition": 3, "observable_n": 98, "old_A_authorization_still_observed_n": 95, "observed_survival_fraction": 0.9693877551020408},
+        {"days_after_exact_transition": 7, "observable_n": 98, "old_A_authorization_still_observed_n": 94, "observed_survival_fraction": 0.9591836734693877},
+        {"days_after_exact_transition": 14, "observable_n": 98, "old_A_authorization_still_observed_n": 94, "observed_survival_fraction": 0.9591836734693877},
+        {"days_after_exact_transition": 21, "observable_n": 98, "old_A_authorization_still_observed_n": 94, "observed_survival_fraction": 0.9591836734693877},
+        {"days_after_exact_transition": 30, "observable_n": 98, "old_A_authorization_still_observed_n": 94, "observed_survival_fraction": 0.9591836734693877},
+        {"days_after_exact_transition": 45, "observable_n": 93, "old_A_authorization_still_observed_n": 89, "observed_survival_fraction": 0.956989247311828},
+        {"days_after_exact_transition": 60, "observable_n": 88, "old_A_authorization_still_observed_n": 83, "observed_survival_fraction": 0.9431818181818182},
+        {"days_after_exact_transition": 90, "observable_n": 77, "old_A_authorization_still_observed_n": 71, "observed_survival_fraction": 0.922077922077922},
+        {"days_after_exact_transition": 120, "observable_n": 65, "old_A_authorization_still_observed_n": 58, "observed_survival_fraction": 0.8923076923076924},
+        {"days_after_exact_transition": 180, "observable_n": 45, "old_A_authorization_still_observed_n": 33, "observed_survival_fraction": 0.7333333333333333},
+        {"days_after_exact_transition": 270, "observable_n": 26, "old_A_authorization_still_observed_n": 18, "observed_survival_fraction": 0.6923076923076923}
+      ]
+    },
+    "routing_visibility": {"spread_seconds": {"n": 185, "p50": 63769.0, "p90": 461915.0, "p95": 612207.0, "p99": 951604.0, "max": 1148402.0}}
+  },
+  "operational_interpretation": {
+    "fixed_symmetric_delta_supported": false,
+    "activation": "Authorize the new origin before the BGP origin change and verify authorization visibility. Observed lead is operator behavior, not an estimate of minimum RPKI propagation time. Same-day cases remain sub-day unordered without CCR.",
+    "retirement": "Do not infer a safe revocation delay from long old-origin authorization survival. Retirement should be state-gated: establish multi-collector routing quiescence and operator intent/failback policy, then add an independently measured RPKI propagation budget before revocation.",
+    "numeric_observation_not_safety_rule": {
+      "one_full_calendar_day_preauthorization_among_authorized_at_event": {"n": 69, "denominator": 80, "fraction": 0.8625},
+      "same_day_unordered_n": 11,
+      "delayed_authorization_lower_bound_days": {"n": 30, "min": 1, "median": 2, "p90": 136, "max": 170},
+      "old_A_authorization_survival_30d": {"observable_n": 98, "still_observed_n": 94, "fraction": 0.9591836734693877},
+      "old_A_authorization_survival_90d": {"observable_n": 77, "still_observed_n": 71, "fraction": 0.922077922077922},
+      "old_A_authorization_survival_180d": {"observable_n": 45, "still_observed_n": 33, "fraction": 0.7333333333333333},
+      "multi_rrc_B_visibility_spread_max_seconds": 1148402.0
+    }
+  },
+  "guardrails": [
+    "Do not call lingering old-origin authorization stale without operator-intent evidence.",
+    "Do not interpret delayed/absent B authorization history as an exact sub-day invalid interval when only date-granular RPKI history is available.",
+    "Do not treat the 185-case exact subset fractions as ecosystem prevalence.",
+    "Do not interpret weeks/months of old-origin authorization survival as RPKI propagation delay."
+  ]
+}
