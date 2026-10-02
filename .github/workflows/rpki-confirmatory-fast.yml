@@ -1,0 +1,33 @@
+name: rpki-confirmatory-fast
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [rpki-pilot-20261002]
+    paths:
+      - rpki_confirmatory_fast.py
+      - .github/workflows/rpki-confirmatory-fast.yml
+permissions:
+  contents: write
+jobs:
+  confirm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: rpki-pilot-20261002
+      - name: Run focused all-RRC confirmatory pilot
+        run: python3 rpki_confirmatory_fast.py
+      - name: Commit confirmatory evidence
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git pull --rebase origin rpki-pilot-20261002 || true
+          git add results/rpki_confirmatory_fast_20261002
+          git commit -m "add focused multi-RRC confirmatory results [skip ci]" || exit 0
+          git push origin HEAD:rpki-pilot-20261002
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rpki-confirmatory-fast-20261002
+          path: results/rpki_confirmatory_fast_20261002
