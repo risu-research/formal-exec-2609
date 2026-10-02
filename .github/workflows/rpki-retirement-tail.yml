@@ -1,0 +1,34 @@
+name: rpki-retirement-tail
+on:
+  push:
+    branches: [rpki-pilot-20261002]
+    paths: [.github/workflows/rpki-retirement-tail.yml]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  pilot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: rpki-pilot-20261002
+      - name: Fetch blind-safe computation code
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/risu-research/frb-exec-2609/rpki-pilot-20261002/rpki_fast_pilot.py -o rpki_fast_pilot.py
+          curl -fsSL https://raw.githubusercontent.com/risu-research/frb-exec-2609/rpki-pilot-20261002/rpki_tail_extension.py -o rpki_tail_extension.py
+          sha256sum rpki_fast_pilot.py rpki_tail_extension.py | tee rpki_tail.sha256
+      - name: Run extended deterministic pilot
+        run: python3 rpki_tail_extension.py
+      - name: Commit result bundle
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add results/rpki_retirement_tail_20261002 rpki_tail.sha256
+          git commit -m "add extended RPKI retirement-tail results [skip ci]" || exit 0
+          git push origin HEAD:rpki-pilot-20261002
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rpki-retirement-tail-20261002
+          path: results/rpki_retirement_tail_20261002
