@@ -1,0 +1,1567 @@
+{
+  "inversion_n": 16,
+  "dates": [
+    "2025-10-24",
+    "2025-10-25",
+    "2025-11-05",
+    "2025-11-12",
+    "2025-11-21",
+    "2025-12-09",
+    "2025-12-12",
+    "2025-12-23",
+    "2026-01-24",
+    "2026-05-20",
+    "2026-05-26",
+    "2026-06-03",
+    "2026-06-05",
+    "2026-06-15",
+    "2026-06-27",
+    "2026-07-16"
+  ],
+  "cases": [
+    {
+      "representative_prefix": "79.172.200.0/24",
+      "A": "198831",
+      "B": "211615",
+      "exact_event_date": "2025-10-24",
+      "exact_rrc_n": "23",
+      "B_validation_event": "invalid",
+      "A_validation_event": "valid",
+      "A_valid_B_invalid": "True",
+      "B_invalid_event": "True",
+      "B_unknown_event": "False",
+      "B_valid_event": "False",
+      "B_next_matching_auth_start": "2025-10-25",
+      "daily_trace_n": "2",
+      "event_start_invalid_run_days_observed": "1",
+      "first_noninvalid_day": "2025-10-25",
+      "first_valid_day": "2025-10-25"
+    },
+    {
+      "representative_prefix": "50.217.41.0/24",
+      "A": "33491",
+      "B": "30302",
+      "exact_event_date": "2025-10-25",
+      "exact_rrc_n": "20",
+      "B_validation_event": "invalid",
+      "A_validation_event": "valid",
+      "A_valid_B_invalid": "True",
+      "B_invalid_event": "True",
+      "B_unknown_event": "False",
+      "B_valid_event": "False",
+      "B_next_matching_auth_start": "2025-10-28",
+      "daily_trace_n": "4",
+      "event_start_invalid_run_days_observed": "3",
+      "first_noninvalid_day": "2025-10-28",
+      "first_valid_day": "2025-10-28"
+    },
+    {
+      "representative_prefix": "100.43.0.0/24",
+      "A": "395597",
+      "B": "22773",
+      "exact_event_date": "2025-11-05",
+      "exact_rrc_n": "13",
+      "B_validation_event": "invalid",
+      "A_validation_event": "valid",
+      "A_valid_B_invalid": "True",
+      "B_invalid_event": "True",
+      "B_unknown_event": "False",
+      "B_valid_event": "False",
+      "B_next_matching_auth_start": "",
+      "daily_trace_n": "0",
+      "event_start_invalid_run_days_observed": "1",
+      "first_noninvalid_day": "",
+      "first_valid_day": ""
+    },
+    {
+      "representative_prefix": "89.185.29.0/24",
+      "A": "202662",
+      "B": "401434",
+      "exact_event_date": "2025-11-12",
+      "exact_rrc_n": "3",
+      "B_validation_event": "invalid",
+      "A_validation_event": "valid",
+      "A_valid_B_invalid": "True",
+      "B_invalid_event": "True",
+      "B_unknown_event": "False",
+      "B_valid_event": "False",
+      "B_next_matching_auth_start": "2025-11-14",
+      "daily_trace_n": "3",
+      "event_start_invalid_run_days_observed": "2",
+      "first_noninvalid_day": "2025-11-14",
+      "first_valid_day": "2025-11-14"
+    },
+    {
+      "representative_prefix": "136.0.242.0/24",
+      "A": "401152",
+      "B": "834",
+      "exact_event_date": "2025-11-21",
+      "exact_rrc_n": "3",
+      "B_validation_event": "invalid",
+      "A_validation_event": "valid",
+      "A_valid_B_invalid": "True",
+      "B_invalid_event": "True",
+      "B_unknown_event": "False",
+      "B_valid_event": "False",
+      "B_next_matching_auth_start": "2026-03-14",
+      "daily_trace_n": "114",
+      "event_start_invalid_run_days_observed": "42",
+      "first_noninvalid_day": "2026-01-02",
+      "first_valid_day": "2026-01-02"
+    },
+    {
+      "representative_prefix": "147.78.2.0/24",
+      "A": "136258",
+      "B": "35758",
+      "exact_event_date": "2025-12-09",
+      "exact_rrc_n": "23",
+      "B_validation_event": "invalid",
+      "A_validation_event": "valid",
+      "A_valid_B_invalid": "True",
+      "B_invalid_event": "True",
+      "B_unknown_event": "False",
+      "B_valid_event": "False",
+      "B_next_matching_auth_start": "2025-12-11",
+      "daily_trace_n": "3",
+      "event_start_invalid_run_days_observed": "2",
+      "first_noninvalid_day": "2025-12-11",
+      "first_valid_day": "2025-12-11"
+    },
+    {
+      "representative_prefix": "45.135.195.0/24",
+      "A": "205899",
+      "B": "198584",
+      "exact_event_date": "2025-12-12",
+      "exact_rrc_n": "23",
+      "B_validation_event": "invalid",
+      "A_validation_event": "valid",
+      "A_valid_B_invalid": "True",
+      "B_invalid_event": "True",
+      "B_unknown_event": "False",
+      "B_valid_event": "False",
+      "B_next_matching_auth_start": "2025-12-13",
+      "daily_trace_n": "2",
+      "event_start_invalid_run_days_observed": "1",
+      "first_noninvalid_day": "2025-12-13",
+      "first_valid_day": "2025-12-13"
+    },
+    {
+      "representative_prefix": "185.232.36.0/22",
+      "A": "203936",
+      "B": "34696",
+      "exact_event_date": "2025-12-23",
+      "exact_rrc_n": "23",
+      "B_validation_event": "invalid",
+      "A_validation_event": "valid",
+      "A_valid_B_invalid": "True",
+      "B_invalid_event": "True",
+      "B_unknown_event": "False",
+      "B_valid_event": "False",
+      "B_next_matching_auth_start": "2025-12-24",
+      "daily_trace_n": "2",
+      "event_start_invalid_run_days_observed": "1",
+      "first_noninvalid_day": "2025-12-24",
+      "first_valid_day": "2025-12-24"
+    },
+    {
+      "representative_prefix": "43.227.184.0/23",
+      "A": "132750",
+      "B": "154297",
+      "exact_event_date": "2026-01-24",
+      "exact_rrc_n": "18",
+      "B_validation_event": "invalid",
+      "A_validation_event": "valid",
+      "A_valid_B_invalid": "True",
+      "B_invalid_event": "True",
+      "B_unknown_event": "False",
+      "B_valid_event": "False",
+      "B_next_matching_auth_start": "2026-01-27",
+      "daily_trace_n": "4",
+      "event_start_invalid_run_days_observed": "3",
+      "first_noninvalid_day": "2026-01-27",
+      "first_valid_day": "2026-01-27"
+    },
+    {
+      "representative_prefix": "202.154.17.0/24",
+      "A": "141607",
+      "B": "154314",
+      "exact_event_date": "2026-05-20",
+      "exact_rrc_n": "15",
+      "B_validation_event": "invalid",
+      "A_validation_event": "valid",
+      "A_valid_B_invalid": "True",
+      "B_invalid_event": "True",
+      "B_unknown_event": "False",
+      "B_valid_event": "False",
+      "B_next_matching_auth_start": "2026-05-22",
+      "daily_trace_n": "3",
+      "event_start_invalid_run_days_observed": "2",
+      "first_noninvalid_day": "2026-05-22",
+      "first_valid_day": "2026-05-22"
+    },
+    {
+      "representative_prefix": "49.238.35.0/24",
+      "A": "17771",
+      "B": "150008",
+      "exact_event_date": "2026-05-26",
+      "exact_rrc_n": "4",
+      "B_validation_event": "invalid",
+      "A_validation_event": "valid",
+      "A_valid_B_invalid": "True",
+      "B_invalid_event": "True",
+      "B_unknown_event": "False",
+      "B_valid_event": "False",
+      "B_next_matching_auth_start": "2026-05-27",
+      "daily_trace_n": "2",
+      "event_start_invalid_run_days_observed": "1",
+      "first_noninvalid_day": "2026-05-27",
+      "first_valid_day": "2026-05-27"
+    },
+    {
+      "representative_prefix": "213.220.60.0/23",
+      "A": "8311",
+      "B": "41397",
+      "exact_event_date": "2026-06-03",
+      "exact_rrc_n": "23",
+      "B_validation_event": "invalid",
+      "A_validation_event": "valid",
+      "A_valid_B_invalid": "True",
+      "B_invalid_event": "True",
+      "B_unknown_event": "False",
+      "B_valid_event": "False",
+      "B_next_matching_auth_start": "2026-06-04",
+      "daily_trace_n": "2",
+      "event_start_invalid_run_days_observed": "1",
+      "first_noninvalid_day": "2026-06-04",
+      "first_valid_day": "2026-06-04"
+    },
+    {
+      "representative_prefix": "31.172.142.0/24",
+      "A": "1820",
+      "B": "31035",
+      "exact_event_date": "2026-06-05",
+      "exact_rrc_n": "23",
+      "B_validation_event": "invalid",
+      "A_validation_event": "valid",
+      "A_valid_B_invalid": "True",
+      "B_invalid_event": "True",
+      "B_unknown_event": "False",
+      "B_valid_event": "False",
+      "B_next_matching_auth_start": "2026-06-06",
+      "daily_trace_n": "2",
+      "event_start_invalid_run_days_observed": "1",
+      "first_noninvalid_day": "2026-06-06",
+      "first_valid_day": "2026-06-06"
+    },
+    {
+      "representative_prefix": "87.58.192.0/24",
+      "A": "198790",
+      "B": "219436",
+      "exact_event_date": "2026-06-15",
+      "exact_rrc_n": "23",
+      "B_validation_event": "invalid",
+      "A_validation_event": "valid",
+      "A_valid_B_invalid": "True",
+      "B_invalid_event": "True",
+      "B_unknown_event": "False",
+      "B_valid_event": "False",
+      "B_next_matching_auth_start": "2026-06-16",
+      "daily_trace_n": "2",
+      "event_start_invalid_run_days_observed": "1",
+      "first_noninvalid_day": "2026-06-16",
+      "first_valid_day": "2026-06-16"
+    },
+    {
+      "representative_prefix": "194.165.37.0/24",
+      "A": "16509",
+      "B": "198365",
+      "exact_event_date": "2026-06-27",
+      "exact_rrc_n": "23",
+      "B_validation_event": "invalid",
+      "A_validation_event": "valid",
+      "A_valid_B_invalid": "True",
+      "B_invalid_event": "True",
+      "B_unknown_event": "False",
+      "B_valid_event": "False",
+      "B_next_matching_auth_start": "2026-06-28",
+      "daily_trace_n": "2",
+      "event_start_invalid_run_days_observed": "1",
+      "first_noninvalid_day": "2026-06-28",
+      "first_valid_day": "2026-06-28"
+    },
+    {
+      "representative_prefix": "197.221.253.0/24",
+      "A": "37204",
+      "B": "56696",
+      "exact_event_date": "2026-07-16",
+      "exact_rrc_n": "21",
+      "B_validation_event": "invalid",
+      "A_validation_event": "valid",
+      "A_valid_B_invalid": "True",
+      "B_invalid_event": "True",
+      "B_unknown_event": "False",
+      "B_valid_event": "False",
+      "B_next_matching_auth_start": "",
+      "daily_trace_n": "0",
+      "event_start_invalid_run_days_observed": "1",
+      "first_noninvalid_day": "",
+      "first_valid_day": ""
+    }
+  ],
+  "mirrors": {
+    "https://rpkiviews.kerfuffle.net/rpkidata/rpkispools/": {
+      "2025-10-24": {
+        "url": "https://rpkiviews.kerfuffle.net/rpkidata/rpkispools/2025/10/24/",
+        "error": "<HTTPError 404: 'Not Found'>"
+      },
+      "2025-10-25": {
+        "url": "https://rpkiviews.kerfuffle.net/rpkidata/rpkispools/2025/10/25/",
+        "error": "<HTTPError 404: 'Not Found'>"
+      },
+      "2025-11-05": {
+        "url": "https://rpkiviews.kerfuffle.net/rpkidata/rpkispools/2025/11/05/",
+        "error": "<HTTPError 404: 'Not Found'>"
+      },
+      "2025-11-12": {
+        "url": "https://rpkiviews.kerfuffle.net/rpkidata/rpkispools/2025/11/12/",
+        "error": "<HTTPError 404: 'Not Found'>"
+      },
+      "2025-11-21": {
+        "url": "https://rpkiviews.kerfuffle.net/rpkidata/rpkispools/2025/11/21/",
+        "error": "<HTTPError 404: 'Not Found'>"
+      },
+      "2025-12-09": {
+        "url": "https://rpkiviews.kerfuffle.net/rpkidata/rpkispools/2025/12/09/",
+        "error": "<HTTPError 404: 'Not Found'>"
+      },
+      "2025-12-12": {
+        "url": "https://rpkiviews.kerfuffle.net/rpkidata/rpkispools/2025/12/12/",
+        "error": "<HTTPError 404: 'Not Found'>"
+      },
+      "2025-12-23": {
+        "url": "https://rpkiviews.kerfuffle.net/rpkidata/rpkispools/2025/12/23/",
+        "error": "<HTTPError 404: 'Not Found'>"
+      },
+      "2026-01-24": {
+        "url": "https://rpkiviews.kerfuffle.net/rpkidata/rpkispools/2026/01/24/",
+        "n_links": 2,
+        "links": [
+          {
+            "href": "20260124-initstate.tar.zst",
+            "url": "https://rpkiviews.kerfuffle.net/rpkidata/rpkispools/2026/01/24/20260124-initstate.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "476813801",
+              "type": "application/octet-stream",
+              "modified": "Sat, 24 Jan 2026 00:00:00 GMT"
+            }
+          },
+          {
+            "href": "20260124-rpkispool.tar.zst",
+            "url": "https://rpkiviews.kerfuffle.net/rpkidata/rpkispools/2026/01/24/20260124-rpkispool.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "441911172",
+              "type": "application/octet-stream",
+              "modified": "Sat, 24 Jan 2026 23:59:48 GMT"
+            }
+          }
+        ],
+        "candidates": [
+          {
+            "href": "20260124-initstate.tar.zst",
+            "url": "https://rpkiviews.kerfuffle.net/rpkidata/rpkispools/2026/01/24/20260124-initstate.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "476813801",
+              "type": "application/octet-stream",
+              "modified": "Sat, 24 Jan 2026 00:00:00 GMT"
+            }
+          },
+          {
+            "href": "20260124-rpkispool.tar.zst",
+            "url": "https://rpkiviews.kerfuffle.net/rpkidata/rpkispools/2026/01/24/20260124-rpkispool.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "441911172",
+              "type": "application/octet-stream",
+              "modified": "Sat, 24 Jan 2026 23:59:48 GMT"
+            }
+          }
+        ]
+      },
+      "2026-05-20": {
+        "url": "https://rpkiviews.kerfuffle.net/rpkidata/rpkispools/2026/05/20/",
+        "n_links": 2,
+        "links": [
+          {
+            "href": "20260520-initstate.tar.zst",
+            "url": "https://rpkiviews.kerfuffle.net/rpkidata/rpkispools/2026/05/20/20260520-initstate.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "608605773",
+              "type": "application/octet-stream",
+              "modified": "Wed, 20 May 2026 00:00:00 GMT"
+            }
+          },
+          {
+            "href": "20260520-rpkispool.tar.zst",
+            "url": "https://rpkiviews.kerfuffle.net/rpkidata/rpkispools/2026/05/20/20260520-rpkispool.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "771028495",
+              "type": "application/octet-stream",
+              "modified": "Wed, 20 May 2026 23:58:15 GMT"
+            }
+          }
+        ],
+        "candidates": [
+          {
+            "href": "20260520-initstate.tar.zst",
+            "url": "https://rpkiviews.kerfuffle.net/rpkidata/rpkispools/2026/05/20/20260520-initstate.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "608605773",
+              "type": "application/octet-stream",
+              "modified": "Wed, 20 May 2026 00:00:00 GMT"
+            }
+          },
+          {
+            "href": "20260520-rpkispool.tar.zst",
+            "url": "https://rpkiviews.kerfuffle.net/rpkidata/rpkispools/2026/05/20/20260520-rpkispool.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "771028495",
+              "type": "application/octet-stream",
+              "modified": "Wed, 20 May 2026 23:58:15 GMT"
+            }
+          }
+        ]
+      },
+      "2026-05-26": {
+        "url": "https://rpkiviews.kerfuffle.net/rpkidata/rpkispools/2026/05/26/",
+        "n_links": 2,
+        "links": [
+          {
+            "href": "20260526-initstate.tar.zst",
+            "url": "https://rpkiviews.kerfuffle.net/rpkidata/rpkispools/2026/05/26/20260526-initstate.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "663555852",
+              "type": "application/octet-stream",
+              "modified": "Tue, 26 May 2026 00:00:00 GMT"
+            }
+          },
+          {
+            "href": "20260526-rpkispool.tar.zst",
+            "url": "https://rpkiviews.kerfuffle.net/rpkidata/rpkispools/2026/05/26/20260526-rpkispool.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "774960728",
+              "type": "application/octet-stream",
+              "modified": "Tue, 26 May 2026 23:59:53 GMT"
+            }
+          }
+        ],
+        "candidates": [
+          {
+            "href": "20260526-initstate.tar.zst",
+            "url": "https://rpkiviews.kerfuffle.net/rpkidata/rpkispools/2026/05/26/20260526-initstate.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "663555852",
+              "type": "application/octet-stream",
+              "modified": "Tue, 26 May 2026 00:00:00 GMT"
+            }
+          },
+          {
+            "href": "20260526-rpkispool.tar.zst",
+            "url": "https://rpkiviews.kerfuffle.net/rpkidata/rpkispools/2026/05/26/20260526-rpkispool.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "774960728",
+              "type": "application/octet-stream",
+              "modified": "Tue, 26 May 2026 23:59:53 GMT"
+            }
+          }
+        ]
+      },
+      "2026-06-03": {
+        "url": "https://rpkiviews.kerfuffle.net/rpkidata/rpkispools/2026/06/03/",
+        "n_links": 2,
+        "links": [
+          {
+            "href": "20260603-initstate.tar.zst",
+            "url": "https://rpkiviews.kerfuffle.net/rpkidata/rpkispools/2026/06/03/20260603-initstate.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "614701863",
+              "type": "application/octet-stream",
+              "modified": "Wed, 03 Jun 2026 00:00:00 GMT"
+            }
+          },
+          {
+            "href": "20260603-rpkispool.tar.zst",
+            "url": "https://rpkiviews.kerfuffle.net/rpkidata/rpkispools/2026/06/03/20260603-rpkispool.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "804331372",
+              "type": "application/octet-stream",
+              "modified": "Wed, 03 Jun 2026 23:58:41 GMT"
+            }
+          }
+        ],
+        "candidates": [
+          {
+            "href": "20260603-initstate.tar.zst",
+            "url": "https://rpkiviews.kerfuffle.net/rpkidata/rpkispools/2026/06/03/20260603-initstate.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "614701863",
+              "type": "application/octet-stream",
+              "modified": "Wed, 03 Jun 2026 00:00:00 GMT"
+            }
+          },
+          {
+            "href": "20260603-rpkispool.tar.zst",
+            "url": "https://rpkiviews.kerfuffle.net/rpkidata/rpkispools/2026/06/03/20260603-rpkispool.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "804331372",
+              "type": "application/octet-stream",
+              "modified": "Wed, 03 Jun 2026 23:58:41 GMT"
+            }
+          }
+        ]
+      },
+      "2026-06-05": {
+        "url": "https://rpkiviews.kerfuffle.net/rpkidata/rpkispools/2026/06/05/",
+        "n_links": 2,
+        "links": [
+          {
+            "href": "20260605-initstate.tar.zst",
+            "url": "https://rpkiviews.kerfuffle.net/rpkidata/rpkispools/2026/06/05/20260605-initstate.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "614559589",
+              "type": "application/octet-stream",
+              "modified": "Fri, 05 Jun 2026 00:00:00 GMT"
+            }
+          },
+          {
+            "href": "20260605-rpkispool.tar.zst",
+            "url": "https://rpkiviews.kerfuffle.net/rpkidata/rpkispools/2026/06/05/20260605-rpkispool.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "816620452",
+              "type": "application/octet-stream",
+              "modified": "Fri, 05 Jun 2026 23:59:55 GMT"
+            }
+          }
+        ],
+        "candidates": [
+          {
+            "href": "20260605-initstate.tar.zst",
+            "url": "https://rpkiviews.kerfuffle.net/rpkidata/rpkispools/2026/06/05/20260605-initstate.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "614559589",
+              "type": "application/octet-stream",
+              "modified": "Fri, 05 Jun 2026 00:00:00 GMT"
+            }
+          },
+          {
+            "href": "20260605-rpkispool.tar.zst",
+            "url": "https://rpkiviews.kerfuffle.net/rpkidata/rpkispools/2026/06/05/20260605-rpkispool.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "816620452",
+              "type": "application/octet-stream",
+              "modified": "Fri, 05 Jun 2026 23:59:55 GMT"
+            }
+          }
+        ]
+      },
+      "2026-06-15": {
+        "url": "https://rpkiviews.kerfuffle.net/rpkidata/rpkispools/2026/06/15/",
+        "n_links": 2,
+        "links": [
+          {
+            "href": "20260615-initstate.tar.zst",
+            "url": "https://rpkiviews.kerfuffle.net/rpkidata/rpkispools/2026/06/15/20260615-initstate.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "613213533",
+              "type": "application/octet-stream",
+              "modified": "Mon, 15 Jun 2026 00:00:00 GMT"
+            }
+          },
+          {
+            "href": "20260615-rpkispool.tar.zst",
+            "url": "https://rpkiviews.kerfuffle.net/rpkidata/rpkispools/2026/06/15/20260615-rpkispool.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "842764138",
+              "type": "application/octet-stream",
+              "modified": "Mon, 15 Jun 2026 23:59:04 GMT"
+            }
+          }
+        ],
+        "candidates": [
+          {
+            "href": "20260615-initstate.tar.zst",
+            "url": "https://rpkiviews.kerfuffle.net/rpkidata/rpkispools/2026/06/15/20260615-initstate.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "613213533",
+              "type": "application/octet-stream",
+              "modified": "Mon, 15 Jun 2026 00:00:00 GMT"
+            }
+          },
+          {
+            "href": "20260615-rpkispool.tar.zst",
+            "url": "https://rpkiviews.kerfuffle.net/rpkidata/rpkispools/2026/06/15/20260615-rpkispool.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "842764138",
+              "type": "application/octet-stream",
+              "modified": "Mon, 15 Jun 2026 23:59:04 GMT"
+            }
+          }
+        ]
+      },
+      "2026-06-27": {
+        "url": "https://rpkiviews.kerfuffle.net/rpkidata/rpkispools/2026/06/27/",
+        "n_links": 2,
+        "links": [
+          {
+            "href": "20260627-initstate.tar.zst",
+            "url": "https://rpkiviews.kerfuffle.net/rpkidata/rpkispools/2026/06/27/20260627-initstate.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "638640700",
+              "type": "application/octet-stream",
+              "modified": "Sat, 27 Jun 2026 00:00:00 GMT"
+            }
+          },
+          {
+            "href": "20260627-rpkispool.tar.zst",
+            "url": "https://rpkiviews.kerfuffle.net/rpkidata/rpkispools/2026/06/27/20260627-rpkispool.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "939594943",
+              "type": "application/octet-stream",
+              "modified": "Sat, 27 Jun 2026 23:58:58 GMT"
+            }
+          }
+        ],
+        "candidates": [
+          {
+            "href": "20260627-initstate.tar.zst",
+            "url": "https://rpkiviews.kerfuffle.net/rpkidata/rpkispools/2026/06/27/20260627-initstate.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "638640700",
+              "type": "application/octet-stream",
+              "modified": "Sat, 27 Jun 2026 00:00:00 GMT"
+            }
+          },
+          {
+            "href": "20260627-rpkispool.tar.zst",
+            "url": "https://rpkiviews.kerfuffle.net/rpkidata/rpkispools/2026/06/27/20260627-rpkispool.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "939594943",
+              "type": "application/octet-stream",
+              "modified": "Sat, 27 Jun 2026 23:58:58 GMT"
+            }
+          }
+        ]
+      },
+      "2026-07-16": {
+        "url": "https://rpkiviews.kerfuffle.net/rpkidata/rpkispools/2026/07/16/",
+        "n_links": 2,
+        "links": [
+          {
+            "href": "20260716-initstate.tar.zst",
+            "url": "https://rpkiviews.kerfuffle.net/rpkidata/rpkispools/2026/07/16/20260716-initstate.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "647348067",
+              "type": "application/octet-stream",
+              "modified": "Thu, 16 Jul 2026 00:00:00 GMT"
+            }
+          },
+          {
+            "href": "20260716-rpkispool.tar.zst",
+            "url": "https://rpkiviews.kerfuffle.net/rpkidata/rpkispools/2026/07/16/20260716-rpkispool.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "1127332703",
+              "type": "application/octet-stream",
+              "modified": "Thu, 16 Jul 2026 23:59:53 GMT"
+            }
+          }
+        ],
+        "candidates": [
+          {
+            "href": "20260716-initstate.tar.zst",
+            "url": "https://rpkiviews.kerfuffle.net/rpkidata/rpkispools/2026/07/16/20260716-initstate.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "647348067",
+              "type": "application/octet-stream",
+              "modified": "Thu, 16 Jul 2026 00:00:00 GMT"
+            }
+          },
+          {
+            "href": "20260716-rpkispool.tar.zst",
+            "url": "https://rpkiviews.kerfuffle.net/rpkidata/rpkispools/2026/07/16/20260716-rpkispool.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "1127332703",
+              "type": "application/octet-stream",
+              "modified": "Thu, 16 Jul 2026 23:59:53 GMT"
+            }
+          }
+        ]
+      }
+    },
+    "https://josephine.sobornost.net/rpkidata/rpkispools/": {
+      "2025-10-24": {
+        "url": "https://josephine.sobornost.net/rpkidata/rpkispools/2025/10/24/",
+        "error": "<HTTPError 404: 'Not Found'>"
+      },
+      "2025-10-25": {
+        "url": "https://josephine.sobornost.net/rpkidata/rpkispools/2025/10/25/",
+        "error": "<HTTPError 404: 'Not Found'>"
+      },
+      "2025-11-05": {
+        "url": "https://josephine.sobornost.net/rpkidata/rpkispools/2025/11/05/",
+        "error": "<HTTPError 404: 'Not Found'>"
+      },
+      "2025-11-12": {
+        "url": "https://josephine.sobornost.net/rpkidata/rpkispools/2025/11/12/",
+        "error": "<HTTPError 404: 'Not Found'>"
+      },
+      "2025-11-21": {
+        "url": "https://josephine.sobornost.net/rpkidata/rpkispools/2025/11/21/",
+        "error": "<HTTPError 404: 'Not Found'>"
+      },
+      "2025-12-09": {
+        "url": "https://josephine.sobornost.net/rpkidata/rpkispools/2025/12/09/",
+        "error": "<HTTPError 404: 'Not Found'>"
+      },
+      "2025-12-12": {
+        "url": "https://josephine.sobornost.net/rpkidata/rpkispools/2025/12/12/",
+        "error": "<HTTPError 404: 'Not Found'>"
+      },
+      "2025-12-23": {
+        "url": "https://josephine.sobornost.net/rpkidata/rpkispools/2025/12/23/",
+        "error": "<HTTPError 404: 'Not Found'>"
+      },
+      "2026-01-24": {
+        "url": "https://josephine.sobornost.net/rpkidata/rpkispools/2026/01/24/",
+        "n_links": 2,
+        "links": [
+          {
+            "href": "20260124-initstate.tar.zst",
+            "url": "https://josephine.sobornost.net/rpkidata/rpkispools/2026/01/24/20260124-initstate.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "476813801",
+              "type": "application/octet-stream",
+              "modified": "Sat, 24 Jan 2026 00:00:00 GMT"
+            }
+          },
+          {
+            "href": "20260124-rpkispool.tar.zst",
+            "url": "https://josephine.sobornost.net/rpkidata/rpkispools/2026/01/24/20260124-rpkispool.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "441911172",
+              "type": "application/octet-stream",
+              "modified": "Sat, 24 Jan 2026 23:59:48 GMT"
+            }
+          }
+        ],
+        "candidates": [
+          {
+            "href": "20260124-initstate.tar.zst",
+            "url": "https://josephine.sobornost.net/rpkidata/rpkispools/2026/01/24/20260124-initstate.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "476813801",
+              "type": "application/octet-stream",
+              "modified": "Sat, 24 Jan 2026 00:00:00 GMT"
+            }
+          },
+          {
+            "href": "20260124-rpkispool.tar.zst",
+            "url": "https://josephine.sobornost.net/rpkidata/rpkispools/2026/01/24/20260124-rpkispool.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "441911172",
+              "type": "application/octet-stream",
+              "modified": "Sat, 24 Jan 2026 23:59:48 GMT"
+            }
+          }
+        ]
+      },
+      "2026-05-20": {
+        "url": "https://josephine.sobornost.net/rpkidata/rpkispools/2026/05/20/",
+        "n_links": 2,
+        "links": [
+          {
+            "href": "20260520-initstate.tar.zst",
+            "url": "https://josephine.sobornost.net/rpkidata/rpkispools/2026/05/20/20260520-initstate.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "608605773",
+              "type": "application/octet-stream",
+              "modified": "Wed, 20 May 2026 00:00:00 GMT"
+            }
+          },
+          {
+            "href": "20260520-rpkispool.tar.zst",
+            "url": "https://josephine.sobornost.net/rpkidata/rpkispools/2026/05/20/20260520-rpkispool.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "771028495",
+              "type": "application/octet-stream",
+              "modified": "Wed, 20 May 2026 23:58:15 GMT"
+            }
+          }
+        ],
+        "candidates": [
+          {
+            "href": "20260520-initstate.tar.zst",
+            "url": "https://josephine.sobornost.net/rpkidata/rpkispools/2026/05/20/20260520-initstate.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "608605773",
+              "type": "application/octet-stream",
+              "modified": "Wed, 20 May 2026 00:00:00 GMT"
+            }
+          },
+          {
+            "href": "20260520-rpkispool.tar.zst",
+            "url": "https://josephine.sobornost.net/rpkidata/rpkispools/2026/05/20/20260520-rpkispool.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "771028495",
+              "type": "application/octet-stream",
+              "modified": "Wed, 20 May 2026 23:58:15 GMT"
+            }
+          }
+        ]
+      },
+      "2026-05-26": {
+        "url": "https://josephine.sobornost.net/rpkidata/rpkispools/2026/05/26/",
+        "n_links": 2,
+        "links": [
+          {
+            "href": "20260526-initstate.tar.zst",
+            "url": "https://josephine.sobornost.net/rpkidata/rpkispools/2026/05/26/20260526-initstate.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "663555852",
+              "type": "application/octet-stream",
+              "modified": "Tue, 26 May 2026 00:00:00 GMT"
+            }
+          },
+          {
+            "href": "20260526-rpkispool.tar.zst",
+            "url": "https://josephine.sobornost.net/rpkidata/rpkispools/2026/05/26/20260526-rpkispool.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "774960728",
+              "type": "application/octet-stream",
+              "modified": "Tue, 26 May 2026 23:59:53 GMT"
+            }
+          }
+        ],
+        "candidates": [
+          {
+            "href": "20260526-initstate.tar.zst",
+            "url": "https://josephine.sobornost.net/rpkidata/rpkispools/2026/05/26/20260526-initstate.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "663555852",
+              "type": "application/octet-stream",
+              "modified": "Tue, 26 May 2026 00:00:00 GMT"
+            }
+          },
+          {
+            "href": "20260526-rpkispool.tar.zst",
+            "url": "https://josephine.sobornost.net/rpkidata/rpkispools/2026/05/26/20260526-rpkispool.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "774960728",
+              "type": "application/octet-stream",
+              "modified": "Tue, 26 May 2026 23:59:53 GMT"
+            }
+          }
+        ]
+      },
+      "2026-06-03": {
+        "url": "https://josephine.sobornost.net/rpkidata/rpkispools/2026/06/03/",
+        "n_links": 2,
+        "links": [
+          {
+            "href": "20260603-initstate.tar.zst",
+            "url": "https://josephine.sobornost.net/rpkidata/rpkispools/2026/06/03/20260603-initstate.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "614701863",
+              "type": "application/octet-stream",
+              "modified": "Wed, 03 Jun 2026 00:00:00 GMT"
+            }
+          },
+          {
+            "href": "20260603-rpkispool.tar.zst",
+            "url": "https://josephine.sobornost.net/rpkidata/rpkispools/2026/06/03/20260603-rpkispool.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "804331372",
+              "type": "application/octet-stream",
+              "modified": "Wed, 03 Jun 2026 23:58:41 GMT"
+            }
+          }
+        ],
+        "candidates": [
+          {
+            "href": "20260603-initstate.tar.zst",
+            "url": "https://josephine.sobornost.net/rpkidata/rpkispools/2026/06/03/20260603-initstate.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "614701863",
+              "type": "application/octet-stream",
+              "modified": "Wed, 03 Jun 2026 00:00:00 GMT"
+            }
+          },
+          {
+            "href": "20260603-rpkispool.tar.zst",
+            "url": "https://josephine.sobornost.net/rpkidata/rpkispools/2026/06/03/20260603-rpkispool.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "804331372",
+              "type": "application/octet-stream",
+              "modified": "Wed, 03 Jun 2026 23:58:41 GMT"
+            }
+          }
+        ]
+      },
+      "2026-06-05": {
+        "url": "https://josephine.sobornost.net/rpkidata/rpkispools/2026/06/05/",
+        "n_links": 2,
+        "links": [
+          {
+            "href": "20260605-initstate.tar.zst",
+            "url": "https://josephine.sobornost.net/rpkidata/rpkispools/2026/06/05/20260605-initstate.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "614559589",
+              "type": "application/octet-stream",
+              "modified": "Fri, 05 Jun 2026 00:00:00 GMT"
+            }
+          },
+          {
+            "href": "20260605-rpkispool.tar.zst",
+            "url": "https://josephine.sobornost.net/rpkidata/rpkispools/2026/06/05/20260605-rpkispool.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "816620452",
+              "type": "application/octet-stream",
+              "modified": "Fri, 05 Jun 2026 23:59:55 GMT"
+            }
+          }
+        ],
+        "candidates": [
+          {
+            "href": "20260605-initstate.tar.zst",
+            "url": "https://josephine.sobornost.net/rpkidata/rpkispools/2026/06/05/20260605-initstate.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "614559589",
+              "type": "application/octet-stream",
+              "modified": "Fri, 05 Jun 2026 00:00:00 GMT"
+            }
+          },
+          {
+            "href": "20260605-rpkispool.tar.zst",
+            "url": "https://josephine.sobornost.net/rpkidata/rpkispools/2026/06/05/20260605-rpkispool.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "816620452",
+              "type": "application/octet-stream",
+              "modified": "Fri, 05 Jun 2026 23:59:55 GMT"
+            }
+          }
+        ]
+      },
+      "2026-06-15": {
+        "url": "https://josephine.sobornost.net/rpkidata/rpkispools/2026/06/15/",
+        "n_links": 2,
+        "links": [
+          {
+            "href": "20260615-initstate.tar.zst",
+            "url": "https://josephine.sobornost.net/rpkidata/rpkispools/2026/06/15/20260615-initstate.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "613213533",
+              "type": "application/octet-stream",
+              "modified": "Mon, 15 Jun 2026 00:00:00 GMT"
+            }
+          },
+          {
+            "href": "20260615-rpkispool.tar.zst",
+            "url": "https://josephine.sobornost.net/rpkidata/rpkispools/2026/06/15/20260615-rpkispool.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "842764138",
+              "type": "application/octet-stream",
+              "modified": "Mon, 15 Jun 2026 23:59:04 GMT"
+            }
+          }
+        ],
+        "candidates": [
+          {
+            "href": "20260615-initstate.tar.zst",
+            "url": "https://josephine.sobornost.net/rpkidata/rpkispools/2026/06/15/20260615-initstate.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "613213533",
+              "type": "application/octet-stream",
+              "modified": "Mon, 15 Jun 2026 00:00:00 GMT"
+            }
+          },
+          {
+            "href": "20260615-rpkispool.tar.zst",
+            "url": "https://josephine.sobornost.net/rpkidata/rpkispools/2026/06/15/20260615-rpkispool.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "842764138",
+              "type": "application/octet-stream",
+              "modified": "Mon, 15 Jun 2026 23:59:04 GMT"
+            }
+          }
+        ]
+      },
+      "2026-06-27": {
+        "url": "https://josephine.sobornost.net/rpkidata/rpkispools/2026/06/27/",
+        "n_links": 2,
+        "links": [
+          {
+            "href": "20260627-initstate.tar.zst",
+            "url": "https://josephine.sobornost.net/rpkidata/rpkispools/2026/06/27/20260627-initstate.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "638640700",
+              "type": "application/octet-stream",
+              "modified": "Sat, 27 Jun 2026 00:00:00 GMT"
+            }
+          },
+          {
+            "href": "20260627-rpkispool.tar.zst",
+            "url": "https://josephine.sobornost.net/rpkidata/rpkispools/2026/06/27/20260627-rpkispool.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "939594943",
+              "type": "application/octet-stream",
+              "modified": "Sat, 27 Jun 2026 23:58:58 GMT"
+            }
+          }
+        ],
+        "candidates": [
+          {
+            "href": "20260627-initstate.tar.zst",
+            "url": "https://josephine.sobornost.net/rpkidata/rpkispools/2026/06/27/20260627-initstate.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "638640700",
+              "type": "application/octet-stream",
+              "modified": "Sat, 27 Jun 2026 00:00:00 GMT"
+            }
+          },
+          {
+            "href": "20260627-rpkispool.tar.zst",
+            "url": "https://josephine.sobornost.net/rpkidata/rpkispools/2026/06/27/20260627-rpkispool.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "939594943",
+              "type": "application/octet-stream",
+              "modified": "Sat, 27 Jun 2026 23:58:58 GMT"
+            }
+          }
+        ]
+      },
+      "2026-07-16": {
+        "url": "https://josephine.sobornost.net/rpkidata/rpkispools/2026/07/16/",
+        "n_links": 2,
+        "links": [
+          {
+            "href": "20260716-initstate.tar.zst",
+            "url": "https://josephine.sobornost.net/rpkidata/rpkispools/2026/07/16/20260716-initstate.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "647348067",
+              "type": "application/octet-stream",
+              "modified": "Thu, 16 Jul 2026 00:00:00 GMT"
+            }
+          },
+          {
+            "href": "20260716-rpkispool.tar.zst",
+            "url": "https://josephine.sobornost.net/rpkidata/rpkispools/2026/07/16/20260716-rpkispool.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "1127332703",
+              "type": "application/octet-stream",
+              "modified": "Thu, 16 Jul 2026 23:59:53 GMT"
+            }
+          }
+        ],
+        "candidates": [
+          {
+            "href": "20260716-initstate.tar.zst",
+            "url": "https://josephine.sobornost.net/rpkidata/rpkispools/2026/07/16/20260716-initstate.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "647348067",
+              "type": "application/octet-stream",
+              "modified": "Thu, 16 Jul 2026 00:00:00 GMT"
+            }
+          },
+          {
+            "href": "20260716-rpkispool.tar.zst",
+            "url": "https://josephine.sobornost.net/rpkidata/rpkispools/2026/07/16/20260716-rpkispool.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "1127332703",
+              "type": "application/octet-stream",
+              "modified": "Thu, 16 Jul 2026 23:59:53 GMT"
+            }
+          }
+        ]
+      }
+    },
+    "https://dango.attn.jp/rpkidata/rpkispools/": {
+      "2025-10-24": {
+        "url": "https://dango.attn.jp/rpkidata/rpkispools/2025/10/24/",
+        "error": "<HTTPError 404: 'Not Found'>"
+      },
+      "2025-10-25": {
+        "url": "https://dango.attn.jp/rpkidata/rpkispools/2025/10/25/",
+        "error": "<HTTPError 404: 'Not Found'>"
+      },
+      "2025-11-05": {
+        "url": "https://dango.attn.jp/rpkidata/rpkispools/2025/11/05/",
+        "error": "<HTTPError 404: 'Not Found'>"
+      },
+      "2025-11-12": {
+        "url": "https://dango.attn.jp/rpkidata/rpkispools/2025/11/12/",
+        "error": "<HTTPError 404: 'Not Found'>"
+      },
+      "2025-11-21": {
+        "url": "https://dango.attn.jp/rpkidata/rpkispools/2025/11/21/",
+        "error": "<HTTPError 404: 'Not Found'>"
+      },
+      "2025-12-09": {
+        "url": "https://dango.attn.jp/rpkidata/rpkispools/2025/12/09/",
+        "error": "<HTTPError 404: 'Not Found'>"
+      },
+      "2025-12-12": {
+        "url": "https://dango.attn.jp/rpkidata/rpkispools/2025/12/12/",
+        "error": "<HTTPError 404: 'Not Found'>"
+      },
+      "2025-12-23": {
+        "url": "https://dango.attn.jp/rpkidata/rpkispools/2025/12/23/",
+        "error": "<HTTPError 404: 'Not Found'>"
+      },
+      "2026-01-24": {
+        "url": "https://dango.attn.jp/rpkidata/rpkispools/2026/01/24/",
+        "n_links": 2,
+        "links": [
+          {
+            "href": "20260124-initstate.tar.zst",
+            "url": "https://dango.attn.jp/rpkidata/rpkispools/2026/01/24/20260124-initstate.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "476813801",
+              "type": "application/octet-stream",
+              "modified": "Sat, 24 Jan 2026 00:00:00 GMT"
+            }
+          },
+          {
+            "href": "20260124-rpkispool.tar.zst",
+            "url": "https://dango.attn.jp/rpkidata/rpkispools/2026/01/24/20260124-rpkispool.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "441911172",
+              "type": "application/octet-stream",
+              "modified": "Sat, 24 Jan 2026 23:59:48 GMT"
+            }
+          }
+        ],
+        "candidates": [
+          {
+            "href": "20260124-initstate.tar.zst",
+            "url": "https://dango.attn.jp/rpkidata/rpkispools/2026/01/24/20260124-initstate.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "476813801",
+              "type": "application/octet-stream",
+              "modified": "Sat, 24 Jan 2026 00:00:00 GMT"
+            }
+          },
+          {
+            "href": "20260124-rpkispool.tar.zst",
+            "url": "https://dango.attn.jp/rpkidata/rpkispools/2026/01/24/20260124-rpkispool.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "441911172",
+              "type": "application/octet-stream",
+              "modified": "Sat, 24 Jan 2026 23:59:48 GMT"
+            }
+          }
+        ]
+      },
+      "2026-05-20": {
+        "url": "https://dango.attn.jp/rpkidata/rpkispools/2026/05/20/",
+        "n_links": 2,
+        "links": [
+          {
+            "href": "20260520-initstate.tar.zst",
+            "url": "https://dango.attn.jp/rpkidata/rpkispools/2026/05/20/20260520-initstate.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "608605773",
+              "type": "application/octet-stream",
+              "modified": "Wed, 20 May 2026 00:00:00 GMT"
+            }
+          },
+          {
+            "href": "20260520-rpkispool.tar.zst",
+            "url": "https://dango.attn.jp/rpkidata/rpkispools/2026/05/20/20260520-rpkispool.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "771028495",
+              "type": "application/octet-stream",
+              "modified": "Wed, 20 May 2026 23:58:15 GMT"
+            }
+          }
+        ],
+        "candidates": [
+          {
+            "href": "20260520-initstate.tar.zst",
+            "url": "https://dango.attn.jp/rpkidata/rpkispools/2026/05/20/20260520-initstate.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "608605773",
+              "type": "application/octet-stream",
+              "modified": "Wed, 20 May 2026 00:00:00 GMT"
+            }
+          },
+          {
+            "href": "20260520-rpkispool.tar.zst",
+            "url": "https://dango.attn.jp/rpkidata/rpkispools/2026/05/20/20260520-rpkispool.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "771028495",
+              "type": "application/octet-stream",
+              "modified": "Wed, 20 May 2026 23:58:15 GMT"
+            }
+          }
+        ]
+      },
+      "2026-05-26": {
+        "url": "https://dango.attn.jp/rpkidata/rpkispools/2026/05/26/",
+        "n_links": 2,
+        "links": [
+          {
+            "href": "20260526-initstate.tar.zst",
+            "url": "https://dango.attn.jp/rpkidata/rpkispools/2026/05/26/20260526-initstate.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "663555852",
+              "type": "application/octet-stream",
+              "modified": "Tue, 26 May 2026 00:00:00 GMT"
+            }
+          },
+          {
+            "href": "20260526-rpkispool.tar.zst",
+            "url": "https://dango.attn.jp/rpkidata/rpkispools/2026/05/26/20260526-rpkispool.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "774960728",
+              "type": "application/octet-stream",
+              "modified": "Tue, 26 May 2026 23:59:53 GMT"
+            }
+          }
+        ],
+        "candidates": [
+          {
+            "href": "20260526-initstate.tar.zst",
+            "url": "https://dango.attn.jp/rpkidata/rpkispools/2026/05/26/20260526-initstate.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "663555852",
+              "type": "application/octet-stream",
+              "modified": "Tue, 26 May 2026 00:00:00 GMT"
+            }
+          },
+          {
+            "href": "20260526-rpkispool.tar.zst",
+            "url": "https://dango.attn.jp/rpkidata/rpkispools/2026/05/26/20260526-rpkispool.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "774960728",
+              "type": "application/octet-stream",
+              "modified": "Tue, 26 May 2026 23:59:53 GMT"
+            }
+          }
+        ]
+      },
+      "2026-06-03": {
+        "url": "https://dango.attn.jp/rpkidata/rpkispools/2026/06/03/",
+        "n_links": 2,
+        "links": [
+          {
+            "href": "20260603-initstate.tar.zst",
+            "url": "https://dango.attn.jp/rpkidata/rpkispools/2026/06/03/20260603-initstate.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "614701863",
+              "type": "application/octet-stream",
+              "modified": "Wed, 03 Jun 2026 00:00:00 GMT"
+            }
+          },
+          {
+            "href": "20260603-rpkispool.tar.zst",
+            "url": "https://dango.attn.jp/rpkidata/rpkispools/2026/06/03/20260603-rpkispool.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "804331372",
+              "type": "application/octet-stream",
+              "modified": "Wed, 03 Jun 2026 23:58:41 GMT"
+            }
+          }
+        ],
+        "candidates": [
+          {
+            "href": "20260603-initstate.tar.zst",
+            "url": "https://dango.attn.jp/rpkidata/rpkispools/2026/06/03/20260603-initstate.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "614701863",
+              "type": "application/octet-stream",
+              "modified": "Wed, 03 Jun 2026 00:00:00 GMT"
+            }
+          },
+          {
+            "href": "20260603-rpkispool.tar.zst",
+            "url": "https://dango.attn.jp/rpkidata/rpkispools/2026/06/03/20260603-rpkispool.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "804331372",
+              "type": "application/octet-stream",
+              "modified": "Wed, 03 Jun 2026 23:58:41 GMT"
+            }
+          }
+        ]
+      },
+      "2026-06-05": {
+        "url": "https://dango.attn.jp/rpkidata/rpkispools/2026/06/05/",
+        "n_links": 2,
+        "links": [
+          {
+            "href": "20260605-initstate.tar.zst",
+            "url": "https://dango.attn.jp/rpkidata/rpkispools/2026/06/05/20260605-initstate.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "614559589",
+              "type": "application/octet-stream",
+              "modified": "Fri, 05 Jun 2026 00:00:00 GMT"
+            }
+          },
+          {
+            "href": "20260605-rpkispool.tar.zst",
+            "url": "https://dango.attn.jp/rpkidata/rpkispools/2026/06/05/20260605-rpkispool.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "816620452",
+              "type": "application/octet-stream",
+              "modified": "Fri, 05 Jun 2026 23:59:55 GMT"
+            }
+          }
+        ],
+        "candidates": [
+          {
+            "href": "20260605-initstate.tar.zst",
+            "url": "https://dango.attn.jp/rpkidata/rpkispools/2026/06/05/20260605-initstate.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "614559589",
+              "type": "application/octet-stream",
+              "modified": "Fri, 05 Jun 2026 00:00:00 GMT"
+            }
+          },
+          {
+            "href": "20260605-rpkispool.tar.zst",
+            "url": "https://dango.attn.jp/rpkidata/rpkispools/2026/06/05/20260605-rpkispool.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "816620452",
+              "type": "application/octet-stream",
+              "modified": "Fri, 05 Jun 2026 23:59:55 GMT"
+            }
+          }
+        ]
+      },
+      "2026-06-15": {
+        "url": "https://dango.attn.jp/rpkidata/rpkispools/2026/06/15/",
+        "n_links": 2,
+        "links": [
+          {
+            "href": "20260615-initstate.tar.zst",
+            "url": "https://dango.attn.jp/rpkidata/rpkispools/2026/06/15/20260615-initstate.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "613213533",
+              "type": "application/octet-stream",
+              "modified": "Mon, 15 Jun 2026 00:00:00 GMT"
+            }
+          },
+          {
+            "href": "20260615-rpkispool.tar.zst",
+            "url": "https://dango.attn.jp/rpkidata/rpkispools/2026/06/15/20260615-rpkispool.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "842764138",
+              "type": "application/octet-stream",
+              "modified": "Mon, 15 Jun 2026 23:59:04 GMT"
+            }
+          }
+        ],
+        "candidates": [
+          {
+            "href": "20260615-initstate.tar.zst",
+            "url": "https://dango.attn.jp/rpkidata/rpkispools/2026/06/15/20260615-initstate.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "613213533",
+              "type": "application/octet-stream",
+              "modified": "Mon, 15 Jun 2026 00:00:00 GMT"
+            }
+          },
+          {
+            "href": "20260615-rpkispool.tar.zst",
+            "url": "https://dango.attn.jp/rpkidata/rpkispools/2026/06/15/20260615-rpkispool.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "842764138",
+              "type": "application/octet-stream",
+              "modified": "Mon, 15 Jun 2026 23:59:04 GMT"
+            }
+          }
+        ]
+      },
+      "2026-06-27": {
+        "url": "https://dango.attn.jp/rpkidata/rpkispools/2026/06/27/",
+        "n_links": 2,
+        "links": [
+          {
+            "href": "20260627-initstate.tar.zst",
+            "url": "https://dango.attn.jp/rpkidata/rpkispools/2026/06/27/20260627-initstate.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "638640700",
+              "type": "application/octet-stream",
+              "modified": "Sat, 27 Jun 2026 00:00:00 GMT"
+            }
+          },
+          {
+            "href": "20260627-rpkispool.tar.zst",
+            "url": "https://dango.attn.jp/rpkidata/rpkispools/2026/06/27/20260627-rpkispool.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "939594943",
+              "type": "application/octet-stream",
+              "modified": "Sat, 27 Jun 2026 23:58:58 GMT"
+            }
+          }
+        ],
+        "candidates": [
+          {
+            "href": "20260627-initstate.tar.zst",
+            "url": "https://dango.attn.jp/rpkidata/rpkispools/2026/06/27/20260627-initstate.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "638640700",
+              "type": "application/octet-stream",
+              "modified": "Sat, 27 Jun 2026 00:00:00 GMT"
+            }
+          },
+          {
+            "href": "20260627-rpkispool.tar.zst",
+            "url": "https://dango.attn.jp/rpkidata/rpkispools/2026/06/27/20260627-rpkispool.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "939594943",
+              "type": "application/octet-stream",
+              "modified": "Sat, 27 Jun 2026 23:58:58 GMT"
+            }
+          }
+        ]
+      },
+      "2026-07-16": {
+        "url": "https://dango.attn.jp/rpkidata/rpkispools/2026/07/16/",
+        "n_links": 2,
+        "links": [
+          {
+            "href": "20260716-initstate.tar.zst",
+            "url": "https://dango.attn.jp/rpkidata/rpkispools/2026/07/16/20260716-initstate.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "647348067",
+              "type": "application/octet-stream",
+              "modified": "Thu, 16 Jul 2026 00:00:00 GMT"
+            }
+          },
+          {
+            "href": "20260716-rpkispool.tar.zst",
+            "url": "https://dango.attn.jp/rpkidata/rpkispools/2026/07/16/20260716-rpkispool.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "1127332703",
+              "type": "application/octet-stream",
+              "modified": "Thu, 16 Jul 2026 23:59:53 GMT"
+            }
+          }
+        ],
+        "candidates": [
+          {
+            "href": "20260716-initstate.tar.zst",
+            "url": "https://dango.attn.jp/rpkidata/rpkispools/2026/07/16/20260716-initstate.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "647348067",
+              "type": "application/octet-stream",
+              "modified": "Thu, 16 Jul 2026 00:00:00 GMT"
+            }
+          },
+          {
+            "href": "20260716-rpkispool.tar.zst",
+            "url": "https://dango.attn.jp/rpkidata/rpkispools/2026/07/16/20260716-rpkispool.tar.zst",
+            "head": {
+              "status": 200,
+              "length": "1127332703",
+              "type": "application/octet-stream",
+              "modified": "Thu, 16 Jul 2026 23:59:53 GMT"
+            }
+          }
+        ]
+      }
+    }
+  }
+}

@@ -32,10 +32,10 @@
     "invalid_on_event_n": 25,
     "invalid_on_event_fraction": 0.7575757575757576,
     "event_start_invalid_run_days": {
-      "n": 40,
+      "n": 25,
       "min": 1,
-      "median": 1,
-      "p90": 100,
+      "median": 3,
+      "p90": 136,
       "p99": 170,
       "max": 170
     }
