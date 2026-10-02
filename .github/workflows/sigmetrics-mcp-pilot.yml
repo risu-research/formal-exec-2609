@@ -15,42 +15,36 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - name: Fetch open MCP dataset and inspect schema
+      - name: Fetch open conformance corpus and inspect schema
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p out
+          curl -fsSL --retry 2 -A 'RISU-SIGMETRICS-Pilot/0.1' \
+            https://raw.githubusercontent.com/Neeeophytee/mcp-stateless-conformance/main/servers.json \
+            -o out/servers.json
+          curl -fsSL --retry 2 -A 'RISU-SIGMETRICS-Pilot/0.1' \
+            https://raw.githubusercontent.com/Neeeophytee/mcp-stateless-conformance/main/results.json \
+            -o out/results.json
           python3 - <<'PY'
-          import csv, urllib.request, pathlib, json
-          urls=[
-            'https://mcpbeat.com/static/data/servers.csv',
-            'https://mcpbeat.com/data/latest/servers.csv',
-          ]
-          raw=None; used=None
-          for u in urls:
-              try:
-                  req=urllib.request.Request(u, headers={'User-Agent':'RISU-SIGMETRICS-Pilot/0.1'})
-                  with urllib.request.urlopen(req, timeout=30) as r:
-                      raw=r.read()
-                  if raw:
-                      used=u; break
-              except Exception as e:
-                  print('FETCH_FAIL',u,repr(e))
-          if not raw:
-              raise SystemExit('could not fetch servers.csv')
-          p=pathlib.Path('out/servers.csv'); p.write_bytes(raw)
-          text=raw.decode('utf-8-sig',errors='replace')
-          rows=list(csv.DictReader(text.splitlines()))
-          print('SOURCE',used)
-          print('ROWS',len(rows))
-          print('COLUMNS',json.dumps(list(rows[0].keys()) if rows else [],ensure_ascii=False))
-          for r in rows[:3]:
-              print('SAMPLE',json.dumps(r,ensure_ascii=False)[:4000])
-          pathlib.Path('out/schema.json').write_text(json.dumps({'source':used,'rows':len(rows),'columns':list(rows[0].keys()) if rows else []},indent=2))
+          import json, pathlib
+          servers=json.loads(pathlib.Path('out/servers.json').read_text())
+          results=json.loads(pathlib.Path('out/results.json').read_text())
+          print('SERVERS',len(servers),'SERVER_SAMPLE',json.dumps(servers[0],ensure_ascii=False)[:2000])
+          print('RESULTS_TYPE',type(results).__name__,'RESULTS_LEN',len(results))
+          if isinstance(results,list):
+              for r in results[:3]: print('RESULT_SAMPLE',json.dumps(r,ensure_ascii=False)[:5000])
+          elif isinstance(results,dict):
+              print('RESULT_KEYS',list(results)[:30])
+              for k,v in list(results.items())[:2]: print('RESULT_ITEM',k,json.dumps(v,ensure_ascii=False)[:5000])
+          pathlib.Path('out/schema.txt').write_text(
+            f'servers={len(servers)}\nserver_sample={json.dumps(servers[0],ensure_ascii=False)}\n'
+            f'results_type={type(results).__name__}\nresults_len={len(results)}\n'
+          )
           PY
-      - name: Upload schema evidence
+      - name: Upload corpus schema evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: sigmetrics-mcp-schema
+          name: sigmetrics-mcp-corpus-schema
           path: out/
