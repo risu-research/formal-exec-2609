@@ -1,0 +1,49 @@
+name: rpki-census-crosssource-diagnostic
+on:
+  push:
+    branches: [rpki-pilot-20261002]
+    paths: [.github/workflows/rpki-census-crosssource-diagnostic.yml]
+permissions:
+  contents: write
+jobs:
+  diagnostic:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: rpki-pilot-20261002
+      - name: Diagnose archive disagreements and exact overlap
+        run: |
+          python3 - <<'PY'
+          import csv,json
+          from collections import Counter
+          from pathlib import Path
+          ar=list(csv.DictReader(open('results/rpki_census_archive_crosscheck_v2_20261002/cases.csv')))
+          cal=list(csv.DictReader(open('results/rpki_full_census_fast_closeout_20261002/weekly_vs_exact_calibration_4key.csv')))
+          key=lambda r:(r['event_date'],r['representative_prefix'],r['A'],r['B'])
+          amap={key(r):r for r in ar}
+          pairs=Counter((r['archive_A'],r['archive_B']) for r in ar)
+          weekly_exact=[r for r in cal if str(r['weekly_inversion']).lower()=='true']
+          cross=[]
+          for r in weekly_exact:
+              z=amap.get(key(r)); cross.append({**r,'archive_A':z['archive_A'] if z else None,'archive_B':z['archive_B'] if z else None,'archive_reproduced':z['reproduced'] if z else None})
+          out={
+            'weekly_primary_inversions_n':len(ar),'archive_state_matrix_for_primary_inversions':{f'{a}/{b}':n for (a,b),n in sorted(pairs.items())},
+            'strict_archive_reproduced_n':sum(r['archive_A']=='valid' and r['archive_B']=='invalid' for r in ar),
+            'archive_B_valid_n':sum(r['archive_B']=='valid' for r in ar),'archive_B_invalid_n':sum(r['archive_B']=='invalid' for r in ar),'archive_B_unknown_n':sum(r['archive_B']=='unknown' for r in ar),
+            'strict_crosssource_population_fraction':sum(r['archive_A']=='valid' and r['archive_B']=='invalid' for r in ar)/7046,
+            'weekly_exact_overlap_inversions_n':len(weekly_exact),
+            'weekly_exact_overlap_archive_reproduced_n':sum(str(r['archive_reproduced']).lower()=='true' for r in cross),
+            'weekly_exact_overlap_cases':cross,
+            'interpretation':'Strict population robustness should use 95 archive-reproduced weekly inversions. Primary 119 is source-specific weekly census; disagreements do not establish B Valid unless archive_B_valid_n > 0.'
+          }
+          p=Path('results/rpki_census_crosssource_diagnostic_20261002');p.mkdir(parents=True,exist_ok=True);(p/'summary.json').write_text(json.dumps(out,indent=2));print(json.dumps(out,indent=2))
+          PY
+      - name: Commit diagnostic
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git pull --rebase origin rpki-pilot-20261002 || true
+          git add results/rpki_census_crosssource_diagnostic_20261002
+          git commit -m "add census cross-source diagnostic [skip ci]" || exit 0
+          git push origin HEAD:rpki-pilot-20261002
