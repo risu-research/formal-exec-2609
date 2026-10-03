@@ -1,0 +1,20 @@
+{
+  "canonical_no_recurrence_8w": {
+    "n": 7046,
+    "inversions": 119,
+    "rate": 0.016889015043996595
+  },
+  "excluded_recurrence_within_8w": {
+    "n": 152,
+    "inversions": 5,
+    "rate": 0.03289473684210526
+  },
+  "all_persistent_clusters_without_recurrence_filter": {
+    "n": 7198,
+    "inversions": 124,
+    "rate": 0.01722700750208391
+  },
+  "absolute_rate_change_when_filter_removed": 0.00033799245808731684,
+  "relative_rate_ratio_all_vs_canonical": 1.0200125618460776,
+  "guardrail": "This is an on/off sensitivity for the 8-week non-recurrence filter, not a 4/8/12-week threshold grid. The stored cluster output does not retain recurrence timing needed to reconstruct 4/12 weeks honestly."
+}
