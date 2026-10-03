@@ -146,3 +146,8 @@ def main():
     print(json.dumps(summary,indent=2))
 
 if __name__=='__main__':main()
+
+if __name__=='__main__':
+    import runpy
+    print('\n=== resolved-vs-unresolved observability diagnostic ===')
+    runpy.run_path('rpki_observability_audit_v1.py', run_name='__main__')
