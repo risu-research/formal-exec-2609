@@ -1,0 +1,9 @@
+{
+  "input": "results/rpki_population_v1_20261002/frozen_no_recurrence.csv",
+  "rule": "include every frozen_no_recurrence row; sort event_date,prefix,A,B",
+  "selected_n": 7046,
+  "selection_sha256": "3b4227baff3cd89cdd7829f91678184fb2abc260c693bc73a66cca058cb29cc4",
+  "forbidden_for_selection": [
+    "any RPKI/ROA state or lifecycle field"
+  ]
+}
