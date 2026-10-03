@@ -1,0 +1,78 @@
+{
+  "status": "FINAL_LIFECYCLE_AUTHORITY",
+  "population": "all 309 frozen outcome-blind exact BGP transitions observed at >=3 RIPE RIS RRCs",
+  "completion": {"n": 309, "errors": 0},
+  "definitions": {
+    "authorization_history": "union of every covering VRP authorizing the same origin ASN",
+    "continuous_interval": "merge overlapping or day-adjacent inclusive date ranges",
+    "activation_lead": "start of the continuous new-origin authorization interval covering the exact BGP transition date",
+    "retirement_linger": "end of the continuous old-origin authorization interval covering the exact BGP transition date; later reauthorization after a gap is excluded",
+    "study_cutoff": "2026-10-02",
+    "same_day_guardrail": "historical RPKI data are date-granular; same-day BGP/ROA ordering is unresolved"
+  },
+  "new_origin_activation_history": {
+    "history_reconstructs_matching_authorization_on_event_date": {"n": 133, "denominator": 309, "fraction": 0.43042071197411},
+    "among_event_date_authorized_preexisting_at_least_1_day": {"n": 101, "denominator": 133, "fraction": 0.7593984962406015},
+    "among_event_date_authorized_same_day_boundary": {"n": 32, "denominator": 133, "fraction": 0.24060150375939848},
+    "first_matching_authorization_observed_after_event": {"n": 74, "denominator": 309, "fraction": 0.2394822006472492},
+    "no_matching_authorization_reconstructed_on_or_after_event": {"n": 102, "denominator": 309, "fraction": 0.3300970873786408},
+    "lead_days_among_event_date_authorized": {"n": 133, "median": 9, "p25": 1, "p75": 132, "p90": 400}
+  },
+  "old_origin_retirement_history": {
+    "history_reconstructs_matching_authorization_on_event_date": {"n": 153, "denominator": 309, "fraction": 0.49514563106796117},
+    "right_censored_at_cutoff": {"n": 98, "denominator": 153, "fraction": 0.6405228758169934},
+    "continuous_linger_days": {"n": 153, "median": 104, "p25": 35, "p75": 181, "p90": 289},
+    "survival_30d": {"n": 115, "denominator": 153, "fraction": 0.7516339869281046},
+    "survival_90d": {"n": 87, "denominator": 126, "fraction": 0.6904761904761905},
+    "survival_180d": {"n": 39, "denominator": 76, "fraction": 0.5131578947368421}
+  },
+  "enrichment_diagnostic": {
+    "prior185_B_event_authorization_fraction": 0.43243243243243246,
+    "new124_B_event_authorization_fraction": 0.4274193548387097,
+    "interpretation_activation": "new-origin event-date authorization is stable across the prior enriched 185 and the newly added 124",
+    "prior185_A_survival_30d": 0.9591836734693877,
+    "new124_A_survival_30d": 0.38181818181818183,
+    "prior185_A_survival_90d": 0.9090909090909091,
+    "new124_A_survival_90d": 0.3469387755102041,
+    "prior185_A_survival_180d": 0.7111111111111111,
+    "new124_A_survival_180d": 0.22580645161290322,
+    "interpretation_retirement": "the prior lifecycle-enriched 185 materially overrepresented long old-origin authorization persistence; retirement inference must use the full 309 panel"
+  },
+  "endpoint_consistency_audit": {
+    "any_discordant_cases": 21,
+    "fraction_of_309": 0.06796116504854369,
+    "A_validator_valid_history_false": 9,
+    "B_validator_valid_history_false": 15,
+    "independent_RIPE_archive_errors": 0,
+    "A_archive_agrees_frozen_validator": 3,
+    "A_archive_agrees_history_boolean": 6,
+    "B_archive_agrees_frozen_validator": 3,
+    "B_archive_agrees_history_boolean": 12,
+    "interpretation": "frozen validator is retained as authority for exact-event ROV state; historical search is used for lifecycle interval reconstruction. They are not silently imputed into one another; discordance is source-specific and disclosed. In the discordant subset, the independent RIPE archive more often agrees with the history Boolean than with the frozen validator."
+  },
+  "invalid_run_stability": {
+    "frozen_exact_B_invalid_with_later_matching_authorization_candidates": 61,
+    "historical_day0_validator_reproduces_frozen_invalid": 61,
+    "fraction": 1.0,
+    "interpretation": "the event-start Invalid state is stable for every case used in the later-authorization Invalid-run analysis"
+  },
+  "paper_decision": {
+    "use_full309_as_primary_lifecycle": true,
+    "retire_prior185_population_lifecycle_claims": true,
+    "keep_prior185_only_as_diagnostic_or_remove_for_space": true,
+    "do_not_report_old_185_retirement_survival_as_population_evidence": true,
+    "recommended_wording": "Historical authorization reconstruction found a matching new-origin authorization on the exact transition date in 133/309 cases; among those, 101 had begun at least one calendar day earlier. For the old origin, 153/309 had a matching authorization interval covering the transition date; among horizon-observable cases, 115/153 remained continuously authorized at 30 days, 87/126 at 90 days, and 39/76 at 180 days."
+  },
+  "discarded_non_authoritative_intermediates": [
+    "rpki_lifecycle_full309_v1 regression against inputs/rpki_exact185_policy_input_20261002.csv: that file contains 61 policy-stage rows, not the full prior185 authority",
+    "rpki_lifecycle_full309_regression_v2 direct lifecycle-field mismatch count against corrected exact artifact: the corrected artifact stores exact timing but not refined lifecycle fields, so blank-schema mismatches are non-scientific",
+    "rpki_lifecycle_full309_contiguous_v3 legacy_vs_contiguous_field_differences: exact input lacks legacy lifecycle columns, so these diagnostic counts are invalid and must not be cited"
+  ],
+  "guardrails": [
+    "ROA history is date-granular and cannot establish sub-day ordering.",
+    "The 309 cases are outcome-blind exact-transition cases; lifecycle RPKI fields were not used for selection.",
+    "Historical search reconstruction and frozen validator are separate sources with measured discordance; neither is silently substituted for the other.",
+    "Old-origin authorization persistence is not operator intent, routing persistence, stale configuration, or traffic impact.",
+    "Right-censored authorizations at the study cutoff are not treated as observed withdrawals."
+  ]
+}
