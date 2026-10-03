@@ -1,0 +1,71 @@
+{
+  "authority": "Canonical exact set and inversion labels are from rpki_outcomeblind_validate_v2_20261002/exact_rov_validate.csv (309 rows; 41 old-Valid/new-Invalid).",
+  "canonical_exact_n": 309,
+  "canonical_inversion_n": 41,
+  "refetch_validation": {
+    "cases_n": 419,
+    "one_hour_current_resolved_n": 310,
+    "rrc_count_mismatch_n": 1,
+    "mismatches": [
+      {
+        "key": [
+          "2026-01-05",
+          "160.20.145.0/24",
+          "30823",
+          "198983"
+        ],
+        "frozen_1h_rrc_n": 0,
+        "refetched_1h_rrc_n": 23,
+        "frozen_resolved_ge3": false,
+        "refetched_resolved_ge3": true
+      }
+    ],
+    "threshold_membership_symmetric_difference_n": 1,
+    "canonical_missing_from_refetched_1h_n": 0,
+    "refetched_1h_extra_vs_canonical_n": 1
+  },
+  "windows": [
+    {
+      "window": "direct_only",
+      "all_419_refetched_resolved_ge3_n": 280,
+      "canonical_309_retained_n": 279,
+      "canonical_309_retention": 0.9029126213592233,
+      "canonical_41_inversions_retained_n": 37,
+      "canonical_41_retention": 0.9024390243902439,
+      "canonical_retained_median_date_changed_vs_1h_n": 6,
+      "canonical_inversion_median_date_changed_vs_1h_n": 1
+    },
+    {
+      "window": "15m",
+      "all_419_refetched_resolved_ge3_n": 293,
+      "canonical_309_retained_n": 292,
+      "canonical_309_retention": 0.9449838187702265,
+      "canonical_41_inversions_retained_n": 39,
+      "canonical_41_retention": 0.9512195121951219,
+      "canonical_retained_median_date_changed_vs_1h_n": 1,
+      "canonical_inversion_median_date_changed_vs_1h_n": 0
+    },
+    {
+      "window": "1h",
+      "all_419_refetched_resolved_ge3_n": 310,
+      "canonical_309_retained_n": 309,
+      "canonical_309_retention": 1.0,
+      "canonical_41_inversions_retained_n": 41,
+      "canonical_41_retention": 1.0,
+      "canonical_retained_median_date_changed_vs_1h_n": 0,
+      "canonical_inversion_median_date_changed_vs_1h_n": 0
+    },
+    {
+      "window": "6h",
+      "all_419_refetched_resolved_ge3_n": 331,
+      "canonical_309_retained_n": 309,
+      "canonical_309_retention": 1.0,
+      "canonical_41_inversions_retained_n": 41,
+      "canonical_41_retention": 1.0,
+      "canonical_retained_median_date_changed_vs_1h_n": 4,
+      "canonical_inversion_median_date_changed_vs_1h_n": 0
+    }
+  ],
+  "interpretation_guardrail": "Alternative linkage windows are evaluated as observability/timing sensitivity anchored to the frozen canonical 309/41 set. Canonical ROV labels are not reassigned unless the alternative median calendar date changes; such inversion-date changes are explicitly counted for follow-up.",
+  "discarded": "The earlier v1 summary fields labeled canonical_41 used superseded exact_rov.csv with 47 inversions and are non-authoritative."
+}
