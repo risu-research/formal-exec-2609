@@ -1,0 +1,52 @@
+{
+  "design": {
+    "n": 309,
+    "rule": "history authorization iff frozen exact ROV is Valid",
+    "third_source": "RIPE NCC daily validated ROA archive, five trust anchors, exact event date, discordant cases only"
+  },
+  "A_cross_tab": {
+    "invalid/history_not_authorized": 68,
+    "valid/history_not_authorized": 9,
+    "valid/history_authorized": 153,
+    "unknown/history_not_authorized": 79
+  },
+  "B_cross_tab": {
+    "valid/history_authorized": 133,
+    "invalid/history_not_authorized": 82,
+    "unknown/history_not_authorized": 79,
+    "valid/history_not_authorized": 15
+  },
+  "A_discordant_side_n": 9,
+  "B_discordant_side_n": 15,
+  "any_discordant_case_n": 21,
+  "A_discordance_types": {
+    "validator_valid_history_false": 9
+  },
+  "B_discordance_types": {
+    "validator_valid_history_false": 15
+  },
+  "archive": {
+    "target_case_n": 21,
+    "completed_case_n": 21,
+    "errors_n": 0,
+    "verdict": {
+      "A": {
+        "archive_agrees_validator": 3,
+        "archive_agrees_history_boolean": 6,
+        "archive_state_valid": 3,
+        "archive_state_unknown": 2,
+        "archive_state_invalid": 4,
+        "discordant_side_n": 9
+      },
+      "B": {
+        "archive_agrees_validator": 3,
+        "archive_agrees_history_boolean": 12,
+        "archive_state_valid": 3,
+        "archive_state_invalid": 9,
+        "archive_state_unknown": 3,
+        "discordant_side_n": 15
+      }
+    }
+  },
+  "guardrail": "Use frozen validator for event-day ROV state; use history intervals for timing only where reconstructed. Report endpoint discordance explicitly."
+}
