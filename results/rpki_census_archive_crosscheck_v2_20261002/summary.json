@@ -1,0 +1,10 @@
+{
+  "target_weekly_inversions_n": 119,
+  "crosschecked_n": 119,
+  "reproduced_n": 95,
+  "discrepancy_n": 24,
+  "errors_n": 0,
+  "reproduction_fraction": 0.7983193277310925,
+  "method": "RIPE NCC daily validated ROA archive, all five trust anchors; targeted covering-prefix streaming for every weekly census inversion",
+  "guardrail": "Crosschecks weekly-checkpoint ROV classification; does not convert weekly checkpoints into exact BGP transition times."
+}
