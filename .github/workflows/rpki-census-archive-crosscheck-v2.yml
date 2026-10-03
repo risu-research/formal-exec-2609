@@ -1,0 +1,82 @@
+name: rpki-census-archive-crosscheck-v2
+on:
+  push:
+    branches: [rpki-pilot-20261002]
+    paths:
+      - rpki_census_archive_crosscheck_v2.py
+      - .github/workflows/rpki-census-archive-crosscheck-v2.yml
+permissions:
+  contents: write
+jobs:
+  archive-shard:
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        shard: [0,1,2,3,4,5,6,7]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: rpki-pilot-20261002
+      - name: Crosscheck target dates
+        run: python3 rpki_census_archive_crosscheck_v2.py --shard-index ${{ matrix.shard }} --shard-count 8
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rpki-census-archive-shard-${{ matrix.shard }}
+          path: |
+            /tmp/rpki_census_archive_*.csv
+            /tmp/rpki_census_archive_*_errors.json
+          if-no-files-found: error
+  aggregate:
+    needs: archive-shard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: rpki-pilot-20261002
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: rpki-census-archive-shard-*
+          path: /tmp/archive-parts
+          merge-multiple: true
+      - name: Aggregate targeted archive crosscheck
+        run: |
+          python3 - <<'PY'
+          import csv,json
+          from pathlib import Path
+          parts=[];errs=[]
+          for p in sorted(Path('/tmp/archive-parts').glob('rpki_census_archive_*.csv')):
+              parts.extend(csv.DictReader(open(p)))
+          for p in sorted(Path('/tmp/archive-parts').glob('rpki_census_archive_*_errors.json')):
+              errs.extend(json.load(open(p)))
+          parts.sort(key=lambda r:(r['event_date'],r['representative_prefix'],int(r['A']),int(r['B'])))
+          out=Path('results/rpki_census_archive_crosscheck_v2_20261002');out.mkdir(parents=True,exist_ok=True)
+          if parts:
+              keys=[]
+              for r in parts:
+                  for k in r:
+                      if k not in keys:keys.append(k)
+              with open(out/'cases.csv','w',newline='') as f:
+                  w=csv.DictWriter(f,fieldnames=keys);w.writeheader();w.writerows(parts)
+          (out/'errors.json').write_text(json.dumps(errs,indent=2))
+          repro=sum(str(r['reproduced']).lower()=='true' for r in parts)
+          discrep=[r for r in parts if str(r['reproduced']).lower()!='true']
+          summary={'target_weekly_inversions_n':119,'crosschecked_n':len(parts),'reproduced_n':repro,'discrepancy_n':len(discrep),'errors_n':len(errs),'reproduction_fraction':repro/len(parts) if parts else None,'method':'RIPE NCC daily validated ROA archive, all five trust anchors; targeted covering-prefix streaming for every weekly census inversion','guardrail':'Crosschecks weekly-checkpoint ROV classification; does not convert weekly checkpoints into exact BGP transition times.'}
+          (out/'summary.json').write_text(json.dumps(summary,indent=2))
+          if discrep:
+              with open(out/'discrepancies.csv','w',newline='') as f:
+                  w=csv.DictWriter(f,fieldnames=list(discrep[0]));w.writeheader();w.writerows(discrep)
+          print(json.dumps(summary,indent=2))
+          if len(parts)!=119 or errs: raise SystemExit('incomplete archive crosscheck')
+          PY
+      - name: Commit archive evidence
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git pull --rebase origin rpki-pilot-20261002 || true
+          git add results/rpki_census_archive_crosscheck_v2_20261002
+          git commit -m "add targeted archive crosscheck for full census [skip ci]" || exit 0
+          git push origin HEAD:rpki-pilot-20261002
