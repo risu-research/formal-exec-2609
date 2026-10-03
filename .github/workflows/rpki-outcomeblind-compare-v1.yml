@@ -27,26 +27,18 @@ jobs:
           find /tmp/corrected -maxdepth 3 -type f -print
       - name: Compare prior corrected exact set with outcome-blind full-panel set
         run: python3 rpki_outcomeblind_compare_v1.py /tmp/corrected
-      - name: Finalize BGPlay linkage sensitivity against canonical v2
-        run: python3 rpki_event_definition_sensitivity_finalize_v2.py
-      - name: Run recurrence-filter on-off sensitivity
-        run: python3 rpki_recurrence_filter_sensitivity_v1.py
-      - name: Commit audits
+      - name: Commit audit
         run: |
           test -f results/rpki_outcomeblind_compare_v1_20261002/summary.json
-          test -f results/rpki_event_definition_sensitivity_v1_20261002/canonical_v2_summary.json
-          test -f results/rpki_recurrence_filter_sensitivity_v1_20261002/summary.json
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git pull --rebase origin rpki-pilot-20261002 || true
-          git add results/rpki_outcomeblind_compare_v1_20261002 results/rpki_event_definition_sensitivity_v1_20261002/canonical_v2_summary.json results/rpki_event_definition_sensitivity_v1_20261002/canonical_v2_details.json results/rpki_event_definition_sensitivity_v1_20261002/canonical_v2_windows.csv results/rpki_recurrence_filter_sensitivity_v1_20261002
-          git commit -m "add event-definition sensitivity closeouts [skip ci]" || exit 0
+          git add results/rpki_outcomeblind_compare_v1_20261002
+          git commit -m "add outcome-blind exact consistency audit [skip ci]" || exit 0
           git push origin HEAD:rpki-pilot-20261002
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: rpki-event-definition-sensitivity-closeout-20261002
-          path: |
-            results/rpki_event_definition_sensitivity_v1_20261002
-            results/rpki_recurrence_filter_sensitivity_v1_20261002
+          name: rpki-outcomeblind-compare-v1-20261002
+          path: results/rpki_outcomeblind_compare_v1_20261002
           if-no-files-found: ignore
