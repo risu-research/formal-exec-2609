@@ -1,0 +1,167 @@
+{
+  "design": {
+    "input": "all 309 frozen outcome-blind exact >=3-RRC cases",
+    "authorization_boolean": "union of every covering VRP for the same origin ASN",
+    "interval_rule": "merge overlapping or day-adjacent inclusive date ranges; lifecycle uses only the merged interval covering exact BGP transition date",
+    "retirement_definition": "end of the continuous old-origin authorization interval that covers the event; later reauthorization after a gap is not counted as lingering",
+    "cutoff": "2026-10-02"
+  },
+  "completed_n": 309,
+  "errors_n": 0,
+  "prior185_key_n": 185,
+  "new124_n": 124,
+  "legacy_vs_contiguous_field_differences": {
+    "B_at_event_state_diff_n": 133,
+    "A_at_event_state_diff_n": 153,
+    "B_lead_day_diff_n": 133,
+    "A_linger_day_diff_n": 153
+  },
+  "prior185": {
+    "n": 185,
+    "B_authorized_at_exact_event_n": 80,
+    "B_authorized_at_exact_event_fraction": 0.43243243243243246,
+    "B_preauthorized_ge1d_n": 69,
+    "B_same_day_boundary_n": 11,
+    "B_first_authorized_after_event_n": 30,
+    "B_no_matching_auth_on_or_after_event_n": 75,
+    "B_contiguous_lead_days": {
+      "n": 80,
+      "median": 13,
+      "p10": 0,
+      "p25": 3,
+      "p75": 209,
+      "p90": 667,
+      "p99": 2130,
+      "max": 2130
+    },
+    "A_authorized_at_exact_event_n": 98,
+    "A_authorized_at_exact_event_fraction": 0.5297297297297298,
+    "A_right_censored_n": 80,
+    "A_contiguous_linger_days": {
+      "n": 98,
+      "median": 135,
+      "p10": 45,
+      "p25": 86,
+      "p75": 213,
+      "p90": 294,
+      "p99": 345,
+      "max": 345
+    },
+    "A_contiguous_survival_30d": {
+      "numerator": 94,
+      "denominator": 98,
+      "fraction": 0.9591836734693877
+    },
+    "A_contiguous_survival_90d": {
+      "numerator": 70,
+      "denominator": 77,
+      "fraction": 0.9090909090909091
+    },
+    "A_contiguous_survival_180d": {
+      "numerator": 32,
+      "denominator": 45,
+      "fraction": 0.7111111111111111
+    }
+  },
+  "new124": {
+    "n": 124,
+    "B_authorized_at_exact_event_n": 53,
+    "B_authorized_at_exact_event_fraction": 0.4274193548387097,
+    "B_preauthorized_ge1d_n": 32,
+    "B_same_day_boundary_n": 21,
+    "B_first_authorized_after_event_n": 44,
+    "B_no_matching_auth_on_or_after_event_n": 27,
+    "B_contiguous_lead_days": {
+      "n": 53,
+      "median": 2,
+      "p10": 0,
+      "p25": 0,
+      "p75": 21,
+      "p90": 200,
+      "p99": 1349,
+      "max": 1349
+    },
+    "A_authorized_at_exact_event_n": 55,
+    "A_authorized_at_exact_event_fraction": 0.4435483870967742,
+    "A_right_censored_n": 18,
+    "A_contiguous_linger_days": {
+      "n": 55,
+      "median": 1,
+      "p10": 0,
+      "p25": 0,
+      "p75": 122,
+      "p90": 206,
+      "p99": 336,
+      "max": 336
+    },
+    "A_contiguous_survival_30d": {
+      "numerator": 21,
+      "denominator": 55,
+      "fraction": 0.38181818181818183
+    },
+    "A_contiguous_survival_90d": {
+      "numerator": 17,
+      "denominator": 49,
+      "fraction": 0.3469387755102041
+    },
+    "A_contiguous_survival_180d": {
+      "numerator": 7,
+      "denominator": 31,
+      "fraction": 0.22580645161290322
+    }
+  },
+  "all309": {
+    "n": 309,
+    "B_authorized_at_exact_event_n": 133,
+    "B_authorized_at_exact_event_fraction": 0.43042071197411,
+    "B_preauthorized_ge1d_n": 101,
+    "B_same_day_boundary_n": 32,
+    "B_first_authorized_after_event_n": 74,
+    "B_no_matching_auth_on_or_after_event_n": 102,
+    "B_contiguous_lead_days": {
+      "n": 133,
+      "median": 9,
+      "p10": 0,
+      "p25": 1,
+      "p75": 132,
+      "p90": 400,
+      "p99": 1544,
+      "max": 2130
+    },
+    "A_authorized_at_exact_event_n": 153,
+    "A_authorized_at_exact_event_fraction": 0.49514563106796117,
+    "A_right_censored_n": 98,
+    "A_contiguous_linger_days": {
+      "n": 153,
+      "median": 104,
+      "p10": 0,
+      "p25": 35,
+      "p75": 181,
+      "p90": 289,
+      "p99": 344,
+      "max": 345
+    },
+    "A_contiguous_survival_30d": {
+      "numerator": 115,
+      "denominator": 153,
+      "fraction": 0.7516339869281046
+    },
+    "A_contiguous_survival_90d": {
+      "numerator": 87,
+      "denominator": 126,
+      "fraction": 0.6904761904761905
+    },
+    "A_contiguous_survival_180d": {
+      "numerator": 39,
+      "denominator": 76,
+      "fraction": 0.5131578947368421
+    }
+  },
+  "usable_as_primary_lifecycle": true,
+  "guardrails": [
+    "Historical authorization is date-granular; same-day ordering relative to BGP is unresolved.",
+    "Survival denominators include only A-authorized-at-event cases observable through each horizon.",
+    "Intervals reaching the 2026-10-02 cutoff are right-censored, not observed withdrawals.",
+    "This measures RPKI authorization persistence, not routing persistence, operator intent, or traffic impact."
+  ]
+}
