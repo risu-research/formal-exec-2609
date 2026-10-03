@@ -1,0 +1,50 @@
+name: rpki-census-key-audit
+on:
+  push:
+    branches: [rpki-pilot-20261002]
+    paths: [.github/workflows/rpki-census-key-audit.yml]
+permissions:
+  contents: write
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: rpki-pilot-20261002
+      - name: Audit population and exact join keys
+        run: |
+          python3 - <<'PY'
+          import csv,json
+          from collections import Counter
+          from pathlib import Path
+          pop=list(csv.DictReader(open('results/rpki_population_v1_20261002/frozen_no_recurrence.csv')))
+          exact=list(csv.DictReader(open('results/rpki_outcomeblind_validate_v2_20261002/exact_rov_validate.csv')))
+          k3=lambda r:(r['representative_prefix'],r['A'],r['B'])
+          k4=lambda r:(r['event_date'],r['representative_prefix'],r['A'],r['B'])
+          c3=Counter(map(k3,pop));c4=Counter(map(k4,pop))
+          exact4=set(map(k4,exact));pop4=set(map(k4,pop))
+          out={
+            'population_n':len(pop),
+            'unique_prefix_A_B_n':len(c3),
+            'duplicate_prefix_A_B_key_count':sum(v>1 for v in c3.values()),
+            'duplicate_prefix_A_B_extra_rows':sum(v-1 for v in c3.values() if v>1),
+            'unique_event_prefix_A_B_n':len(c4),
+            'duplicate_event_prefix_A_B_key_count':sum(v>1 for v in c4.values()),
+            'exact_n':len(exact),
+            'exact_4key_overlap_population_n':len(exact4 & pop4),
+            'exact_4key_missing_population_n':len(exact4-pop4),
+            'recommendation':'Use event_date,prefix,A,B as canonical join key; prefix,A,B is safe only if duplicate count is zero.'
+          }
+          Path('results/rpki_census_key_audit_20261002').mkdir(parents=True,exist_ok=True)
+          Path('results/rpki_census_key_audit_20261002/summary.json').write_text(json.dumps(out,indent=2))
+          print(json.dumps(out,indent=2))
+          PY
+      - name: Commit key audit
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git pull --rebase origin rpki-pilot-20261002 || true
+          git add results/rpki_census_key_audit_20261002
+          git commit -m "add census key audit [skip ci]" || exit 0
+          git push origin HEAD:rpki-pilot-20261002
