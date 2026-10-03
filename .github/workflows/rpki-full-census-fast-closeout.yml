@@ -1,0 +1,93 @@
+name: rpki-full-census-fast-closeout
+on:
+  push:
+    branches: [rpki-pilot-20261002]
+    paths: [.github/workflows/rpki-full-census-fast-closeout.yml]
+permissions:
+  actions: read
+  contents: write
+jobs:
+  closeout:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: rpki-pilot-20261002
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: 37079693841
+          github-token: ${{ github.token }}
+          pattern: rpki-full-census-shard-*
+          path: /tmp/census-parts
+          merge-multiple: true
+      - name: Aggregate census and canonical 4-key exact calibration
+        run: |
+          python3 - <<'PY'
+          import csv,json,hashlib
+          from collections import Counter,defaultdict
+          from pathlib import Path
+          pop=list(csv.DictReader(open('results/rpki_population_v1_20261002/frozen_no_recurrence.csv')))
+          pop.sort(key=lambda r:(r['event_date'],r['representative_prefix'],int(r['A']),int(r['B'])))
+          rows=[]
+          for p in sorted(Path('/tmp/census-parts').glob('rpki_census_shard_*.csv')):
+              rows.extend(csv.DictReader(open(p)))
+          rows.sort(key=lambda r:(r['event_date'],r['representative_prefix'],int(r['A']),int(r['B'])))
+          key=lambda r:(r['event_date'],r['representative_prefix'],r['A'],r['B'])
+          expected=set(map(key,pop)); got=set(map(key,rows))
+          if len(rows)!=7046 or got!=expected:
+              raise SystemExit(f'key integrity failure rows={len(rows)} unique={len(got)} missing={len(expected-got)} extra={len(got-expected)}')
+          out=Path('results/rpki_full_census_fast_closeout_20261002');out.mkdir(parents=True,exist_ok=True)
+          # keep authoritative full census CSV
+          keys=[]
+          for r in rows:
+              for k in r:
+                  if k not in keys:keys.append(k)
+          with open(out/'census_weekly_rov.csv','w',newline='') as f:
+              w=csv.DictWriter(f,fieldnames=keys);w.writeheader();w.writerows(rows)
+          states=Counter((r['A_rov_weekly'],r['B_rov_weekly']) for r in rows)
+          inv=[r for r in rows if str(r['weekly_inversion']).lower()=='true']
+          def cbin(n):
+              n=int(n or 1)
+              return '1' if n==1 else '2-4' if n<=4 else '5-9' if n<=9 else '10+'
+          bymonth=defaultdict(lambda:{'n':0,'inv':0}); bybin=defaultdict(lambda:{'n':0,'inv':0})
+          wstates=Counter(); totalw=invw=0
+          for r in rows:
+              ii=str(r['weekly_inversion']).lower()=='true'; m=r['event_date'][:7]; b=cbin(r.get('cluster_prefix_n'))
+              bymonth[m]['n']+=1;bymonth[m]['inv']+=int(ii);bybin[b]['n']+=1;bybin[b]['inv']+=int(ii)
+              wt=int(r.get('cluster_prefix_n') or 1);totalw+=wt;invw+=wt*int(ii);wstates[(r['A_rov_weekly'],r['B_rov_weekly'])]+=wt
+          # canonical event_date,prefix,A,B calibration
+          exact=list(csv.DictReader(open('results/rpki_outcomeblind_validate_v2_20261002/exact_rov_validate.csv')))
+          cmap={key(r):r for r in rows}; cm=Counter(); cal=[]
+          for e in exact:
+              k=key(e); c=cmap.get(k)
+              if c is None: raise SystemExit('missing exact key '+repr(k))
+              wi=str(c['weekly_inversion']).lower()=='true'; ei=e['A_rov']=='valid' and e['B_rov']=='invalid';cm[(wi,ei)]+=1
+              cal.append({'event_date':e['event_date'],'representative_prefix':e['representative_prefix'],'A':e['A'],'B':e['B'],'weekly_A':c['A_rov_weekly'],'weekly_B':c['B_rov_weekly'],'exact_event_date':e['exact_event_date'],'exact_A':e['A_rov'],'exact_B':e['B_rov'],'weekly_inversion':wi,'exact_inversion':ei})
+          with open(out/'weekly_vs_exact_calibration_4key.csv','w',newline='') as f:
+              w=csv.DictWriter(f,fieldnames=list(cal[0]));w.writeheader();w.writerows(cal)
+          selsha=hashlib.sha256(''.join('|'.join(key(r))+'\n' for r in pop).encode()).hexdigest()
+          def frac(a,b): return a/b if b else None
+          summary={
+            'authority':'fast population closeout from successful 8 census shards; archive crosscheck is separate',
+            'population_n':len(rows),'key_integrity':{'expected_n':7046,'unique_4key_n':len(got),'missing_n':0,'extra_n':0},
+            'selection_outcome_blind':True,'selection_sha256_4key':selsha,
+            'joint_state_matrix':{f'{a}/{b}':n for (a,b),n in sorted(states.items())},
+            'weekly_old_valid_new_invalid_n':len(inv),'weekly_old_valid_new_invalid_fraction_all':frac(len(inv),len(rows)),
+            'prefix_weight_total_n':totalw,'prefix_weight_inversion_n':invw,'prefix_weight_inversion_fraction':frac(invw,totalw),
+            'prefix_weighted_joint_state_matrix':{f'{a}/{b}':n for (a,b),n in sorted(wstates.items())},
+            'month_breakdown':{m:{**v,'fraction':frac(v['inv'],v['n'])} for m,v in sorted(bymonth.items())},
+            'cluster_size_breakdown':{b:{**v,'fraction':frac(v['inv'],v['n'])} for b,v in sorted(bybin.items())},
+            'exact_calibration_4key':{'overlap_n':len(cal),'weekly_true_exact_true':cm[(True,True)],'weekly_true_exact_false':cm[(True,False)],'weekly_false_exact_true':cm[(False,True)],'weekly_false_exact_false':cm[(False,False)]},
+            'guardrails':['This is a weekly-checkpoint census over frozen persistent observed origin replacements, not an exact-transition prevalence estimate.','The 309-case >=3-RRC outcome-blind audit remains the exact-timing mechanism evidence.','Cluster-prefix weighting is sensitivity analysis; the event cluster is the primary unit.','No RPKI state was used to select census cases.']
+          }
+          (out/'summary.json').write_text(json.dumps(summary,indent=2))
+          print(json.dumps(summary,indent=2))
+          PY
+      - name: Commit fast closeout
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git pull --rebase origin rpki-pilot-20261002 || true
+          git add results/rpki_full_census_fast_closeout_20261002
+          git commit -m "add fast full-census closeout [skip ci]" || exit 0
+          git push origin HEAD:rpki-pilot-20261002
