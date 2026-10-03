@@ -1,0 +1,1178 @@
+{
+  "corrected_authority_path": "/tmp/corrected/exact_lifecycle.csv",
+  "corrected_prior185_n": 185,
+  "new_full309_n": 309,
+  "overlap_n": 185,
+  "new124_n": 124,
+  "corrected_field_regression": {
+    "missing_n": 0,
+    "mismatch_n": 1143,
+    "pass": false,
+    "mismatches": [
+      {
+        "key": [
+          "146.19.183.0/24",
+          "43197",
+          "60101"
+        ],
+        "field": "exact_event_date",
+        "old": "",
+        "new": "2025-10-22"
+      },
+      {
+        "key": [
+          "146.19.183.0/24",
+          "43197",
+          "60101"
+        ],
+        "field": "B_auth_at_exact_event_date",
+        "old": "",
+        "new": "False"
+      },
+      {
+        "key": [
+          "146.19.183.0/24",
+          "43197",
+          "60101"
+        ],
+        "field": "A_auth_at_exact_event_date",
+        "old": "",
+        "new": "False"
+      },
+      {
+        "key": [
+          "146.19.183.0/24",
+          "43197",
+          "60101"
+        ],
+        "field": "A_retirement_right_censored_exact_aligned",
+        "old": "",
+        "new": "False"
+      },
+      {
+        "key": [
+          "156.154.123.0/24",
+          "12008",
+          "16552"
+        ],
+        "field": "exact_event_date",
+        "old": "",
+        "new": "2025-10-22"
+      },
+      {
+        "key": [
+          "156.154.123.0/24",
+          "12008",
+          "16552"
+        ],
+        "field": "B_auth_at_exact_event_date",
+        "old": "",
+        "new": "True"
+      },
+      {
+        "key": [
+          "156.154.123.0/24",
+          "12008",
+          "16552"
+        ],
+        "field": "B_auth_start_exact_aligned",
+        "old": "",
+        "new": "2025-06-27"
+      },
+      {
+        "key": [
+          "156.154.123.0/24",
+          "12008",
+          "16552"
+        ],
+        "field": "B_lead_calendar_days_exact_aligned",
+        "old": "",
+        "new": "117"
+      },
+      {
+        "key": [
+          "156.154.123.0/24",
+          "12008",
+          "16552"
+        ],
+        "field": "A_auth_at_exact_event_date",
+        "old": "",
+        "new": "True"
+      },
+      {
+        "key": [
+          "156.154.123.0/24",
+          "12008",
+          "16552"
+        ],
+        "field": "A_auth_last_observed_exact_aligned",
+        "old": "",
+        "new": "2026-10-02"
+      },
+      {
+        "key": [
+          "156.154.123.0/24",
+          "12008",
+          "16552"
+        ],
+        "field": "A_linger_observed_days_exact_aligned",
+        "old": "",
+        "new": "345"
+      },
+      {
+        "key": [
+          "156.154.123.0/24",
+          "12008",
+          "16552"
+        ],
+        "field": "A_retirement_right_censored_exact_aligned",
+        "old": "",
+        "new": "True"
+      },
+      {
+        "key": [
+          "204.0.176.0/20",
+          "7029",
+          "6079"
+        ],
+        "field": "exact_event_date",
+        "old": "",
+        "new": "2025-10-26"
+      },
+      {
+        "key": [
+          "204.0.176.0/20",
+          "7029",
+          "6079"
+        ],
+        "field": "B_auth_at_exact_event_date",
+        "old": "",
+        "new": "True"
+      },
+      {
+        "key": [
+          "204.0.176.0/20",
+          "7029",
+          "6079"
+        ],
+        "field": "B_auth_start_exact_aligned",
+        "old": "",
+        "new": "2025-06-13"
+      },
+      {
+        "key": [
+          "204.0.176.0/20",
+          "7029",
+          "6079"
+        ],
+        "field": "B_lead_calendar_days_exact_aligned",
+        "old": "",
+        "new": "135"
+      },
+      {
+        "key": [
+          "204.0.176.0/20",
+          "7029",
+          "6079"
+        ],
+        "field": "A_auth_at_exact_event_date",
+        "old": "",
+        "new": "True"
+      },
+      {
+        "key": [
+          "204.0.176.0/20",
+          "7029",
+          "6079"
+        ],
+        "field": "A_auth_last_observed_exact_aligned",
+        "old": "",
+        "new": "2026-10-02"
+      },
+      {
+        "key": [
+          "204.0.176.0/20",
+          "7029",
+          "6079"
+        ],
+        "field": "A_linger_observed_days_exact_aligned",
+        "old": "",
+        "new": "341"
+      },
+      {
+        "key": [
+          "204.0.176.0/20",
+          "7029",
+          "6079"
+        ],
+        "field": "A_retirement_right_censored_exact_aligned",
+        "old": "",
+        "new": "True"
+      },
+      {
+        "key": [
+          "50.217.41.0/24",
+          "33491",
+          "30302"
+        ],
+        "field": "exact_event_date",
+        "old": "",
+        "new": "2025-10-25"
+      },
+      {
+        "key": [
+          "50.217.41.0/24",
+          "33491",
+          "30302"
+        ],
+        "field": "B_auth_at_exact_event_date",
+        "old": "",
+        "new": "False"
+      },
+      {
+        "key": [
+          "50.217.41.0/24",
+          "33491",
+          "30302"
+        ],
+        "field": "B_next_auth_start_exact_aligned",
+        "old": "",
+        "new": "2025-10-28"
+      },
+      {
+        "key": [
+          "50.217.41.0/24",
+          "33491",
+          "30302"
+        ],
+        "field": "A_auth_at_exact_event_date",
+        "old": "",
+        "new": "True"
+      },
+      {
+        "key": [
+          "50.217.41.0/24",
+          "33491",
+          "30302"
+        ],
+        "field": "A_auth_last_observed_exact_aligned",
+        "old": "",
+        "new": "2026-10-02"
+      },
+      {
+        "key": [
+          "50.217.41.0/24",
+          "33491",
+          "30302"
+        ],
+        "field": "A_linger_observed_days_exact_aligned",
+        "old": "",
+        "new": "342"
+      },
+      {
+        "key": [
+          "50.217.41.0/24",
+          "33491",
+          "30302"
+        ],
+        "field": "A_retirement_right_censored_exact_aligned",
+        "old": "",
+        "new": "True"
+      },
+      {
+        "key": [
+          "64.38.104.0/22",
+          "202695",
+          "51055"
+        ],
+        "field": "exact_event_date",
+        "old": "",
+        "new": "2025-10-23"
+      },
+      {
+        "key": [
+          "64.38.104.0/22",
+          "202695",
+          "51055"
+        ],
+        "field": "B_auth_at_exact_event_date",
+        "old": "",
+        "new": "True"
+      },
+      {
+        "key": [
+          "64.38.104.0/22",
+          "202695",
+          "51055"
+        ],
+        "field": "B_auth_start_exact_aligned",
+        "old": "",
+        "new": "2025-05-06"
+      },
+      {
+        "key": [
+          "64.38.104.0/22",
+          "202695",
+          "51055"
+        ],
+        "field": "B_lead_calendar_days_exact_aligned",
+        "old": "",
+        "new": "170"
+      },
+      {
+        "key": [
+          "64.38.104.0/22",
+          "202695",
+          "51055"
+        ],
+        "field": "A_auth_at_exact_event_date",
+        "old": "",
+        "new": "True"
+      },
+      {
+        "key": [
+          "64.38.104.0/22",
+          "202695",
+          "51055"
+        ],
+        "field": "A_auth_last_observed_exact_aligned",
+        "old": "",
+        "new": "2026-10-02"
+      },
+      {
+        "key": [
+          "64.38.104.0/22",
+          "202695",
+          "51055"
+        ],
+        "field": "A_linger_observed_days_exact_aligned",
+        "old": "",
+        "new": "344"
+      },
+      {
+        "key": [
+          "64.38.104.0/22",
+          "202695",
+          "51055"
+        ],
+        "field": "A_retirement_right_censored_exact_aligned",
+        "old": "",
+        "new": "True"
+      },
+      {
+        "key": [
+          "79.172.200.0/24",
+          "198831",
+          "211615"
+        ],
+        "field": "exact_event_date",
+        "old": "",
+        "new": "2025-10-24"
+      },
+      {
+        "key": [
+          "79.172.200.0/24",
+          "198831",
+          "211615"
+        ],
+        "field": "B_auth_at_exact_event_date",
+        "old": "",
+        "new": "False"
+      },
+      {
+        "key": [
+          "79.172.200.0/24",
+          "198831",
+          "211615"
+        ],
+        "field": "B_next_auth_start_exact_aligned",
+        "old": "",
+        "new": "2025-10-25"
+      },
+      {
+        "key": [
+          "79.172.200.0/24",
+          "198831",
+          "211615"
+        ],
+        "field": "A_auth_at_exact_event_date",
+        "old": "",
+        "new": "True"
+      },
+      {
+        "key": [
+          "79.172.200.0/24",
+          "198831",
+          "211615"
+        ],
+        "field": "A_auth_last_observed_exact_aligned",
+        "old": "",
+        "new": "2026-03-01"
+      },
+      {
+        "key": [
+          "79.172.200.0/24",
+          "198831",
+          "211615"
+        ],
+        "field": "A_linger_observed_days_exact_aligned",
+        "old": "",
+        "new": "128"
+      },
+      {
+        "key": [
+          "79.172.200.0/24",
+          "198831",
+          "211615"
+        ],
+        "field": "A_retirement_right_censored_exact_aligned",
+        "old": "",
+        "new": "False"
+      },
+      {
+        "key": [
+          "142.111.216.0/24",
+          "7018",
+          "7029"
+        ],
+        "field": "exact_event_date",
+        "old": "",
+        "new": "2025-10-28"
+      },
+      {
+        "key": [
+          "142.111.216.0/24",
+          "7018",
+          "7029"
+        ],
+        "field": "B_auth_at_exact_event_date",
+        "old": "",
+        "new": "True"
+      },
+      {
+        "key": [
+          "142.111.216.0/24",
+          "7018",
+          "7029"
+        ],
+        "field": "B_auth_start_exact_aligned",
+        "old": "",
+        "new": "2025-10-01"
+      },
+      {
+        "key": [
+          "142.111.216.0/24",
+          "7018",
+          "7029"
+        ],
+        "field": "B_lead_calendar_days_exact_aligned",
+        "old": "",
+        "new": "27"
+      },
+      {
+        "key": [
+          "142.111.216.0/24",
+          "7018",
+          "7029"
+        ],
+        "field": "A_auth_at_exact_event_date",
+        "old": "",
+        "new": "True"
+      },
+      {
+        "key": [
+          "142.111.216.0/24",
+          "7018",
+          "7029"
+        ],
+        "field": "A_auth_last_observed_exact_aligned",
+        "old": "",
+        "new": "2026-04-16"
+      },
+      {
+        "key": [
+          "142.111.216.0/24",
+          "7018",
+          "7029"
+        ],
+        "field": "A_linger_observed_days_exact_aligned",
+        "old": "",
+        "new": "170"
+      },
+      {
+        "key": [
+          "142.111.216.0/24",
+          "7018",
+          "7029"
+        ],
+        "field": "A_retirement_right_censored_exact_aligned",
+        "old": "",
+        "new": "False"
+      },
+      {
+        "key": [
+          "216.130.164.0/24",
+          "812",
+          "22297"
+        ],
+        "field": "exact_event_date",
+        "old": "",
+        "new": "2025-11-02"
+      },
+      {
+        "key": [
+          "216.130.164.0/24",
+          "812",
+          "22297"
+        ],
+        "field": "B_auth_at_exact_event_date",
+        "old": "",
+        "new": "False"
+      },
+      {
+        "key": [
+          "216.130.164.0/24",
+          "812",
+          "22297"
+        ],
+        "field": "A_auth_at_exact_event_date",
+        "old": "",
+        "new": "False"
+      },
+      {
+        "key": [
+          "216.130.164.0/24",
+          "812",
+          "22297"
+        ],
+        "field": "A_retirement_right_censored_exact_aligned",
+        "old": "",
+        "new": "False"
+      },
+      {
+        "key": [
+          "216.163.110.0/24",
+          "36788",
+          "32890"
+        ],
+        "field": "exact_event_date",
+        "old": "",
+        "new": "2025-11-02"
+      },
+      {
+        "key": [
+          "216.163.110.0/24",
+          "36788",
+          "32890"
+        ],
+        "field": "B_auth_at_exact_event_date",
+        "old": "",
+        "new": "False"
+      },
+      {
+        "key": [
+          "216.163.110.0/24",
+          "36788",
+          "32890"
+        ],
+        "field": "A_auth_at_exact_event_date",
+        "old": "",
+        "new": "False"
+      },
+      {
+        "key": [
+          "216.163.110.0/24",
+          "36788",
+          "32890"
+        ],
+        "field": "A_retirement_right_censored_exact_aligned",
+        "old": "",
+        "new": "False"
+      },
+      {
+        "key": [
+          "44.32.207.0/24",
+          "56655",
+          "216091"
+        ],
+        "field": "exact_event_date",
+        "old": "",
+        "new": "2025-11-01"
+      },
+      {
+        "key": [
+          "44.32.207.0/24",
+          "56655",
+          "216091"
+        ],
+        "field": "B_auth_at_exact_event_date",
+        "old": "",
+        "new": "False"
+      },
+      {
+        "key": [
+          "44.32.207.0/24",
+          "56655",
+          "216091"
+        ],
+        "field": "A_auth_at_exact_event_date",
+        "old": "",
+        "new": "False"
+      },
+      {
+        "key": [
+          "44.32.207.0/24",
+          "56655",
+          "216091"
+        ],
+        "field": "A_retirement_right_censored_exact_aligned",
+        "old": "",
+        "new": "False"
+      },
+      {
+        "key": [
+          "100.43.0.0/24",
+          "395597",
+          "22773"
+        ],
+        "field": "exact_event_date",
+        "old": "",
+        "new": "2025-11-05"
+      },
+      {
+        "key": [
+          "100.43.0.0/24",
+          "395597",
+          "22773"
+        ],
+        "field": "B_auth_at_exact_event_date",
+        "old": "",
+        "new": "False"
+      },
+      {
+        "key": [
+          "100.43.0.0/24",
+          "395597",
+          "22773"
+        ],
+        "field": "A_auth_at_exact_event_date",
+        "old": "",
+        "new": "True"
+      },
+      {
+        "key": [
+          "100.43.0.0/24",
+          "395597",
+          "22773"
+        ],
+        "field": "A_auth_last_observed_exact_aligned",
+        "old": "",
+        "new": "2025-11-05"
+      },
+      {
+        "key": [
+          "100.43.0.0/24",
+          "395597",
+          "22773"
+        ],
+        "field": "A_linger_observed_days_exact_aligned",
+        "old": "",
+        "new": "0"
+      },
+      {
+        "key": [
+          "100.43.0.0/24",
+          "395597",
+          "22773"
+        ],
+        "field": "A_retirement_right_censored_exact_aligned",
+        "old": "",
+        "new": "False"
+      },
+      {
+        "key": [
+          "102.164.248.0/22",
+          "328311",
+          "37529"
+        ],
+        "field": "exact_event_date",
+        "old": "",
+        "new": "2025-11-05"
+      },
+      {
+        "key": [
+          "102.164.248.0/22",
+          "328311",
+          "37529"
+        ],
+        "field": "B_auth_at_exact_event_date",
+        "old": "",
+        "new": "False"
+      },
+      {
+        "key": [
+          "102.164.248.0/22",
+          "328311",
+          "37529"
+        ],
+        "field": "A_auth_at_exact_event_date",
+        "old": "",
+        "new": "False"
+      },
+      {
+        "key": [
+          "102.164.248.0/22",
+          "328311",
+          "37529"
+        ],
+        "field": "A_retirement_right_censored_exact_aligned",
+        "old": "",
+        "new": "False"
+      },
+      {
+        "key": [
+          "199.127.94.0/24",
+          "3356",
+          "36596"
+        ],
+        "field": "exact_event_date",
+        "old": "",
+        "new": "2025-11-06"
+      },
+      {
+        "key": [
+          "199.127.94.0/24",
+          "3356",
+          "36596"
+        ],
+        "field": "B_auth_at_exact_event_date",
+        "old": "",
+        "new": "False"
+      },
+      {
+        "key": [
+          "199.127.94.0/24",
+          "3356",
+          "36596"
+        ],
+        "field": "A_auth_at_exact_event_date",
+        "old": "",
+        "new": "False"
+      },
+      {
+        "key": [
+          "199.127.94.0/24",
+          "3356",
+          "36596"
+        ],
+        "field": "A_retirement_right_censored_exact_aligned",
+        "old": "",
+        "new": "False"
+      },
+      {
+        "key": [
+          "185.173.80.0/24",
+          "44102",
+          "51748"
+        ],
+        "field": "exact_event_date",
+        "old": "",
+        "new": "2025-11-12"
+      },
+      {
+        "key": [
+          "185.173.80.0/24",
+          "44102",
+          "51748"
+        ],
+        "field": "B_auth_at_exact_event_date",
+        "old": "",
+        "new": "False"
+      },
+      {
+        "key": [
+          "185.173.80.0/24",
+          "44102",
+          "51748"
+        ],
+        "field": "A_auth_at_exact_event_date",
+        "old": "",
+        "new": "False"
+      },
+      {
+        "key": [
+          "185.173.80.0/24",
+          "44102",
+          "51748"
+        ],
+        "field": "A_retirement_right_censored_exact_aligned",
+        "old": "",
+        "new": "False"
+      },
+      {
+        "key": [
+          "193.187.72.0/24",
+          "199066",
+          "8075"
+        ],
+        "field": "exact_event_date",
+        "old": "",
+        "new": "2025-11-11"
+      },
+      {
+        "key": [
+          "193.187.72.0/24",
+          "199066",
+          "8075"
+        ],
+        "field": "B_auth_at_exact_event_date",
+        "old": "",
+        "new": "True"
+      },
+      {
+        "key": [
+          "193.187.72.0/24",
+          "199066",
+          "8075"
+        ],
+        "field": "B_auth_start_exact_aligned",
+        "old": "",
+        "new": "2025-11-05"
+      },
+      {
+        "key": [
+          "193.187.72.0/24",
+          "199066",
+          "8075"
+        ],
+        "field": "B_lead_calendar_days_exact_aligned",
+        "old": "",
+        "new": "6"
+      },
+      {
+        "key": [
+          "193.187.72.0/24",
+          "199066",
+          "8075"
+        ],
+        "field": "A_auth_at_exact_event_date",
+        "old": "",
+        "new": "True"
+      },
+      {
+        "key": [
+          "193.187.72.0/24",
+          "199066",
+          "8075"
+        ],
+        "field": "A_auth_last_observed_exact_aligned",
+        "old": "",
+        "new": "2026-10-02"
+      },
+      {
+        "key": [
+          "193.187.72.0/24",
+          "199066",
+          "8075"
+        ],
+        "field": "A_linger_observed_days_exact_aligned",
+        "old": "",
+        "new": "325"
+      },
+      {
+        "key": [
+          "193.187.72.0/24",
+          "199066",
+          "8075"
+        ],
+        "field": "A_retirement_right_censored_exact_aligned",
+        "old": "",
+        "new": "True"
+      },
+      {
+        "key": [
+          "198.52.42.0/24",
+          "395061",
+          "39506"
+        ],
+        "field": "exact_event_date",
+        "old": "",
+        "new": "2025-11-14"
+      },
+      {
+        "key": [
+          "198.52.42.0/24",
+          "395061",
+          "39506"
+        ],
+        "field": "B_auth_at_exact_event_date",
+        "old": "",
+        "new": "False"
+      },
+      {
+        "key": [
+          "198.52.42.0/24",
+          "395061",
+          "39506"
+        ],
+        "field": "A_auth_at_exact_event_date",
+        "old": "",
+        "new": "False"
+      },
+      {
+        "key": [
+          "198.52.42.0/24",
+          "395061",
+          "39506"
+        ],
+        "field": "A_retirement_right_censored_exact_aligned",
+        "old": "",
+        "new": "False"
+      },
+      {
+        "key": [
+          "89.185.29.0/24",
+          "202662",
+          "401434"
+        ],
+        "field": "exact_event_date",
+        "old": "",
+        "new": "2025-11-12"
+      },
+      {
+        "key": [
+          "89.185.29.0/24",
+          "202662",
+          "401434"
+        ],
+        "field": "B_auth_at_exact_event_date",
+        "old": "",
+        "new": "False"
+      },
+      {
+        "key": [
+          "89.185.29.0/24",
+          "202662",
+          "401434"
+        ],
+        "field": "B_next_auth_start_exact_aligned",
+        "old": "",
+        "new": "2025-11-14"
+      },
+      {
+        "key": [
+          "89.185.29.0/24",
+          "202662",
+          "401434"
+        ],
+        "field": "A_auth_at_exact_event_date",
+        "old": "",
+        "new": "True"
+      },
+      {
+        "key": [
+          "89.185.29.0/24",
+          "202662",
+          "401434"
+        ],
+        "field": "A_auth_last_observed_exact_aligned",
+        "old": "",
+        "new": "2026-10-02"
+      },
+      {
+        "key": [
+          "89.185.29.0/24",
+          "202662",
+          "401434"
+        ],
+        "field": "A_linger_observed_days_exact_aligned",
+        "old": "",
+        "new": "324"
+      },
+      {
+        "key": [
+          "89.185.29.0/24",
+          "202662",
+          "401434"
+        ],
+        "field": "A_retirement_right_censored_exact_aligned",
+        "old": "",
+        "new": "True"
+      },
+      {
+        "key": [
+          "102.0.21.0/24",
+          "36926",
+          "327708"
+        ],
+        "field": "exact_event_date",
+        "old": "",
+        "new": "2025-11-20"
+      }
+    ]
+  },
+  "manuscript_anchor_checks": {
+    "prior185_B_at_event_80": true,
+    "prior185_B_pre_ge1d_69": true,
+    "prior185_B_same_day_11": true,
+    "prior185_B_lead_median_13": true,
+    "prior185_A_at_event_98": true,
+    "prior185_A_survival30_94of98": true,
+    "prior185_A_survival90_71of77": true,
+    "prior185_A_survival180_33of45": false
+  },
+  "manuscript_anchor_checks_all_pass": false,
+  "prior185_recomputed": {
+    "n": 185,
+    "B_authorized_on_exact_event_date_n": 80,
+    "B_authorized_on_exact_event_date_fraction": 0.43243243243243246,
+    "B_authorization_first_observed_after_exact_event_date_n": 30,
+    "B_no_matching_authorization_on_or_after_event_n": 75,
+    "B_pre_authorized_ge1d_n": 69,
+    "B_same_day_authorization_boundary_n": 11,
+    "B_authorization_lead_days": {
+      "n": 80,
+      "median": 13,
+      "p10": 0,
+      "p25": 3,
+      "p75": 170,
+      "p90": 667,
+      "p99": 2130
+    },
+    "A_authorized_on_exact_event_date_n": 98,
+    "A_authorized_on_exact_event_date_fraction": 0.5297297297297298,
+    "A_retirement_right_censored_n": 83,
+    "A_linger_observed_days": {
+      "n": 98,
+      "median": 137,
+      "p25": 86,
+      "p75": 219,
+      "p90": 294,
+      "p99": 345
+    },
+    "A_survival_30d": {
+      "numerator": 94,
+      "denominator": 98,
+      "fraction": 0.9591836734693877
+    },
+    "A_survival_90d": {
+      "numerator": 71,
+      "denominator": 77,
+      "fraction": 0.922077922077922
+    },
+    "A_survival_180d": {
+      "numerator": 32,
+      "denominator": 45,
+      "fraction": 0.7111111111111111
+    }
+  },
+  "new124_only": {
+    "n": 124,
+    "B_authorized_on_exact_event_date_n": 53,
+    "B_authorized_on_exact_event_date_fraction": 0.4274193548387097,
+    "B_authorization_first_observed_after_exact_event_date_n": 44,
+    "B_no_matching_authorization_on_or_after_event_n": 27,
+    "B_pre_authorized_ge1d_n": 32,
+    "B_same_day_authorization_boundary_n": 21,
+    "B_authorization_lead_days": {
+      "n": 53,
+      "median": 2,
+      "p10": 0,
+      "p25": 0,
+      "p75": 21,
+      "p90": 200,
+      "p99": 1349
+    },
+    "A_authorized_on_exact_event_date_n": 55,
+    "A_authorized_on_exact_event_date_fraction": 0.4435483870967742,
+    "A_retirement_right_censored_n": 18,
+    "A_linger_observed_days": {
+      "n": 55,
+      "median": 3,
+      "p25": 0,
+      "p75": 127,
+      "p90": 206,
+      "p99": 336
+    },
+    "A_survival_30d": {
+      "numerator": 21,
+      "denominator": 55,
+      "fraction": 0.38181818181818183
+    },
+    "A_survival_90d": {
+      "numerator": 17,
+      "denominator": 49,
+      "fraction": 0.3469387755102041
+    },
+    "A_survival_180d": {
+      "numerator": 7,
+      "denominator": 31,
+      "fraction": 0.22580645161290322
+    }
+  },
+  "all309": {
+    "n": 309,
+    "B_authorized_on_exact_event_date_n": 133,
+    "B_authorized_on_exact_event_date_fraction": 0.43042071197411,
+    "B_authorization_first_observed_after_exact_event_date_n": 74,
+    "B_no_matching_authorization_on_or_after_event_n": 102,
+    "B_pre_authorized_ge1d_n": 101,
+    "B_same_day_authorization_boundary_n": 32,
+    "B_authorization_lead_days": {
+      "n": 133,
+      "median": 9,
+      "p10": 0,
+      "p25": 1,
+      "p75": 119,
+      "p90": 385,
+      "p99": 1544
+    },
+    "A_authorized_on_exact_event_date_n": 153,
+    "A_authorized_on_exact_event_date_fraction": 0.49514563106796117,
+    "A_retirement_right_censored_n": 101,
+    "A_linger_observed_days": {
+      "n": 153,
+      "median": 118,
+      "p25": 36,
+      "p75": 190,
+      "p90": 289,
+      "p99": 344
+    },
+    "A_survival_30d": {
+      "numerator": 115,
+      "denominator": 153,
+      "fraction": 0.7516339869281046
+    },
+    "A_survival_90d": {
+      "numerator": 88,
+      "denominator": 126,
+      "fraction": 0.6984126984126984
+    },
+    "A_survival_180d": {
+      "numerator": 39,
+      "denominator": 76,
+      "fraction": 0.5131578947368421
+    }
+  },
+  "invalid_run_conservative": {
+    "candidate_n": 61,
+    "admitted_day0_reproduced_n": 61,
+    "day0_reproduction_fraction": 1.0,
+    "days": {
+      "n": 61,
+      "min": 1,
+      "median": 1,
+      "p90": 47,
+      "p99": 170,
+      "max": 170
+    }
+  },
+  "paper_gate_pass": false,
+  "interpretation_if_pass": "The lifecycle extension removes the prior lifecycle-enriched selection asymmetry: the same exact-date authorization definitions now cover all 309 outcome-blind >=3-RRC cases.",
+  "guardrails": [
+    "ROA history is date-granular; same-day BGP/ROA ordering is not inferred.",
+    "A-survival denominators include only cases authorized at the exact event and observable through each horizon.",
+    "Right-censored authorizations at the 2026-10-02 cutoff are not treated as withdrawal.",
+    "Invalid-run duration is descriptive only for cases whose historical day-0 validator state still reproduces the frozen Invalid state."
+  ]
+}
