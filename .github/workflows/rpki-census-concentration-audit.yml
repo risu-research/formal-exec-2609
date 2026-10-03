@@ -1,0 +1,47 @@
+name: rpki-census-concentration-audit
+on:
+  push:
+    branches: [rpki-pilot-20261002]
+    paths: [.github/workflows/rpki-census-concentration-audit.yml]
+permissions:
+  contents: write
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: rpki-pilot-20261002
+      - name: Audit concentration
+        run: |
+          python3 - <<'PY'
+          import csv,json
+          from collections import Counter
+          from pathlib import Path
+          rows=list(csv.DictReader(open('results/rpki_full_census_fast_closeout_20261002/census_weekly_rov.csv')))
+          inv=[r for r in rows if str(r['weekly_inversion']).lower()=='true']
+          ca=Counter(r['A'] for r in inv);cb=Counter(r['B'] for r in inv);cp=Counter((r['A'],r['B']) for r in inv);cd=Counter(r['event_date'][:10] for r in inv)
+          def hhi(c):
+              n=sum(c.values());return sum((v/n)**2 for v in c.values()) if n else None
+          def top(c,k=10):
+              n=sum(c.values());return [{'key':'->'.join(x) if isinstance(x,tuple) else x,'n':v,'share':v/n} for x,v in c.most_common(k)]
+          out={
+            'inversion_n':len(inv),'unique_old_A_n':len(ca),'unique_new_B_n':len(cb),'unique_A_B_pair_n':len(cp),'unique_event_dates_n':len(cd),
+            'old_A_hhi':hhi(ca),'new_B_hhi':hhi(cb),'pair_hhi':hhi(cp),'date_hhi':hhi(cd),
+            'top_old_A':top(ca),'top_new_B':top(cb),'top_pairs':top(cp),'top_dates':top(cd),
+            'top1_new_B_share':cb.most_common(1)[0][1]/len(inv) if inv else None,
+            'top5_new_B_share':sum(v for _,v in cb.most_common(5))/len(inv) if inv else None,
+            'top1_pair_share':cp.most_common(1)[0][1]/len(inv) if inv else None,
+            'top5_pair_share':sum(v for _,v in cp.most_common(5))/len(inv) if inv else None,
+            'max_inversions_single_date':cd.most_common(1)[0][1] if inv else 0
+          }
+          p=Path('results/rpki_census_concentration_audit_20261002');p.mkdir(parents=True,exist_ok=True);(p/'summary.json').write_text(json.dumps(out,indent=2));print(json.dumps(out,indent=2))
+          PY
+      - name: Commit audit
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git pull --rebase origin rpki-pilot-20261002 || true
+          git add results/rpki_census_concentration_audit_20261002
+          git commit -m "add full-census concentration audit [skip ci]" || exit 0
+          git push origin HEAD:rpki-pilot-20261002
