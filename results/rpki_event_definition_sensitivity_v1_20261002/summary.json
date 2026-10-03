@@ -1,0 +1,108 @@
+{
+  "design": {
+    "pre_stability": "strictly stronger filters applied to already-frozen 7046 weekly census; no new RPKI selection",
+    "bgplay_linkage": "same 419 frozen panel; same BGPlay +/-7d data; only withdrawal-to-B linkage window changes; direct A->B always accepted",
+    "guardrail": "This does not test looser pre-stability, alternative post-persistence, or 4/12-week recurrence because those cannot be reconstructed honestly from stored outputs without rerunning the 52 weekly snapshots."
+  },
+  "pre_stability": [
+    {
+      "pre_min": 3,
+      "clusters": 7046,
+      "weekly_inversions": 119,
+      "weekly_inversion_rate": 0.016889015043996595,
+      "crosssource_reproduced_inversions": 95,
+      "crosssource_rate_over_clusters": 0.013482827135963667,
+      "retained_vs_pre3": 1.0
+    },
+    {
+      "pre_min": 4,
+      "clusters": 6510,
+      "weekly_inversions": 109,
+      "weekly_inversion_rate": 0.01674347158218126,
+      "crosssource_reproduced_inversions": 86,
+      "crosssource_rate_over_clusters": 0.013210445468509985,
+      "retained_vs_pre3": 0.9239284700539313
+    },
+    {
+      "pre_min": 5,
+      "clusters": 6015,
+      "weekly_inversions": 103,
+      "weekly_inversion_rate": 0.0171238570241064,
+      "crosssource_reproduced_inversions": 81,
+      "crosssource_rate_over_clusters": 0.013466334164588529,
+      "retained_vs_pre3": 0.8536758444507522
+    },
+    {
+      "pre_min": 6,
+      "clusters": 5627,
+      "weekly_inversions": 96,
+      "weekly_inversion_rate": 0.017060600675315445,
+      "crosssource_reproduced_inversions": 76,
+      "crosssource_rate_over_clusters": 0.01350630886795806,
+      "retained_vs_pre3": 0.7986091399375532
+    },
+    {
+      "pre_min": 8,
+      "clusters": 5015,
+      "weekly_inversions": 84,
+      "weekly_inversion_rate": 0.01674975074775673,
+      "crosssource_reproduced_inversions": 67,
+      "crosssource_rate_over_clusters": 0.013359920239282154,
+      "retained_vs_pre3": 0.7117513482827136
+    },
+    {
+      "pre_min": 10,
+      "clusters": 4473,
+      "weekly_inversions": 74,
+      "weekly_inversion_rate": 0.016543706684551754,
+      "crosssource_reproduced_inversions": 59,
+      "crosssource_rate_over_clusters": 0.013190252626872345,
+      "retained_vs_pre3": 0.6348282713596367
+    }
+  ],
+  "bgplay_linkage": {
+    "attempted": 419,
+    "completed": 419,
+    "errors": 0,
+    "one_hour_rrc_count_exact_match_n": 418,
+    "one_hour_comparable_n": 419,
+    "windows": [
+      {
+        "window": "direct_only",
+        "resolved_ge3_n": 280,
+        "retained_of_canonical_309": 280,
+        "canonical_41_inversions_still_resolved_n": 42,
+        "canonical_41_retention": 0.8936170212765957,
+        "resolved_overlap_with_1h_n": 280,
+        "median_calendar_date_changed_vs_1h_n": 6
+      },
+      {
+        "window": "15m",
+        "resolved_ge3_n": 293,
+        "retained_of_canonical_309": 293,
+        "canonical_41_inversions_still_resolved_n": 45,
+        "canonical_41_retention": 0.9574468085106383,
+        "resolved_overlap_with_1h_n": 293,
+        "median_calendar_date_changed_vs_1h_n": 1
+      },
+      {
+        "window": "1h",
+        "resolved_ge3_n": 310,
+        "retained_of_canonical_309": 310,
+        "canonical_41_inversions_still_resolved_n": 47,
+        "canonical_41_retention": 1.0,
+        "resolved_overlap_with_1h_n": 310,
+        "median_calendar_date_changed_vs_1h_n": 0
+      },
+      {
+        "window": "6h",
+        "resolved_ge3_n": 331,
+        "retained_of_canonical_309": 310,
+        "canonical_41_inversions_still_resolved_n": 47,
+        "canonical_41_retention": 1.0,
+        "resolved_overlap_with_1h_n": 310,
+        "median_calendar_date_changed_vs_1h_n": 4
+      }
+    ]
+  }
+}
