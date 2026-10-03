@@ -25,3 +25,4 @@ jobs:
           git add results/rpki_event_definition_sensitivity_v1_20261002/canonical_v2_*.json results/rpki_event_definition_sensitivity_v1_20261002/canonical_v2_windows.csv
           git commit -m "add canonical v2 event sensitivity closeout [skip ci]" || exit 0
           git push origin HEAD:rpki-pilot-20261002
+# trigger: canonical-v2-closeout
