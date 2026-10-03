@@ -1,0 +1,123 @@
+{
+  "authority": "fast population closeout from successful 8 census shards; archive crosscheck is separate",
+  "population_n": 7046,
+  "key_integrity": {
+    "expected_n": 7046,
+    "unique_4key_n": 7046,
+    "missing_n": 0,
+    "extra_n": 0
+  },
+  "selection_outcome_blind": true,
+  "selection_sha256_4key": "22fe0ef735a8cb05d4bb0536193af2665b3ecfdd2e99a0d3950577759bf23a5e",
+  "joint_state_matrix": {
+    "invalid/invalid": 562,
+    "invalid/valid": 1923,
+    "unknown/unknown": 1373,
+    "valid/invalid": 119,
+    "valid/valid": 3069
+  },
+  "weekly_old_valid_new_invalid_n": 119,
+  "weekly_old_valid_new_invalid_fraction_all": 0.016889015043996595,
+  "prefix_weight_total_n": 20251,
+  "prefix_weight_inversion_n": 183,
+  "prefix_weight_inversion_fraction": 0.009036590785640215,
+  "prefix_weighted_joint_state_matrix": {
+    "invalid/invalid": 2409,
+    "invalid/valid": 3971,
+    "unknown/unknown": 4744,
+    "valid/invalid": 183,
+    "valid/valid": 8944
+  },
+  "month_breakdown": {
+    "2025-10": {
+      "n": 201,
+      "inv": 4,
+      "fraction": 0.01990049751243781
+    },
+    "2025-11": {
+      "n": 683,
+      "inv": 12,
+      "fraction": 0.017569546120058566
+    },
+    "2025-12": {
+      "n": 869,
+      "inv": 20,
+      "fraction": 0.023014959723820484
+    },
+    "2026-01": {
+      "n": 538,
+      "inv": 13,
+      "fraction": 0.024163568773234202
+    },
+    "2026-02": {
+      "n": 634,
+      "inv": 7,
+      "fraction": 0.011041009463722398
+    },
+    "2026-03": {
+      "n": 792,
+      "inv": 10,
+      "fraction": 0.012626262626262626
+    },
+    "2026-04": {
+      "n": 621,
+      "inv": 14,
+      "fraction": 0.02254428341384863
+    },
+    "2026-05": {
+      "n": 611,
+      "inv": 14,
+      "fraction": 0.022913256955810146
+    },
+    "2026-06": {
+      "n": 776,
+      "inv": 7,
+      "fraction": 0.00902061855670103
+    },
+    "2026-07": {
+      "n": 565,
+      "inv": 8,
+      "fraction": 0.01415929203539823
+    },
+    "2026-08": {
+      "n": 756,
+      "inv": 10,
+      "fraction": 0.013227513227513227
+    }
+  },
+  "cluster_size_breakdown": {
+    "1": {
+      "n": 4880,
+      "inv": 97,
+      "fraction": 0.019877049180327868
+    },
+    "10+": {
+      "n": 292,
+      "inv": 1,
+      "fraction": 0.003424657534246575
+    },
+    "2-4": {
+      "n": 1479,
+      "inv": 15,
+      "fraction": 0.010141987829614604
+    },
+    "5-9": {
+      "n": 395,
+      "inv": 6,
+      "fraction": 0.015189873417721518
+    }
+  },
+  "exact_calibration_4key": {
+    "overlap_n": 309,
+    "weekly_true_exact_true": 6,
+    "weekly_true_exact_false": 0,
+    "weekly_false_exact_true": 35,
+    "weekly_false_exact_false": 268
+  },
+  "guardrails": [
+    "This is a weekly-checkpoint census over frozen persistent observed origin replacements, not an exact-transition prevalence estimate.",
+    "The 309-case >=3-RRC outcome-blind audit remains the exact-timing mechanism evidence.",
+    "Cluster-prefix weighting is sensitivity analysis; the event cluster is the primary unit.",
+    "No RPKI state was used to select census cases."
+  ]
+}
