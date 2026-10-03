@@ -1,0 +1,12 @@
+{
+  "population_n": 7046,
+  "unique_prefix_A_B_n": 7036,
+  "duplicate_prefix_A_B_key_count": 10,
+  "duplicate_prefix_A_B_extra_rows": 10,
+  "unique_event_prefix_A_B_n": 7046,
+  "duplicate_event_prefix_A_B_key_count": 0,
+  "exact_n": 309,
+  "exact_4key_overlap_population_n": 309,
+  "exact_4key_missing_population_n": 0,
+  "recommendation": "Use event_date,prefix,A,B as canonical join key; prefix,A,B is safe only if duplicate count is zero."
+}
