@@ -128,6 +128,14 @@ def events(g):
 
 def fetch(pkg):
     d,e=getj(f"https://pypi.org/pypi/{quote(pkg,safe='')}/json",6,35);return pkg,d,e
+def fetchv(pkg,v):
+    d,e=getj(f"https://pypi.org/pypi/{quote(pkg,safe='')}/{quote(str(v),safe='')}/json",5,30);return d,e
+def declared_minors(info):
+    out=set()
+    for c in (info or {}).get("classifiers") or []:
+        m=re.fullmatch(r"Programming Language :: Python :: (2\.7|3\.\d+)",str(c).strip())
+        if m:out.add(m.group(1))
+    return out
 def relmap(meta):
     m=defaultdict(list);bad=[]
     for raw,fs in (meta.get("releases")or{}).items():
@@ -245,13 +253,22 @@ def main():
     for q in primary.values():
         q["member_ids_all"]=sorted(q["member_ids_all"]);q["thresholds"]=sorted(q["thresholds"]);ok.append(q)
     st=[r for r in ok if r["stranding"]];st90=[r for r in ok if r["stranding_90"]];co=[r for r in ok if r["lost_runtime_set"]];pr=[r for r in ok if not r["lost_runtime_set"]];eo=[r for r in ok if r["eol_aligned_only"]];ex=[r for r in ok if r["gained_runtime_set"]]
+    classifier_errors={}; corroborated=[]; classifier_rows=[]
+    for r in st:
+        a,ea=fetchv(r["package"],r["predecessor"]);b,eb=fetchv(r["package"],r["secure_release"])
+        if ea or eb:classifier_errors[f'{r["package"]}:{r["predecessor"]}->{r["secure_release"]}']={"pre":ea,"fix":eb}
+        A=declared_minors((a or {}).get("info") or {});B=declared_minors((b or {}).get("info") or {})
+        lost=set(x for x in str(r.get("lost_supported_set") or "").split(";") if x and x!="nan")
+        explicit_pre=lost&A; explicit_removed=explicit_pre-B
+        q=dict(r);q["pred_classifier_minors"]=";".join(sorted(A));q["fix_classifier_minors"]=";".join(sorted(B));q["lost_explicitly_declared_pre"]=";".join(sorted(explicit_pre));q["lost_explicitly_removed_classifier"]=";".join(sorted(explicit_removed));q["classifier_corroborated"]=bool(explicit_removed);classifier_rows.append(q)
+        if q["classifier_corroborated"]:corroborated.append(q)
     yrs=defaultdict(lambda:{"ok":0,"stranding":0,"eol_only":0,"contracted":0})
     for r in ok:
         y=r["fix_upload"][:4];yrs[y]["ok"]+=1;yrs[y]["stranding"]+=int(r["stranding"]);yrs[y]["eol_only"]+=int(r["eol_aligned_only"]);yrs[y]["contracted"]+=int(bool(r["lost_runtime_set"]))
     reasons=Counter(r["reason"] for r in rows if r["status"]!="ok")
-    S={"generated_at":dt.datetime.now(dt.timezone.utc).isoformat(),"advisory_database_commit":sha,"raw_pysec_records":len(rec),"yaml_parse_errors":len(bad),"withdrawn_records_removed":len(wd),"active_records":len(rec)-len(wd),"alias_dedup_groups":len(gs),"alias_merged_groups":sum(len(g)>1 for g in gs),"groups_without_parseable_ecosystem_fix":nofix,"deduplicated_fixed_events":len(ev),"fixed_event_packages":len(pk),"pypi_fetch_errors":len(fe),"analyzable_fixed_threshold_events":len(ok0),"analyzable_repair_events":len(ok),"excluded_threshold_events":len(rows)-len(ok0),"exclusion_reasons":dict(reasons),"preserved_events_rcl0":len(pr),"contracted_events_rcl_gt0":len(co),"supported_runtime_stranding_events":len(st),"supported_runtime_stranding_events_90d":len(st90),"eol_aligned_only_contraction_events":len(eo),"expanded_events":len(ex),"currently_yanked_sensitive_stranding_events":sum(r["current_stranding"] for r in ok),"fixed_versions_all_files_currently_yanked":sum(r["fix_all_yanked"] for r in ok),"preservation_rate":len(pr)/len(ok) if ok else None,"contraction_rate":len(co)/len(ok) if ok else None,"supported_stranding_rate":len(st)/len(ok) if ok else None,"supported_stranding_rate_90d":len(st90)/len(ok) if ok else None,"eol_aligned_only_rate":len(eo)/len(ok) if ok else None,"by_fix_year":dict(sorted(yrs.items())),"definition":{"unit":"unique stable repair release (package, first stable secure release, stable vulnerable predecessor)","predecessor":"highest stable PEP440 release in an associated introduced..fixed interval uploaded before the secure release","runtime_support":"resolver-visible Requires-Python; missing field means unrestricted","minor_runtime_rule":"x.y.0 and x.y.999 must agree, otherwise minor is patch-sensitive/ambiguous","historical_yank_rule":"primary RCL ignores current yanked state because historical yank timestamps are unavailable; current-yank sensitivity is separate","stranding":"predecessor supported runtime, runtime released and not EOL at fix upload, fixed release does not support it"}}
+    S={"generated_at":dt.datetime.now(dt.timezone.utc).isoformat(),"advisory_database_commit":sha,"raw_pysec_records":len(rec),"yaml_parse_errors":len(bad),"withdrawn_records_removed":len(wd),"active_records":len(rec)-len(wd),"alias_dedup_groups":len(gs),"alias_merged_groups":sum(len(g)>1 for g in gs),"groups_without_parseable_ecosystem_fix":nofix,"deduplicated_fixed_events":len(ev),"fixed_event_packages":len(pk),"pypi_fetch_errors":len(fe),"analyzable_fixed_threshold_events":len(ok0),"analyzable_repair_events":len(ok),"excluded_threshold_events":len(rows)-len(ok0),"exclusion_reasons":dict(reasons),"preserved_events_rcl0":len(pr),"contracted_events_rcl_gt0":len(co),"supported_runtime_stranding_events":len(st),"supported_runtime_stranding_events_90d":len(st90),"eol_aligned_only_contraction_events":len(eo),"expanded_events":len(ex),"currently_yanked_sensitive_stranding_events":sum(r["current_stranding"] for r in ok),"fixed_versions_all_files_currently_yanked":sum(r["fix_all_yanked"] for r in ok),"classifier_check_errors":len(classifier_errors),"classifier_corroborated_stranding_events":len(corroborated),"classifier_corroborated_rate_of_all_repairs":len(corroborated)/len(ok) if ok else None,"classifier_corroborated_fraction_of_stranding":len(corroborated)/len(st) if st else None,"preservation_rate":len(pr)/len(ok) if ok else None,"contraction_rate":len(co)/len(ok) if ok else None,"supported_stranding_rate":len(st)/len(ok) if ok else None,"supported_stranding_rate_90d":len(st90)/len(ok) if ok else None,"eol_aligned_only_rate":len(eo)/len(ok) if ok else None,"by_fix_year":dict(sorted(yrs.items())),"definition":{"unit":"unique stable repair release (package, first stable secure release, stable vulnerable predecessor)","predecessor":"highest stable PEP440 release in an associated introduced..fixed interval uploaded before the secure release","runtime_support":"resolver-visible Requires-Python; missing field means unrestricted","minor_runtime_rule":"x.y.0 and x.y.999 must agree, otherwise minor is patch-sensitive/ambiguous","historical_yank_rule":"primary RCL ignores current yanked state because historical yank timestamps are unavailable; current-yank sensitivity is separate","stranding":"predecessor supported runtime, runtime released and not EOL at fix upload, fixed release does not support it"}}
     (OUT/"summary.json").write_text(json.dumps(S,indent=2,sort_keys=True));(OUT/"fetch_errors.json").write_text(json.dumps(fe,indent=2,sort_keys=True))
-    csvw(OUT/"events.csv",rows);csvw(OUT/"repair_events.csv",ok);csvw(OUT/"stranding_events.csv",st);csvw(OUT/"stranding_events_90d.csv",st90);csvw(OUT/"contraction_events.csv",co);csvw(OUT/"excluded_events.csv",[r for r in rows if r["status"]!="ok"])
+    csvw(OUT/"events.csv",rows);csvw(OUT/"repair_events.csv",ok);csvw(OUT/"stranding_events.csv",st);csvw(OUT/"stranding_events_90d.csv",st90);csvw(OUT/"stranding_classifier_check.csv",classifier_rows);csvw(OUT/"stranding_classifier_corroborated.csv",corroborated);csvw(OUT/"contraction_events.csv",co);csvw(OUT/"excluded_events.csv",[r for r in rows if r["status"]!="ok"]);(OUT/"classifier_errors.json").write_text(json.dumps(classifier_errors,indent=2,sort_keys=True))
     (OUT/"run_manifest.json").write_text(json.dumps({"advisory_commit":sha,"python":sys.version,"generated_at":dt.datetime.now(dt.timezone.utc).isoformat()},indent=2))
     log("SUMMARY "+json.dumps(S,sort_keys=True))
 
