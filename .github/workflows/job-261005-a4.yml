@@ -1,0 +1,23 @@
+name: neutral-job-a4
+on:
+  push:
+    branches:
+      - run/job-261005-a4
+jobs:
+  compute:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python -m pip install requests
+      - run: python jobs/job_261005_a4.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: job-261005-a4-results
+          path: job-out-a4/
+          retention-days: 7
