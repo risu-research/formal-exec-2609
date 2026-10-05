@@ -162,10 +162,19 @@ def life(cy,d):
     rel={x["cycle"] for x in cy if x["releaseDate"]<=d}
     sup={x["cycle"] for x in cy if x["releaseDate"]<=d and (x["eol"] is None or d<=x["eol"])}
     return rel,sup
-def pred(m,intro,fixed,t):
-    iv=None if intro=="0" else Version(intro);fv=Version(fixed);z=[]
+def secure(m,fixed):
+    fv=Version(fixed);z=[]
     for v in m:
-        if v>=fv or (iv is not None and v<iv):continue
+        if v.is_prerelease or v<fv:continue
+        u=firstup(files(m,v))
+        if u:z.append((v,u))
+    return min(z,key=lambda x:(x[0],x[1]))[0] if z else None
+
+def pred(m,intros,fixed,t):
+    fv=Version(fixed);z=[]
+    for v in m:
+        if v.is_prerelease or v>=fv:continue
+        if not any(i=="0" or v>=Version(i) for i in intros):continue
         u=firstup(files(m,v))
         if u and u<=t:z.append((v,u))
     return max(z,key=lambda x:(x[0],x[1]))[0] if z else None
@@ -173,18 +182,19 @@ def pred(m,intro,fixed,t):
 def analyze(e,meta,cy):
     o=dict(e);o.update({"status":"ok","reason":"","predecessor":"","fix_upload":"","pred_runtime_set":"","fix_runtime_set":"","lost_runtime_set":"","supported_pred_set":"","lost_supported_set":"","lost_eol_set":"","gained_runtime_set":"","ambiguous_runtime_set":"","rcl_all":"","rcl_supported":"","stranding":False,"eol_aligned_only":False,"fix_all_yanked":False,"current_lost_supported_set":"","current_stranding":False})
     if meta is None:o["status"]="excluded";o["reason"]="pypi_metadata_unavailable";return o
-    m,bv=relmap(meta);fv=Version(e["fixed"])
-    if fv not in m:o["status"]="excluded";o["reason"]="fixed_version_not_on_pypi";return o
-    ff=files(m,fv);tf=firstup(ff)
-    if not tf:o["status"]="excluded";o["reason"]="fixed_upload_time_missing";return o
-    pv=pred(m,e["introduced"],e["fixed"],tf)
+    m,bv=relmap(meta);sv=secure(m,e["fixed"])
+    if sv is None:o["status"]="excluded";o["reason"]="no_stable_secure_release";return o
+    ff=files(m,sv);tf=firstup(ff)
+    if not tf:o["status"]="excluded";o["reason"]="secure_upload_time_missing";return o
+    pv=pred(m,e.get("introduced_list",[e["introduced"]]),e["fixed"],tf)
     if pv is None:o["status"]="excluded";o["reason"]="predecessor_not_found";return o
     pf=files(m,pv);ps=rsets(pf,cy);fs=rsets(ff,cy);pc=rsets(pf,cy,True);fc=rsets(ff,cy,True)
     rel,sup=life(cy,tf.date());amb=(ps["amb"]|fs["amb"])&rel
-    P=(ps["yes"]&rel)-amb;F=(fs["yes"]&rel)-amb;lost=P-F;gain=F-P;Ps=P&sup;Ls=Ps-F;Le=lost-sup
+    mature90={x["cycle"] for x in cy if x["releaseDate"]<=tf.date()-dt.timedelta(days=90) and (x["eol"] is None or tf.date()<=x["eol"])}
+    P=(ps["yes"]&rel)-amb;F=(fs["yes"]&rel)-amb;lost=P-F;gain=F-P;Ps=P&sup;Ls=Ps-F;Le=lost-sup;Ls90=(P&mature90)-F
     P2=(pc["yes"]&rel)-amb;F2=(fc["yes"]&rel)-amb;CL=(P2&sup)-F2
     key=lambda x:tuple(map(int,x.split(".")));fmt=lambda s:";".join(sorted(s,key=key))
-    o.update({"predecessor":str(pv),"fix_upload":tf.isoformat(),"pred_runtime_set":fmt(P),"fix_runtime_set":fmt(F),"lost_runtime_set":fmt(lost),"supported_pred_set":fmt(Ps),"lost_supported_set":fmt(Ls),"lost_eol_set":fmt(Le),"gained_runtime_set":fmt(gain),"ambiguous_runtime_set":fmt(amb),"rcl_all":len(lost)/len(P) if P else None,"rcl_supported":len(Ls)/len(Ps) if Ps else None,"stranding":bool(Ls),"eol_aligned_only":bool(lost) and not bool(Ls),"fix_all_yanked":fs["all_yanked"],"current_lost_supported_set":fmt(CL),"current_stranding":bool(CL),"pred_invalid_specs":ps["bad"],"fix_invalid_specs":fs["bad"],"pred_files":ps["n"],"fix_files":fs["n"],"bad_pypi_versions":len(bv)})
+    o.update({"secure_release":str(sv),"predecessor":str(pv),"fix_upload":tf.isoformat(),"pred_runtime_set":fmt(P),"fix_runtime_set":fmt(F),"lost_runtime_set":fmt(lost),"supported_pred_set":fmt(Ps),"lost_supported_set":fmt(Ls),"lost_supported_90_set":fmt(Ls90),"lost_eol_set":fmt(Le),"gained_runtime_set":fmt(gain),"ambiguous_runtime_set":fmt(amb),"rcl_all":len(lost)/len(P) if P else None,"rcl_supported":len(Ls)/len(Ps) if Ps else None,"stranding":bool(Ls),"stranding_90":bool(Ls90),"eol_aligned_only":bool(lost) and not bool(Ls),"fix_all_yanked":fs["all_yanked"],"current_lost_supported_set":fmt(CL),"current_stranding":bool(CL),"pred_invalid_specs":ps["bad"],"fix_invalid_specs":fs["bad"],"pred_files":ps["n"],"fix_files":fs["n"],"bad_pypi_versions":len(bv)})
     if not P:o["status"]="excluded";o["reason"]="no_stable_minor_runtime_predecessor"
     return o
 
@@ -204,7 +214,17 @@ def main():
     ev=[];nofix=0
     for g in gs:
         z=events(g);nofix+=not bool(z);ev+=z
-    u={(x["group_id"],x["package_norm"],x["introduced"],x["fixed"]):x for x in ev};ev=list(u.values());ev.sort(key=lambda x:(x["package_norm"],Version(x["fixed"])))
+    u={}
+    for x in ev:
+        k=(x["package_norm"],x["fixed"])
+        if k not in u:
+            y=dict(x);y["member_ids"]=set(x["member_ids"]);y["aliases"]=set(x["aliases"]);y["introduced_list"]={x["introduced"]};y["source_paths"]={x["source_path"]};u[k]=y
+        else:
+            u[k]["member_ids"].update(x["member_ids"]);u[k]["aliases"].update(x["aliases"]);u[k]["introduced_list"].add(x["introduced"]);u[k]["source_paths"].add(x["source_path"])
+    ev=[]
+    for y in u.values():
+        y["member_ids"]=sorted(y["member_ids"]);y["aliases"]=sorted(y["aliases"]);y["introduced_list"]=sorted(y["introduced_list"]);y["source_paths"]=sorted(y["source_paths"]);y["introduced"]=";".join(y["introduced_list"]);ev.append(y)
+    ev.sort(key=lambda x:(x["package_norm"],Version(x["fixed"])))
     cy=lifecycle();pk=sorted({x["package"] for x in ev},key=norm);log(f"events={len(ev)} packages={len(pk)}")
     md={};fe={}
     with ThreadPoolExecutor(max_workers=12) as ex:
@@ -214,14 +234,24 @@ def main():
             if e:fe[norm(p)]=e
             if i%200==0 or i==len(pk):log(f"fetch {i}/{len(pk)} errors={len(fe)}")
     rows=[analyze(x,md.get(x["package_norm"]),cy) for x in ev]
-    ok=[r for r in rows if r["status"]=="ok"];st=[r for r in ok if r["stranding"]];co=[r for r in ok if r["lost_runtime_set"]];pr=[r for r in ok if not r["lost_runtime_set"]];eo=[r for r in ok if r["eol_aligned_only"]];ex=[r for r in ok if r["gained_runtime_set"]]
+    ok0=[r for r in rows if r["status"]=="ok"];primary={}
+    for r in ok0:
+        k=(r["package_norm"],r["secure_release"],r["predecessor"])
+        if k not in primary:
+            q=dict(r);q["member_ids_all"]=set(r.get("member_ids")or[]);q["thresholds"]={r["fixed"]};primary[k]=q
+        else:
+            primary[k]["member_ids_all"].update(r.get("member_ids")or[]);primary[k]["thresholds"].add(r["fixed"])
+    ok=[]
+    for q in primary.values():
+        q["member_ids_all"]=sorted(q["member_ids_all"]);q["thresholds"]=sorted(q["thresholds"]);ok.append(q)
+    st=[r for r in ok if r["stranding"]];st90=[r for r in ok if r["stranding_90"]];co=[r for r in ok if r["lost_runtime_set"]];pr=[r for r in ok if not r["lost_runtime_set"]];eo=[r for r in ok if r["eol_aligned_only"]];ex=[r for r in ok if r["gained_runtime_set"]]
     yrs=defaultdict(lambda:{"ok":0,"stranding":0,"eol_only":0,"contracted":0})
     for r in ok:
         y=r["fix_upload"][:4];yrs[y]["ok"]+=1;yrs[y]["stranding"]+=int(r["stranding"]);yrs[y]["eol_only"]+=int(r["eol_aligned_only"]);yrs[y]["contracted"]+=int(bool(r["lost_runtime_set"]))
     reasons=Counter(r["reason"] for r in rows if r["status"]!="ok")
-    S={"generated_at":dt.datetime.now(dt.timezone.utc).isoformat(),"advisory_database_commit":sha,"raw_pysec_records":len(rec),"yaml_parse_errors":len(bad),"withdrawn_records_removed":len(wd),"active_records":len(rec)-len(wd),"alias_dedup_groups":len(gs),"alias_merged_groups":sum(len(g)>1 for g in gs),"groups_without_parseable_ecosystem_fix":nofix,"deduplicated_fixed_events":len(ev),"fixed_event_packages":len(pk),"pypi_fetch_errors":len(fe),"analyzable_events":len(ok),"excluded_events":len(rows)-len(ok),"exclusion_reasons":dict(reasons),"preserved_events_rcl0":len(pr),"contracted_events_rcl_gt0":len(co),"supported_runtime_stranding_events":len(st),"eol_aligned_only_contraction_events":len(eo),"expanded_events":len(ex),"currently_yanked_sensitive_stranding_events":sum(r["current_stranding"] for r in ok),"fixed_versions_all_files_currently_yanked":sum(r["fix_all_yanked"] for r in ok),"preservation_rate":len(pr)/len(ok) if ok else None,"contraction_rate":len(co)/len(ok) if ok else None,"supported_stranding_rate":len(st)/len(ok) if ok else None,"eol_aligned_only_rate":len(eo)/len(ok) if ok else None,"by_fix_year":dict(sorted(yrs.items())),"definition":{"unit":"deduplicated PYSEC ECOSYSTEM fixed-range event","predecessor":"highest PEP440 release in same introduced..fixed interval uploaded before fixed release","runtime_support":"resolver-visible Requires-Python; missing field means unrestricted","minor_runtime_rule":"x.y.0 and x.y.999 must agree, otherwise minor is patch-sensitive/ambiguous","historical_yank_rule":"primary RCL ignores current yanked state because historical yank timestamps are unavailable; current-yank sensitivity is separate","stranding":"predecessor supported runtime, runtime released and not EOL at fix upload, fixed release does not support it"}}
+    S={"generated_at":dt.datetime.now(dt.timezone.utc).isoformat(),"advisory_database_commit":sha,"raw_pysec_records":len(rec),"yaml_parse_errors":len(bad),"withdrawn_records_removed":len(wd),"active_records":len(rec)-len(wd),"alias_dedup_groups":len(gs),"alias_merged_groups":sum(len(g)>1 for g in gs),"groups_without_parseable_ecosystem_fix":nofix,"deduplicated_fixed_events":len(ev),"fixed_event_packages":len(pk),"pypi_fetch_errors":len(fe),"analyzable_fixed_threshold_events":len(ok0),"analyzable_repair_events":len(ok),"excluded_threshold_events":len(rows)-len(ok0),"exclusion_reasons":dict(reasons),"preserved_events_rcl0":len(pr),"contracted_events_rcl_gt0":len(co),"supported_runtime_stranding_events":len(st),"supported_runtime_stranding_events_90d":len(st90),"eol_aligned_only_contraction_events":len(eo),"expanded_events":len(ex),"currently_yanked_sensitive_stranding_events":sum(r["current_stranding"] for r in ok),"fixed_versions_all_files_currently_yanked":sum(r["fix_all_yanked"] for r in ok),"preservation_rate":len(pr)/len(ok) if ok else None,"contraction_rate":len(co)/len(ok) if ok else None,"supported_stranding_rate":len(st)/len(ok) if ok else None,"supported_stranding_rate_90d":len(st90)/len(ok) if ok else None,"eol_aligned_only_rate":len(eo)/len(ok) if ok else None,"by_fix_year":dict(sorted(yrs.items())),"definition":{"unit":"unique stable repair release (package, first stable secure release, stable vulnerable predecessor)","predecessor":"highest stable PEP440 release in an associated introduced..fixed interval uploaded before the secure release","runtime_support":"resolver-visible Requires-Python; missing field means unrestricted","minor_runtime_rule":"x.y.0 and x.y.999 must agree, otherwise minor is patch-sensitive/ambiguous","historical_yank_rule":"primary RCL ignores current yanked state because historical yank timestamps are unavailable; current-yank sensitivity is separate","stranding":"predecessor supported runtime, runtime released and not EOL at fix upload, fixed release does not support it"}}
     (OUT/"summary.json").write_text(json.dumps(S,indent=2,sort_keys=True));(OUT/"fetch_errors.json").write_text(json.dumps(fe,indent=2,sort_keys=True))
-    csvw(OUT/"events.csv",rows);csvw(OUT/"stranding_events.csv",st);csvw(OUT/"contraction_events.csv",co);csvw(OUT/"excluded_events.csv",[r for r in rows if r["status"]!="ok"])
+    csvw(OUT/"events.csv",rows);csvw(OUT/"repair_events.csv",ok);csvw(OUT/"stranding_events.csv",st);csvw(OUT/"stranding_events_90d.csv",st90);csvw(OUT/"contraction_events.csv",co);csvw(OUT/"excluded_events.csv",[r for r in rows if r["status"]!="ok"])
     (OUT/"run_manifest.json").write_text(json.dumps({"advisory_commit":sha,"python":sys.version,"generated_at":dt.datetime.now(dt.timezone.utc).isoformat()},indent=2))
     log("SUMMARY "+json.dumps(S,sort_keys=True))
 
