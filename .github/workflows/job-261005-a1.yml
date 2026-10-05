@@ -1,0 +1,36 @@
+name: neutral-job-a1
+on:
+  push:
+    branches:
+      - run/job-261005-a1
+  workflow_dispatch:
+
+jobs:
+  compute:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install runtime
+        run: python -m pip install --disable-pip-version-check PyYAML packaging requests
+      - name: Execute
+        run: python jobs/job_261005_a1.py
+      - name: Print summary
+        if: always()
+        run: |
+          if [ -f job-out/summary.json ]; then
+            cat job-out/summary.json
+            cat job-out/summary.json >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Upload compact outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: job-261005-a1-results
+          path: job-out/
+          retention-days: 7
