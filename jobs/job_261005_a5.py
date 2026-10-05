@@ -169,15 +169,26 @@ def build_advisory_events(rec, metas):
             pkg=str(pd["name"]); meta=metas.get(norm(pkg))
             if not meta: continue
             m,_=relmap(meta)
+            fixeds=[]
+            for rg in af.get("ranges") or []:
+                if rg.get("type")!="ECOSYSTEM": continue
+                for ev in rg.get("events") or []:
+                    if "fixed" in ev:
+                        fv=V(ev["fixed"])
+                        if fv is not None: fixeds.append(fv)
+            if not fixeds: continue
             stable=sorted(v for v in m if not v.is_prerelease and not v.is_devrelease)
             if len(stable)<2: continue
             states=[affected(v,af) for v in stable]
-            # exact vulnerable -> unaffected transitions in canonical version order.
+            # exact vulnerable -> unaffected transitions in canonical version order,
+            # retained only when an explicit OSV fixed boundary lies in (pred, secure].
             for i in range(len(stable)-1):
                 if not states[i]: continue
                 j=i+1
                 if states[j]: continue
                 pred=stable[i]; sec=stable[j]
+                matched_fixed=[fv for fv in fixeds if pred < fv and fv <= sec]
+                if not matched_fixed: continue
                 tp=up(m[pred]); ts=up(m[sec])
                 if not tp or not ts: continue
                 t=max(tp,ts)
@@ -207,7 +218,7 @@ def build_advisory_events(rec, metas):
                     recov[r]={"release":str(bestv) if bestv else None,"time":best.isoformat() if best else None,
                               "delay_days":(best-t).days if best else None}
                 events.append({
-                    "group_id":gid,"aliases":aliases,"source_path":rr["path"],"package":pkg,"package_norm":norm(pkg),
+                    "group_id":gid,"aliases":aliases,"source_path":rr["path"],"package":pkg,"package_norm":norm(pkg),"matched_fixed":";".join(str(x) for x in sorted(matched_fixed)),
                     "predecessor":str(pred),"secure_release":str(sec),
                     "predecessor_upload":tp.isoformat(),"secure_upload":ts.isoformat(),"event_time":t.isoformat(),
                     "pred_runtime_set":fmt(P),"supported_pred_set":fmt(P&S),"safe_candidates_at_event":";".join(map(str,safe)),
@@ -282,7 +293,7 @@ def main():
       "recovery_delay_median_days":sorted(delays)[len(delays)//2] if delays else None,
       "recovery_delay_max_days":max(delays) if delays else None,
       "definition":{
-        "transition":"adjacent stable PyPI versions in canonical PEP 440 order where advisory state changes affected->unaffected",
+        "transition":"adjacent stable PyPI versions in canonical PEP 440 order where advisory state changes affected->unaffected and at least one explicit ECOSYSTEM fixed boundary lies in (predecessor, secure]",
         "event_time":"later of predecessor and first-safe successor upload timestamps",
         "safe_path":"union of all non-vulnerable stable upgrade candidates >= predecessor already uploaded by event_time",
         "stranding":"a Python minor admitted by predecessor and upstream-supported at event_time is admitted by no safe upgrade candidate at event_time",
