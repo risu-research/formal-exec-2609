@@ -1,0 +1,28 @@
+name: neutral-job-a5
+on:
+  push:
+    branches:
+      - run/job-261005-a5
+jobs:
+  compute:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python -m pip install --disable-pip-version-check PyYAML packaging requests
+      - run: python jobs/job_261005_a5.py
+      - name: summary
+        if: always()
+        run: |
+          test -f job-out-a5/summary.json && cat job-out-a5/summary.json || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: job-261005-a5-results
+          path: job-out-a5/
+          retention-days: 7
