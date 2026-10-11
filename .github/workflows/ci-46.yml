@@ -51,4 +51,18 @@ jobs:
           if-no-files-found: warn
           path: |
             audit46/
-            c46_${{ matrix.cap }}/
+            c46_${{ matrix.cap }}/SOURCE_IDENTITY.json
+            c46_${{ matrix.cap }}/ingest.json
+            c46_${{ matrix.cap }}/answers.json
+            c46_${{ matrix.cap }}/fixed/physical.json
+            c46_${{ matrix.cap }}/verified/physical.json
+            c46_${{ matrix.cap }}/pre_upgrade/inherited_identity.json
+            c46_${{ matrix.cap }}/post_upgrade/inherited_identity.json
+            c46_${{ matrix.cap }}/traces/*.json
+            c46_${{ matrix.cap }}/stream_wall.json
+            c46_${{ matrix.cap }}/receipts.csv
+            c46_${{ matrix.cap }}/stream_metrics.json
+            c46_${{ matrix.cap }}/decision_matrix.json
+            c46_${{ matrix.cap }}/FINAL_STATUS.json
+            c46_${{ matrix.cap }}/upstream_schema.sql
+            c46_${{ matrix.cap }}/upstream_tpch_*.sql
