@@ -41,8 +41,9 @@ def setup_source():
  sqls={i:fetch(f"queries/query_{i:02d}.sql").strip().rstrip(";") for i in QUERIES}
  for i,s in sqls.items():(ROOT/f"upstream_tpch_q{i:02d}.sql").write_text(s+";\n")
  defs={}
- for raw in re.split(r";",schema):
-  cleaned="\n".join(s for s in raw.splitlines() if not s.lstrip().startswith("--")).strip()
+ clean_schema="\n".join(s for s in schema.splitlines() if not s.lstrip().startswith("--"))
+ for raw in clean_schema.split(";"):
+  cleaned=raw.strip()
   if not cleaned:continue
   m=re.match(r"CREATE\s+TABLE\s+(\w+)\s*\((.*?)\)\s*PRIMARY\s+KEY\s*\((.*?)\)\s*$",cleaned,re.S|re.I)
   if m:defs[m.group(1)]=(m.group(2),m.group(3))
