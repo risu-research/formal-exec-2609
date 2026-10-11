@@ -1,0 +1,38 @@
+name: Stage33p independent ClickBench Hits pilot
+on:
+  push:
+    branches: [stage27-part-count]
+    paths:
+      - experiments/db_clickbench_hits_independent.py
+      - .github/workflows/db-clickbench-hits-independent.yml
+  workflow_dispatch:
+permissions: {contents: read}
+jobs:
+  hits_replication:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate and ensure decompress executable
+        run: |
+          python3 -m py_compile experiments/db_clickbench_hits_independent.py
+          df -h .
+          free -h
+          if ! command -v zstd >/dev/null; then sudo apt-get update -qq && sudo apt-get install -y -qq zstd; fi
+      - name: Independent real Hits workload statistics lifecycle
+        run: |
+          set -o pipefail
+          PYTHONUNBUFFERED=1 python3 experiments/db_clickbench_hits_independent.py 2>&1 | tee stage33p.log
+      - name: Archive experimental records
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage33p-hits-independent
+          retention-days: 14
+          if-no-files-found: warn
+          path: |
+            stage33p.log
+            s33p/FINAL_STATUS.json
+            s33p/medians.csv
+            s33p/fresh_receipts.csv
+            s33p/attached_receipts.csv
