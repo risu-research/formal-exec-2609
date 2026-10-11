@@ -1,0 +1,50 @@
+name: ci-51
+on:
+  push:
+    branches: [ci48-neutral-run]
+    paths: [.github/workflows/ci-51.yml]
+  workflow_dispatch:
+permissions: {contents: read}
+jobs:
+  fixed-query-replication:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 65
+    steps:
+      - uses: actions/checkout@v4
+      - name: Static evidence and source verification
+        run: |
+          set -euo pipefail
+          mkdir -p audit51
+          sha256sum experiments/db_c42.py experiments/db_c50.py experiments/db_c51.py >audit51/SOURCE_SHA256.txt
+          python3 -m py_compile experiments/db_c51.py
+          if grep -iE '(moon.?hwan|northwestern|@hotmail|@risuinstitute|password=|bearer [a-z0-9_-]+)' experiments/db_c51.py; then exit 1; fi
+          python3 experiments/db_c51.py --preflight
+      - name: Repeated measurement of fixed query set
+        run: |
+          set -euo pipefail
+          PYTHONUNBUFFERED=1 python3 experiments/db_c51.py 2>&1 | tee audit51/progress.log
+      - name: Preserve audit data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: c51-targeted-query-validation
+          retention-days: 14
+          if-no-files-found: warn
+          path: |
+            audit51/
+            s51/PREREGISTERED.json
+            s51/SOURCE_IDENTITY.json
+            s51/calendar.json
+            s51/settings.tsv
+            s51/FINAL_STATUS.json
+            s51/old_state/state.json
+            s51/post_ingest/state.json
+            s51/post_ingest/answer_check.json
+            s51/post_ingest/target_metrics.json
+            s51/post_ingest/validation.json
+            s51/post_ingest/receipts.csv
+            s51/later/state.json
+            s51/later/answer_check.json
+            s51/later/target_metrics.json
+            s51/later/validation.json
+            s51/later/receipts.csv
