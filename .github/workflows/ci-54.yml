@@ -1,0 +1,63 @@
+name: ci-54
+on:
+  push:
+    branches: [ci48-neutral-run]
+    paths: [.github/workflows/ci-54.yml, experiments/db_c54.py]
+  workflow_dispatch:
+permissions: {contents: read}
+jobs:
+  cache-crossover:
+    name: Cold warm bypass / batches=${{ matrix.batches }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 70
+    strategy:
+      fail-fast: false
+      matrix:
+        batches: [1, 8]
+    env:
+      C53_BATCHES: ${{ matrix.batches }}
+      C52_LAYOUT: monthly
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lock source and preflight
+        run: |
+          set -euo pipefail
+          mkdir -p audit54
+          sha256sum experiments/db_c42.py experiments/db_c50.py experiments/db_c52.py experiments/db_c53.py experiments/db_c54.py > audit54/SOURCE_SHA256.txt
+          python3 -m py_compile experiments/db_c54.py
+          if grep -iE '(moon.?hwan|northwestern|@hotmail|@risuinstitute|password=|bearer [a-z0-9_-]+)' experiments/db_c54.py; then exit 1; fi
+          python3 experiments/db_c54.py --preflight
+      - name: Run immutable parts cache crossover
+        run: |
+          set -euo pipefail
+          PYTHONUNBUFFERED=1 python3 experiments/db_c54.py 2>&1 | tee audit54/progress.log
+      - name: Preserve execution evidence on pass or fail
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: c54-b${{ matrix.batches }}-cache-crossover
+          retention-days: 14
+          if-no-files-found: warn
+          path: |
+            audit54/
+            s54_batch${{ matrix.batches }}/PREREGISTERED.json
+            s54_batch${{ matrix.batches }}/SOURCE_IDENTITY.json
+            s54_batch${{ matrix.batches }}/calendar.json
+            s54_batch${{ matrix.batches }}/FINAL_STATUS.json
+            s54_batch${{ matrix.batches }}/SELECTED.json
+            s54_batch${{ matrix.batches }}/post_ingest/state.json
+            s54_batch${{ matrix.batches }}/post_ingest/frozen_physical.json
+            s54_batch${{ matrix.batches }}/post_ingest/profiles.json
+            s54_batch${{ matrix.batches }}/post_ingest/paired_contrasts.json
+            s54_batch${{ matrix.batches }}/post_ingest/history_decisions.json
+            s54_batch${{ matrix.batches }}/post_ingest/validation.json
+            s54_batch${{ matrix.batches }}/post_ingest/receipts.csv
+            s54_batch${{ matrix.batches }}/later/state.json
+            s54_batch${{ matrix.batches }}/later/frozen_physical.json
+            s54_batch${{ matrix.batches }}/later/profiles.json
+            s54_batch${{ matrix.batches }}/later/paired_contrasts.json
+            s54_batch${{ matrix.batches }}/later/history_decisions.json
+            s54_batch${{ matrix.batches }}/later/validation.json
+            s54_batch${{ matrix.batches }}/later/receipts.csv
+            s54_batch${{ matrix.batches }}/post_ingest/reset_changed_*.json
+            s54_batch${{ matrix.batches }}/later/reset_changed_*.json
