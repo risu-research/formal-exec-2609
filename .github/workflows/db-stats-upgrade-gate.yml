@@ -1,0 +1,42 @@
+name: SSB thirteen-query stats upgrade gates
+on:
+  push:
+    branches: [stage21-db-compat]
+    paths: [experiments/db_stats_upgrade_gate.py, .github/workflows/db-stats-upgrade-gate.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  upgrade-gate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare pinned SSB input
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq zstd
+          df -h .
+          free -h
+      - name: Run all 13 SSB queries with matched controls
+        run: |
+          set -o pipefail
+          PYTHONUNBUFFERED=1 python3 experiments/db_stats_upgrade_gate.py 2>&1 | tee stage25-run.log
+      - name: Save decisions and raw evidence (not 1.8GB native file)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage25-upgrade-gate-evidence
+          retention-days: 10
+          if-no-files-found: warn
+          path: |
+            stage25-run.log
+            s25/SOURCE_IDENTITY.json
+            s25/FINAL_STATUS.json
+            s25/decision_query_table.csv
+            s25/upgrade_gate_scenarios.csv
+            s25/break_even.json
+            s25/data-prep.stderr.txt
+            s25/26.7.1.1315/*
+            s25/26.8.1.2041/*
