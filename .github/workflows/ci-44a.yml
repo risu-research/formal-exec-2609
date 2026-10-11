@@ -1,0 +1,45 @@
+name: ci-44a
+on:
+  push:
+    branches: [stage39-independent-replication]
+    paths: [.github/workflows/ci-44a.yml]
+  workflow_dispatch:
+permissions: {contents: read}
+jobs:
+  benchmark:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 65
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare and identify runner
+        run: |
+          set -euo pipefail
+          mkdir -p c44a
+          uname -a > c44a/host.txt
+          lscpu | grep -E '(Model name|CPU\(s\))' >> c44a/host.txt || true
+          sha256sum experiments/db_c44_a.py >> c44a/host.txt
+          python3 -m py_compile experiments/db_c44_a.py
+          if ! command -v zstd >/dev/null; then sudo apt-get update -qq && sudo apt-get install -y -qq zstd; fi
+      - name: Run matched comparisons
+        run: |
+          set -euo pipefail
+          PYTHONUNBUFFERED=1 python3 experiments/db_c44_a.py 2>&1 | tee c44a/trace.log
+      - name: Preserve receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: c44a-raw
+          retention-days: 14
+          if-no-files-found: warn
+          path: |
+            c44a/
+            c44a/SOURCE_IDENTITY.json
+            c44a/FINAL_STATUS.json
+            c44a/partition_inventory.tsv
+            c44a/fixed/physical.json
+            c44a/verified/physical.json
+            c44a/answers.json
+            c44a/plans.json
+            c44a/medians.json
+            c44a/pairs.json
+            c44a/receipts.csv
