@@ -34,13 +34,15 @@ def main():
   for _ in range(45):
    if q("SELECT 1",check=False)["ok"]:break
    time.sleep(1)
-  q("CREATE TABLE probe (x UInt32,y UInt32,z String) ENGINE=MergeTree ORDER BY x SETTINGS min_bytes_for_wide_part=0")
-  q("SYSTEM STOP MERGES probe")
+  q("CREATE TABLE probe (x UInt32,y UInt32,z String) ENGINE=MergeTree ORDER BY x SETTINGS min_bytes_for_wide_part=0,max_bytes_to_merge_at_max_space_in_pool=0")
+  print("C43P_NO_BACKGROUND_MERGES_WITH_MUTATIONS_ALLOWED",flush=True)
   q("INSERT INTO probe SELECT number,toUInt32(number%41),toString(number) FROM numbers(160000) SETTINGS materialize_statistics_on_insert=0")
   baseline=sha("probe")
   checks={"version":q("SELECT version()"),"settings":q("SELECT name,value FROM system.settings WHERE name LIKE '%statistics%' ORDER BY name FORMAT TSV")}
   checks["before"]=baseline
+  print("C43P_START_MATERIALIZE",flush=True)
   checks["materialize"]=q("ALTER TABLE probe MATERIALIZE STATISTICS ALL SETTINGS mutations_sync=2",check=False)
+  print("C43P_FINISHED_MATERIALIZE",checks["materialize"]["ok"],checks["materialize"]["error"],flush=True)
   checks["after_materialize"]=sha("probe")
   checks["clear"]=q("ALTER TABLE probe CLEAR STATISTICS ALL",check=False)
   checks["after_clear"]=sha("probe")
