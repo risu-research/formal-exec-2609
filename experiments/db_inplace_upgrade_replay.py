@@ -50,7 +50,7 @@ def start(ver):
   if p.returncode==0:break
   time.sleep(1)
  else:raise RuntimeError("ClickHouse did not boot "+ver)
- actual=sql(CT,"SELECT version() FORMAT TSV").strip()
+ actual=run(["docker","exec",CT,"clickhouse-client","--query","SELECT version() FORMAT TSV"]).stdout.decode().strip()
  print("S30_STARTED "+json.dumps({"image":ver,"server_version":actual}),flush=True)
  if actual!=ver:raise RuntimeError(f"Wrong version {actual} != {ver}")
  return CT
