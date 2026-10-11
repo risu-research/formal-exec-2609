@@ -1,0 +1,40 @@
+name: Stage28 in-place MergeTree merge-state counterfactual
+on:
+  push:
+    branches: [stage27-part-count]
+    paths:
+      - experiments/db_merge_final_counterfactual.py
+      - .github/workflows/db-merge-final-counterfactual.yml
+  workflow_dispatch:
+permissions: {contents: read}
+jobs:
+  merge:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare and verify environment
+        run: |
+          df -h .
+          free -h
+          python3 -m py_compile experiments/db_merge_final_counterfactual.py
+          if ! command -v zstd >/dev/null; then sudo apt-get update -qq && sudo apt-get install -y -qq zstd; fi
+      - name: Matched before-and-after merge-state measurement
+        run: |
+          set -o pipefail
+          PYTHONUNBUFFERED=1 python3 experiments/db_merge_final_counterfactual.py 2>&1 | tee stage28-run.log
+      - name: Preserve results even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage28-merge-state-evidence
+          retention-days: 14
+          if-no-files-found: warn
+          path: |
+            stage28-run.log
+            s28/SOURCE_IDENTITY.json
+            s28/FINAL_STATUS.json
+            s28/parts_statistics_schema.tsv
+            s28/before/
+            s28/after/
+            s28/effects.csv
