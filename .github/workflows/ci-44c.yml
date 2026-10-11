@@ -1,0 +1,46 @@
+name: ci-44c
+on:
+  push:
+    branches: [stage39-independent-replication]
+    paths: [.github/workflows/ci-44c.yml]
+  workflow_dispatch:
+permissions: {contents: read}
+jobs:
+  bounded:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate source
+        run: |
+          set -euo pipefail
+          mkdir -p c44c
+          uname -a > c44c/host.txt
+          lscpu | grep -E '(Model name|CPU\(s\))' >> c44c/host.txt || true
+          df -h . >> c44c/host.txt
+          sha256sum experiments/db_c44_b.py experiments/db_tpch_join_boundary.py >> c44c/host.txt
+          python3 -m py_compile experiments/db_c44_b.py
+      - name: Run bounded normalized contrast
+        run: |
+          set -euo pipefail
+          PYTHONUNBUFFERED=1 python3 experiments/db_c44_b.py 2>&1 | tee c44c/trace.log
+      - name: Preserve all measurements
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: c44c-raw
+          retention-days: 14
+          if-no-files-found: warn
+          path: |
+            c44c/
+            c44b/FINAL_STATUS.json
+            c44b/settings.tsv
+            c44b/ingest.json
+            c44b/fixed/physical.json
+            c44b/verified/physical.json
+            c44b/answers.json
+            c44b/plans.json
+            c44b/receipts.csv
+            c44b/medians.json
+            c44b/upstream_tpch_*.sql
+            c44b/upstream_schema.sql
