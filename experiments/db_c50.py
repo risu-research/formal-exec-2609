@@ -80,7 +80,7 @@ GOLDEN_ANSWERS = {
   "8": "b480d3db660d64045a8b35adf974c36429b90929a83e191c0db31deb6b4cafb7",
   "9": "b0242ca170818735162c0ea18fa26d7a7bf44c3cddd009117ee44537f5d21998",
   "10": "72dcf540d01db608f34ca87fab3485a18dd64aa18abccaf09506dfb8afa14871",
-  "11": "c668e39656898b6c232b71c48a94f70d4e7b5605f8592c7b81b8e80f5241c5",
+  "11": "c668e39656898b6c232b71c48f4a94f70d4e7b5605f8592c7b81b8e80f5241c5",
   "12": "9c4ff6580251ffdda1c810bdfc0998072257881388dfbdfc1f557305cd6ff2c4",
   "13": "5de16226f8f1d5de7872cbe86b3339c2c3ffc9bab9fa4802f9ff062795cc3259"
 }
@@ -117,6 +117,8 @@ if __name__=='__main__':
         assert B.RUNS==6
         assert B.sql is original_sql
         assert len(GOLDEN_ANSWERS)==13
+        assert all(len(h)==64 and all(c in '0123456789abcdef' for c in h) for h in GOLDEN_ANSWERS.values())
+        assert GOLDEN_ANSWERS['11']=='c668e39656898b6c232b71c48f4a94f70d4e7b5605f8592c7b81b8e80f5241c5'
         print('C50_PREFLIGHT_OK',flush=True)
     else:
         B.main()
