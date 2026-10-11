@@ -133,7 +133,7 @@ def main():
   print("S28_SOURCE_PARTS "+q(ct,PARTS.format("raw_source")).strip(),flush=True)
   for t in ("holdout","merged"):
    q(ct,f"INSERT INTO ssb.{t} SELECT * FROM ssb.raw_source "
-     "SETTINGS materialize_statistics_on_insert=1,max_threads=1,max_insert_threads=1,max_memory_usage=9000000000",timeout=600)
+     "SETTINGS materialize_statistics_on_insert=1,max_threads=1,max_insert_threads=1,min_insert_block_size_rows=750152,min_insert_block_size_bytes=1,max_memory_usage=9000000000",timeout=600)
    print("S28_CREATED "+t+" "+q(ct,PARTS.format(t)).strip(),flush=True)
   save("parts_statistics_schema.tsv",q(ct,"SELECT name FROM system.columns WHERE database='system' AND table='parts' AND name LIKE '%stat%' FORMAT TSV"))
   pre=physical(ct,"before")
