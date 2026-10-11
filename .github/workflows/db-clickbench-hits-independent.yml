@@ -34,5 +34,7 @@ jobs:
             stage33p.log
             s33p/FINAL_STATUS.json
             s33p/medians.csv
+            s33p/fresh_attestation.json
+            s33p/attached_attestation.json
             s33p/fresh_receipts.csv
             s33p/attached_receipts.csv
