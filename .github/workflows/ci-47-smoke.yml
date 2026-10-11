@@ -1,0 +1,42 @@
+name: ci-47-smoke
+on:
+  push:
+    branches: [stage39-independent-replication]
+    paths: [.github/workflows/ci-47-smoke.yml]
+  workflow_dispatch:
+permissions: {contents: read}
+jobs:
+  preregistration:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify syntax, policy routing, Q5 controls, and manifest
+        run: |
+          set -euo pipefail
+          python3 -m py_compile experiments/db_c47.py
+          C47_CAP=300000 python3 experiments/db_c47.py --preflight
+          C47_CAP=1500000 python3 experiments/db_c47.py --preflight
+          python3 - <<'PY'
+          import json, pathlib
+          for cap in (300000,1500000):
+              r=pathlib.Path('c47_'+str(cap))
+              m=json.loads((r/'PREREGISTERED.json').read_text())
+              assert m['arms']==['prune','both','selective']
+              assert len(m['scenario_list'])==4
+              assert sum(t['no_q5'] for t in m['scenario_list'])==1
+              assert m['measured_rounds']==2
+              for entry in m['scenario_list']:
+                  assert (r/'traces'/ (entry['name']+'.json')).is_file()
+          print('C47_SMOKE_OK')
+          PY
+          if grep -iE '(moon.?hwan|northwestern|@hotmail|@risuinstitute|personal access token|password=|bearer [a-z0-9_-]+)' experiments/db_c47.py; then exit 1; fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: c47-preregistered
+          retention-days: 14
+          path: |
+            c47_300000/PREREGISTERED.json
+            c47_300000/traces/*.json
+            c47_1500000/PREREGISTERED.json
+            c47_1500000/traces/*.json
