@@ -4,6 +4,7 @@ on:
     branches: [stage21-db-compat]
     paths:
       - .github/workflows/db-sf1-rerun.yml
+      - experiments/db_sf1_probe.py
   workflow_dispatch:
 permissions:
   contents: read
