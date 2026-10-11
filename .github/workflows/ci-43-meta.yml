@@ -49,3 +49,5 @@ jobs:
             c43m/cleared/means.json
             c43m/rebuilt/receipts.csv
             c43m/rebuilt/means.json
+
+# batched verification implementation
