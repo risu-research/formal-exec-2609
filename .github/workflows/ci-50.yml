@@ -1,0 +1,51 @@
+name: ci-50
+on:
+  push:
+    branches: [ci48-neutral-run]
+    paths: [.github/workflows/ci-50.yml]
+  workflow_dispatch:
+permissions: {contents: read}
+jobs:
+  corrected-annual:
+    name: annual-layout-sql-integrity
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify corrected query integrity gate
+        run: |
+          set -euo pipefail
+          mkdir -p audit50
+          sha256sum experiments/db_c42.py experiments/db_c49.py experiments/db_c50.py > audit50/SOURCE_SHA256.txt
+          python3 -m py_compile experiments/db_c50.py
+          if grep -iE '(moon.?hwan|northwestern|@hotmail|@risuinstitute|password=|bearer [a-z0-9_-]+)' experiments/db_c50.py; then exit 1; fi
+          python3 experiments/db_c50.py --preflight
+      - name: Corrected annual storage experiment
+        run: |
+          set -euo pipefail
+          PYTHONUNBUFFERED=1 python3 experiments/db_c50.py 2>&1 | tee audit50/progress.log
+      - name: Preserve lean verification receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: c50-annual-corrected
+          retention-days: 14
+          if-no-files-found: warn
+          path: |
+            audit50/
+            s50/PREREGISTERED.json
+            s50/SOURCE_IDENTITY.json
+            s50/calendar.json
+            s50/settings.tsv
+            s50/FINAL_STATUS.json
+            s50/old_state/state.json
+            s50/post_ingest/state.json
+            s50/post_ingest/comparisons.json
+            s50/post_ingest/receipts.csv
+            s50/post_ingest/answers.json
+            s50/post_ingest/cross_run_answer_check.json
+            s50/later/state.json
+            s50/later/comparisons.json
+            s50/later/receipts.csv
+            s50/later/answers.json
+            s50/later/cross_run_answer_check.json
