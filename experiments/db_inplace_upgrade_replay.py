@@ -114,6 +114,14 @@ def establish(sqls,native):
  t0=time.monotonic()
  sql(CT,"OPTIMIZE TABLE ssb.single FINAL SETTINGS optimize_throw_if_noop=1",timeout=720)
  sql(CT,"SYSTEM STOP MERGES ssb.single")
+ # Persist merge freeze in table metadata across both server restarts.
+ # STOP MERGES alone does NOT survive a server restart.
+ for t in ("raw_source",)+STATES:
+  sql(CT,"ALTER TABLE ssb."+t+" MODIFY SETTING max_bytes_to_merge_at_max_space_in_pool=0")
+  detail=sql(CT,"SHOW CREATE TABLE ssb."+t)
+  if "max_bytes_to_merge_at_max_space_in_pool = 0" not in detail and "max_bytes_to_merge_at_max_space_in_pool=0" not in detail:
+   raise RuntimeError("Persistent merge freeze not recorded for "+t+": "+detail[-400:])
+ print("S30_PERSISTENT_MERGE_FREEZE_OK",flush=True)
  print("S30_FINAL_MERGE_SEC "+str(round(time.monotonic()-t0,3)),flush=True)
  p=physical()
  assert all(x["fingerprint"]==next(iter(p.values()))["fingerprint"] for x in p.values()),"Input mismatch"
