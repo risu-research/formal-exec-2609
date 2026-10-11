@@ -1,0 +1,36 @@
+name: ClickHouse optimizer CPU stack attribution
+on:
+  push:
+    branches: [stage21-db-compat]
+    paths: [experiments/db_optimizer_stacks.py, .github/workflows/db-optimizer-stacks.yml]
+  workflow_dispatch:
+permissions: {contents: read}
+jobs:
+  cpu-stacks:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 65
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install native data decompressor
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq zstd
+          df -h .
+      - name: Collect CPU sampling stacks for both engines
+        run: |
+          set -o pipefail
+          PYTHONUNBUFFERED=1 python3 experiments/db_optimizer_stacks.py 2>&1 | tee stage24-run.log
+      - name: Preserve symbolic CPU stack evidence, no native table
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage24-optimizer-stack-receipts
+          retention-days: 10
+          if-no-files-found: warn
+          path: |
+            stage24-run.log
+            s24/SOURCE_IDENTITY.json
+            s24/FINAL_STATUS.json
+            s24/data-prep.stderr.txt
+            s24/26.7.1.1315/*
+            s24/26.8.1.2041/*
