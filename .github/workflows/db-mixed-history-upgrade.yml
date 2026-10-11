@@ -2,47 +2,39 @@ name: Stage37 prospective mixed-history upgrade
 on:
   push:
     branches: [stage27-part-count]
-    paths:
-      - experiments/db_mixed_history_upgrade.py
-      - .github/workflows/db-mixed-history-upgrade.yml
+    paths: [experiments/db_mixed_history_upgrade.py, .github/workflows/db-mixed-history-upgrade.yml]
   workflow_dispatch:
 permissions: {contents: read}
 jobs:
   mixed_history:
     runs-on: ubuntu-24.04
-    timeout-minutes: 31
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-      - name: Validate source and environment
+      - name: Prepare
         run: |
           python3 -m py_compile experiments/db_mixed_history_upgrade.py
           df -h .
-          free -h
           if ! command -v zstd >/dev/null; then sudo apt-get update -qq && sudo apt-get install -y -qq zstd; fi
-      - name: Genuine 26.7 to 26.8 progressive mixed history
+      - name: Real mixed-history 26.7-to-26.8 replay
         run: |
           set -o pipefail
           PYTHONUNBUFFERED=1 python3 experiments/db_mixed_history_upgrade.py 2>&1 | tee stage37.log
-      - name: Persist all query receipts, SQL answers and part hashes
+      - name: Archive evidence even if trial fails
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: stage37-real-mixed-history-evidence
+          name: stage37-mixed-history-replay
           retention-days: 14
           if-no-files-found: warn
           path: |
             stage37.log
             s37/SOURCE_IDENTITY.json
-            s37/default_old.txt
-            s37/default_new.txt
-            s37/cohorts.json
             s37/FINAL_STATUS.json
-            s37/gates.csv
-            s37/perquery.csv
+            s37/gate_matrix.csv
             s37/all_medians.csv
-            s37/before_upgrade/
-            s37/after_upgrade/
-            s37/before_append_*/
-            s37/after_append_*/
-            s37/old_*/
-            s37/new_*/
+            s37/defaults_old.tsv
+            s37/defaults_new.tsv
+            s37/before/
+            s37/inherited/
+            s37/after/
