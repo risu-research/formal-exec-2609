@@ -44,7 +44,7 @@ def setup_source():
  for raw in re.split(r";",schema):
   cleaned="\n".join(s for s in raw.splitlines() if not s.lstrip().startswith("--")).strip()
   if not cleaned:continue
-  m=re.match(r"CREATE\s+TABLE\s+(\w+)\s*\((.*)\)\s*PRIMARY\s+KEY\s*\((.*?)\)\s*$",cleaned,re.S|re.I)
+  m=re.match(r"CREATE\s+TABLE\s+(\w+)\s*\((.*?)\)\s*PRIMARY\s+KEY\s*\((.*?)\)\s*$",cleaned,re.S|re.I)
   if m:defs[m.group(1)]=(m.group(2),m.group(3))
  for t in TABLES:
   if t not in defs:raise RuntimeError("Cannot parse official DDL for "+t)
