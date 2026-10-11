@@ -1,0 +1,35 @@
+name: reproducibility-source-snapshot
+on:
+  push:
+    branches: [stage39-independent-replication]
+    paths: [.github/workflows/ci-archive-repro-snapshot.yml]
+  workflow_dispatch:
+permissions: {contents: read}
+jobs:
+  archive:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Gather self-contained experiment source inventory
+        run: |
+          set -euo pipefail
+          mkdir -p reproducibility/experiments reproducibility/workflows
+          find experiments -maxdepth 1 -type f \( -name 'db_*.py' -o -name '*sigmetrics*.py' \) -exec cp {} reproducibility/experiments/ \;
+          find .github/workflows -maxdepth 1 -type f -name 'ci-*.yml' -exec cp {} reproducibility/workflows/ \;
+          ( cd reproducibility && find experiments workflows -type f -print0 | sort -z | xargs -0 sha256sum ) > reproducibility/SHA256SUMS.txt
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+          root=Path('reproducibility')
+          names=sorted(str(p.relative_to(root)) for p in root.rglob('*') if p.is_file())
+          (root/'FILE_INDEX.json').write_text(json.dumps({'files':names,'count':len(names)},indent=2)+'\n')
+          print('SOURCE_SNAPSHOT',len(names))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reproducibility-source
+          retention-days: 14
+          path: reproducibility/
