@@ -1,0 +1,43 @@
+name: Stage35 Hits target-aware upgrade certification
+on:
+  push:
+    branches: [stage27-part-count]
+    paths:
+      - experiments/db_target_aware_hits_gate.py
+      - .github/workflows/db-target-aware-hits-gate.yml
+  workflow_dispatch:
+permissions: {contents: read}
+jobs:
+  target_aware:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 28
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify analysis source and environment
+        run: |
+          python3 -m py_compile experiments/db_target_aware_hits_gate.py
+          df -h .
+          free -h
+          if ! command -v zstd >/dev/null; then sudo apt-get update -qq && sudo apt-get install -y -qq zstd; fi
+      - name: Compare target-aligned in-place upgrade versus mismatched rebuild
+        run: |
+          set -o pipefail
+          PYTHONUNBUFFERED=1 python3 experiments/db_target_aware_hits_gate.py 2>&1 | tee stage35.log
+      - name: Preserve original query receipts and gate evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage35-hits-target-aligned-replay
+          retention-days: 14
+          if-no-files-found: warn
+          path: |
+            stage35.log
+            s35/sources.json
+            s35/FINAL_STATUS.json
+            s35/gates.csv
+            s35/all_medians.csv
+            s35/old_fresh/
+            s35/old_attached/
+            s35/new_inherited/
+            s35/new_fresh/
+            s35/new_attached/
