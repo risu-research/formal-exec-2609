@@ -1,0 +1,35 @@
+name: ClickHouse statistics materialization control
+on:
+  push:
+    branches: [stage21-db-compat]
+    paths: [experiments/db_stats_materialization.py, .github/workflows/db-stats-materialization.yml]
+  workflow_dispatch:
+permissions: {contents: read}
+jobs:
+  materialization:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 85
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install zstd
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq zstd
+      - name: Compare statistics controls using same physical runner
+        run: |
+          set -o pipefail
+          PYTHONUNBUFFERED=1 python3 experiments/db_stats_materialization.py 2>&1 | tee stage24b-run.log
+      - name: Preserve all receipts except source table
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage24b-statistics-materialization-evidence
+          retention-days: 10
+          if-no-files-found: warn
+          path: |
+            stage24b-run.log
+            s24b/SOURCE_IDENTITY.json
+            s24b/FINAL_STATUS.json
+            s24b/data-prep.stderr.txt
+            s24b/26.7.1.1315/*
+            s24b/26.8.1.2041/*
