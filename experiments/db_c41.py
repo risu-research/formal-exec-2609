@@ -100,7 +100,7 @@ def main():
     all_results=[]
     try:
         S.start(S.NEW)
-        P.sql("CREATE DATABASE IF NOT EXISTS ssb")
+        S.run(["docker","exec",S.CT,"clickhouse-client","--query","CREATE DATABASE IF NOT EXISTS ssb"])
         cols=(R/"official/create/schema/lineorder_flat.columns").read_text()
         for t in ("raw","delta50")+TABLES:P.create(t,cols)
         with open(native,"rb") as f:
