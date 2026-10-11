@@ -9,8 +9,8 @@ import csv,hashlib,json,pathlib,random,statistics,time,subprocess
 import db_tpch_join_boundary as T
 R=pathlib.Path("c44b").resolve();R.mkdir(exist_ok=True)
 T.ROOT=R
-T.KEY_CAP=1500000
-T.REPS=5
+T.KEY_CAP=300000
+T.REPS=4
 T.WARMUPS=1
 TABLES=T.TABLES
 QUERIES=T.QUERIES
