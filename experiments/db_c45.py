@@ -178,7 +178,7 @@ def run_queries(sq,jq):
   tasks=preplanned[:]
   rng.shuffle(tasks)
   for typ,table,q in tasks:
-   cell=ARMS[:]
+   cell=list(ARMS)
    rng.shuffle(cell)
    for arm in cell:
     qid=f"c45_{len(records)}"
