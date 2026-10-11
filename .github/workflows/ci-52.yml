@@ -1,0 +1,60 @@
+name: ci-52
+on:
+  push:
+    branches: [ci48-neutral-run]
+    paths: [.github/workflows/ci-52.yml, experiments/db_c52.py]
+  workflow_dispatch:
+permissions: {contents: read}
+jobs:
+  high-cost-sql:
+    name: High cost SQL / ${{ matrix.layout }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 65
+    strategy:
+      fail-fast: false
+      matrix:
+        layout: [annual, monthly]
+    env:
+      C52_LAYOUT: ${{ matrix.layout }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fix experiment definitions and validate generic source
+        run: |
+          set -euo pipefail
+          mkdir -p audit52
+          sha256sum experiments/db_c42.py experiments/db_c50.py experiments/db_c52.py >audit52/SOURCE_SHA256.txt
+          python3 -m py_compile experiments/db_c52.py
+          if grep -iE '(moon.?hwan|northwestern|@hotmail|@risuinstitute|password=|bearer [a-z0-9_-]+)' experiments/db_c52.py; then exit 1; fi
+          python3 experiments/db_c52.py --preflight
+      - name: Execute natural analytic query workload
+        run: |
+          set -euo pipefail
+          PYTHONUNBUFFERED=1 python3 experiments/db_c52.py 2>&1 | tee audit52/progress.log
+      - name: Preserve all decision receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: c52-${{ matrix.layout }}-audit
+          retention-days: 14
+          if-no-files-found: warn
+          path: |
+            audit52/
+            s52_${{ matrix.layout }}/PREREGISTERED.json
+            s52_${{ matrix.layout }}/SOURCE_IDENTITY.json
+            s52_${{ matrix.layout }}/calendar.json
+            s52_${{ matrix.layout }}/settings.tsv
+            s52_${{ matrix.layout }}/FINAL_STATUS.json
+            s52_${{ matrix.layout }}/SELECTED.json
+            s52_${{ matrix.layout }}/old_state/state.json
+            s52_${{ matrix.layout }}/post_ingest/state.json
+            s52_${{ matrix.layout }}/post_ingest/original_answers_verified.json
+            s52_${{ matrix.layout }}/post_ingest/new_sql_answers.json
+            s52_${{ matrix.layout }}/post_ingest/results.json
+            s52_${{ matrix.layout }}/post_ingest/validation.json
+            s52_${{ matrix.layout }}/post_ingest/receipts.csv
+            s52_${{ matrix.layout }}/later/state.json
+            s52_${{ matrix.layout }}/later/original_answers_verified.json
+            s52_${{ matrix.layout }}/later/new_sql_answers.json
+            s52_${{ matrix.layout }}/later/results.json
+            s52_${{ matrix.layout }}/later/validation.json
+            s52_${{ matrix.layout }}/later/receipts.csv
