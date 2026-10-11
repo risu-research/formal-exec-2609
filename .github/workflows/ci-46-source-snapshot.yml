@@ -1,0 +1,26 @@
+name: ci-46-source-snapshot
+on:
+  push:
+    branches: [stage39-independent-replication]
+    paths: [.github/workflows/ci-46-source-snapshot.yml]
+  workflow_dispatch:
+permissions: {contents: read}
+jobs:
+  archive:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Preserve exact experiment source and provenance
+        run: |
+          set -euo pipefail
+          mkdir -p stage46-source
+          cp experiments/db_c46.py experiments/db_c45.py experiments/db_c42.py experiments/db_mixed_history_upgrade.py experiments/db_tpch_join_boundary.py experiments/db_inplace_upgrade_replay.py experiments/db_sf1_probe.py stage46-source/
+          cp .github/workflows/ci-46.yml stage46-source/
+          sha256sum stage46-source/* >stage46-source/SHA256SUMS.txt
+          echo "$GITHUB_SHA" >stage46-source/branch_commit.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: c46-source
+          retention-days: 14
+          path: stage46-source/
