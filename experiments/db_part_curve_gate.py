@@ -49,13 +49,12 @@ def insert_big(ct,dest,from_table):
 def quarter(k):
  return "%04d-%02d-01"%(1992+k//4,1+(k%4)*3)
 def middle(ct):
- for k in range(27):
-  a,b=quarter(k),quarter(k+1)
-  s=(f"INSERT INTO ssb.middle SELECT * FROM ssb.raw_source WHERE LO_ORDERDATE >= toDate('{a}') AND LO_ORDERDATE < toDate('{b}') "
-     "SETTINGS materialize_statistics_on_insert=1,max_threads=1,max_insert_threads=1,"
-     "min_insert_block_size_rows=750152,min_insert_block_size_bytes=1,max_memory_usage=9000000000")
-  q(ct,s,timeout=250)
-  if k%7==0:print("S29_MIDDLE_PROGRESS",VER,k+1,flush=True)
+ # Stage28 independently observed single INSERT creates 11 active parts.
+ # Reuse that verified path instead of 27 SELECTs producing 994 tiny parts.
+ q(ct,"INSERT INTO ssb.middle SELECT * FROM ssb.raw_source "
+   "SETTINGS materialize_statistics_on_insert=1,max_threads=1,"
+   "max_insert_threads=1,max_memory_usage=9000000000",timeout=580)
+ print("S29_MIDDLE_DIRECT "+json.dumps(physical(ct,"middle")),flush=True)
 def sqlfor(sql,t):
  assert "FROM lineorder_flat" in sql
  return sql.replace("FROM lineorder_flat","FROM "+t)
