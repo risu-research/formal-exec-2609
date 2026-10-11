@@ -1,0 +1,61 @@
+name: ci-42
+on:
+  push:
+    branches: [stage39-independent-replication]
+    paths:
+      - .github/workflows/ci-42.yml
+  workflow_dispatch:
+permissions: {contents: read}
+jobs:
+  c42:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Capture machine identity and preflight
+        run: |
+          set -euo pipefail
+          mkdir -p c42
+          {
+            echo "commit=$GITHUB_SHA"
+            date -u '+utc=%FT%TZ'
+            uname -a
+            lscpu | grep -E '(Model name|CPU\(s\)|Hypervisor vendor)' || true
+            nproc
+            free -h
+            df -h .
+            sha256sum experiments/db_c42.py
+          } > c42/host.txt
+          python3 -m py_compile experiments/db_c42.py
+          if ! command -v zstd >/dev/null; then sudo apt-get update -qq && sudo apt-get install -y -qq zstd; fi
+      - name: Execute original-date partition comparison
+        run: |
+          set -euo pipefail
+          PYTHONUNBUFFERED=1 python3 experiments/db_c42.py 2>&1 | tee c42/trace.log
+      - name: Preserve audit receipts on failure too
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: c42-run
+          if-no-files-found: warn
+          retention-days: 14
+          path: |
+            c42/
+            s42/SOURCE_IDENTITY.json
+            s42/calendar.json
+            s42/settings.tsv
+            s42/FINAL_STATUS.json
+            s42/old_state/state.json
+            s42/new_engine_before_writes/state.json
+            s42/post_ingest/state.json
+            s42/post_ingest_after_measure/state.json
+            s42/later/state.json
+            s42/later_after_measure/state.json
+            s42/old_engine/answers.json
+            s42/old_engine/receipts.csv
+            s42/post_ingest/answers.json
+            s42/post_ingest/receipts.csv
+            s42/post_ingest/comparisons.json
+            s42/later/answers.json
+            s42/later/receipts.csv
+            s42/later/comparisons.json
