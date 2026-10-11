@@ -55,3 +55,5 @@ jobs:
             s41/post/receipts.csv
             s41/post/answers.json
             s41/post_after_measure/physical.json
+
+# routine rerun after initialization correction
