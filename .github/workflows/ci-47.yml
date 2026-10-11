@@ -7,7 +7,7 @@ on:
 permissions: {contents: read}
 jobs:
   preregistered-policy-test:
-    name: prospective-\${{ matrix.cap }}
+    name: prospective-${{ matrix.cap }}
     runs-on: ubuntu-24.04
     timeout-minutes: 85
     strategy:
@@ -19,8 +19,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Verify source and preregistration without sensitive metadata
         env:
-          C47_CAP: \${{ matrix.cap }}
-          C46_CAP: \${{ matrix.cap }}
+          C47_CAP: ${{ matrix.cap }}
+          C46_CAP: ${{ matrix.cap }}
         run: |
           set -euo pipefail
           mkdir -p audit47
@@ -30,8 +30,8 @@ jobs:
           python3 experiments/db_c47.py --preflight
       - name: Measure frozen policy on novel paired traces
         env:
-          C47_CAP: \${{ matrix.cap }}
-          C46_CAP: \${{ matrix.cap }}
+          C47_CAP: ${{ matrix.cap }}
+          C46_CAP: ${{ matrix.cap }}
         run: |
           set -euo pipefail
           PYTHONUNBUFFERED=1 python3 experiments/db_c47.py 2>&1 | tee audit47/progress.log
@@ -39,25 +39,25 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: c47-\${{ matrix.cap }}
+          name: c47-${{ matrix.cap }}
           retention-days: 14
           if-no-files-found: warn
           path: |
             audit47/SOURCE_SHA256.txt
             audit47/progress.log
-            c47_\${{ matrix.cap }}/PREREGISTERED.json
-            c47_\${{ matrix.cap }}/traces/*.json
-            c47_\${{ matrix.cap }}/SOURCE_IDENTITY.json
-            c47_\${{ matrix.cap }}/ingest.json
-            c47_\${{ matrix.cap }}/fixed/physical.json
-            c47_\${{ matrix.cap }}/after_replay/physical.json
-            c47_\${{ matrix.cap }}/pre_upgrade/inherited_identity.json
-            c47_\${{ matrix.cap }}/post_upgrade/inherited_identity.json
-            c47_\${{ matrix.cap }}/answers.json
-            c47_\${{ matrix.cap }}/receipts.csv
-            c47_\${{ matrix.cap }}/stream_wall.json
-            c47_\${{ matrix.cap }}/stream_wall_partial.json
-            c47_\${{ matrix.cap }}/metrics.json
-            c47_\${{ matrix.cap }}/decision_matrix.json
-            c47_\${{ matrix.cap }}/FINAL_STATUS.json
-            c47_\${{ matrix.cap }}/upstream_tpch_q*.sql
+            c47_${{ matrix.cap }}/PREREGISTERED.json
+            c47_${{ matrix.cap }}/traces/*.json
+            c47_${{ matrix.cap }}/SOURCE_IDENTITY.json
+            c47_${{ matrix.cap }}/ingest.json
+            c47_${{ matrix.cap }}/fixed/physical.json
+            c47_${{ matrix.cap }}/after_replay/physical.json
+            c47_${{ matrix.cap }}/pre_upgrade/inherited_identity.json
+            c47_${{ matrix.cap }}/post_upgrade/inherited_identity.json
+            c47_${{ matrix.cap }}/answers.json
+            c47_${{ matrix.cap }}/receipts.csv
+            c47_${{ matrix.cap }}/stream_wall.json
+            c47_${{ matrix.cap }}/stream_wall_partial.json
+            c47_${{ matrix.cap }}/metrics.json
+            c47_${{ matrix.cap }}/decision_matrix.json
+            c47_${{ matrix.cap }}/FINAL_STATUS.json
+            c47_${{ matrix.cap }}/upstream_tpch_q*.sql
