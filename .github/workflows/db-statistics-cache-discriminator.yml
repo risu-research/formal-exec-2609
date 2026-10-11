@@ -1,0 +1,41 @@
+name: Stage31b statistics cache causal discriminator
+on:
+  push:
+    branches: [stage27-part-count]
+    paths: [experiments/db_statistics_cache_discriminator.py, .github/workflows/db-statistics-cache-discriminator.yml]
+  workflow_dispatch:
+permissions: {contents: read}
+jobs:
+  statistics_cache:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 21
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate preconditions
+        run: |
+          python3 -m py_compile experiments/db_statistics_cache_discriminator.py
+          df -h .
+          free -h
+          if ! command -v zstd >/dev/null; then sudo apt-get update -qq && sudo apt-get install -y -qq zstd; fi
+      - name: Query-level cache ON OFF before and after ATTACH
+        run: |
+          set -o pipefail
+          PYTHONUNBUFFERED=1 python3 experiments/db_statistics_cache_discriminator.py 2>&1 | tee stage31b.log
+      - name: Preserve all individual query receipts and physical proofs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage31b-statistics-cache-discriminator
+          retention-days: 14
+          if-no-files-found: warn
+          path: |
+            stage31b.log
+            s31b/SOURCE_IDENTITY.json
+            s31b/system_settings.tsv
+            s31b/FINAL_STATUS.json
+            s31b/medians_all.csv
+            s31b/fresh/
+            s31b/reattached/
+            s31b/restarted/
+            s31b/post_fresh/
+            s31b/post_reattached/
