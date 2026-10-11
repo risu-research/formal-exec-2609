@@ -61,7 +61,17 @@ def main():
   sources=[]
   for i in range(4):
    p=R/("part_"+str(i)+".zst")
-   urllib.request.urlretrieve("https://datasets.clickhouse.com/hits/native/hits_100m_obfuscated_"+str(i)+".native.zst",p)
+   candidates=["https://clickhouse-public-datasets.s3.amazonaws.com/hits/native/hits_100m_obfuscated_"+str(i)+".native.zst", "https://datasets.clickhouse.com/hits/native/hits_100m_obfuscated_"+str(i)+".native.zst"]
+   errors=[]
+   for url in candidates:
+    try:
+     urllib.request.urlretrieve(url,p)
+     print("S33P_SOURCE",url,flush=True)
+     break
+    except Exception as e:
+     errors.append(str(e))
+   else:
+    raise RuntimeError("All official Hits download hosts failed: "+repr(errors))
    sources.append({"part":i,"sha256":hashlib.sha256(p.read_bytes()).hexdigest(),"bytes":p.stat().st_size})
    dec=subprocess.Popen(["zstd","-dc",str(p)],stdout=subprocess.PIPE)
    r=subprocess.run(["docker","exec","-i",S.CT,"clickhouse-client","--query","INSERT INTO ssb.raw FORMAT Native"],stdin=dec.stdout,timeout=600)
