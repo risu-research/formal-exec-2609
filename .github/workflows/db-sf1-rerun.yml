@@ -1,0 +1,40 @@
+name: SSB SF1 paired engine profile
+on:
+  push:
+    branches: [stage21-db-compat]
+    paths:
+      - .github/workflows/db-sf1-rerun.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  profile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 95
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup bounded diagnostics
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq zstd
+          df -h .
+          free -h
+      - name: Execute fixed-input comparison
+        run: |
+          set -o pipefail
+          PYTHONUNBUFFERED=1 python3 experiments/db_sf1_probe.py 2>&1 | tee sf1-run.log
+      - name: Retain evidence (exclude downloaded and native data)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ssb-sf1-paired-receipts
+          retention-days: 7
+          if-no-files-found: warn
+          path: |
+            sf1-run.log
+            s22/SOURCE_IDENTITY.json
+            s22/STATUS.json
+            s22/data-prep.stderr.txt
+            s22/26.7.1.1315/*
+            s22/26.8.1.2041/*
