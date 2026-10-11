@@ -1,0 +1,54 @@
+name: Stage38 Natural Merge Recovery and Decision Lifetime
+on:
+  push:
+    branches: [stage27-part-count]
+    paths:
+      - experiments/db_natural_merge_decision_lifetime.py
+      - .github/workflows/db-natural-merge-decision-lifetime.yml
+  workflow_dispatch:
+permissions: {contents: read}
+jobs:
+  natural_merge:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 32
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check environment and syntax
+        run: |
+          python3 -m py_compile experiments/db_natural_merge_decision_lifetime.py
+          df -h .
+          free -h
+          if ! command -v zstd >/dev/null; then sudo apt-get update -qq && sudo apt-get install -y -qq zstd; fi
+      - name: Genuine normal background MergeTree merge lifecycle
+        run: |
+          set -o pipefail
+          PYTHONUNBUFFERED=1 python3 experiments/db_natural_merge_decision_lifetime.py 2>&1 | tee stage38.log
+      - name: Retain complete receipts, snapshots and merge trace on failure too
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage38-natural-merge-evidence
+          retention-days: 14
+          if-no-files-found: warn
+          path: |
+            stage38.log
+            s38/SOURCE_IDENTITY.json
+            s38/defaults_old.tsv
+            s38/defaults_new.tsv
+            s38/FINAL_STATUS.json
+            s38/decision_timeline.csv
+            s38/all_medians.csv
+            s38/merge_trace.json
+            s38/merge_part_log.jsonl
+            s38/before/
+            s38/before_upgrade/
+            s38/after_binary_upgrade/
+            s38/post_insert/
+            s38/post_insert_after_benchmark/
+            s38/midpoint/
+            s38/midpoint_after_benchmark/
+            s38/terminal/
+            s38/terminal_after_benchmark/
+            s38/after/
+            s38/mid/
+            s38/final/
