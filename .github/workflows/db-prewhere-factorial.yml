@@ -1,0 +1,42 @@
+name: SSB PREWHERE factorial 2x2
+on:
+  push:
+    branches: [stage21-db-compat]
+    paths:
+      - experiments/db_prewhere_factorial.py
+      - .github/workflows/db-prewhere-factorial.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  factorial:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 85
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare native input toolchain
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq zstd
+          df -h .
+          free -h
+      - name: Execute balanced PREWHERE ON OFF on both releases
+        run: |
+          set -o pipefail
+          PYTHONUNBUFFERED=1 python3 experiments/db_prewhere_factorial.py 2>&1 | tee stage23-run.log
+      - name: Save full audit without large source table
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage23-prewhere-factorial-evidence
+          retention-days: 10
+          if-no-files-found: warn
+          path: |
+            stage23-run.log
+            s23/SOURCE_IDENTITY.json
+            s23/FINAL_STATUS.json
+            s23/factorial_summary.csv
+            s23/interactions.csv
+            s23/data-prep.stderr.txt
+            s23/wave*/
