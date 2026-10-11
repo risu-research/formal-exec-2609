@@ -1,0 +1,29 @@
+name: ci-43-probe
+on:
+  push:
+    branches: [stage39-independent-replication]
+    paths: [.github/workflows/ci-43-probe.yml]
+  workflow_dispatch:
+permissions: {contents: read}
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate script
+        run: python3 -m py_compile experiments/db_c43_probe.py
+      - name: Run bounded test
+        run: |
+          set -euo pipefail
+          PYTHONUNBUFFERED=1 python3 experiments/db_c43_probe.py 2>&1 | tee c43p.log
+      - name: Preserve validation
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: c43-probe
+          retention-days: 14
+          if-no-files-found: warn
+          path: |
+            c43p.log
+            c43p/probe.json
