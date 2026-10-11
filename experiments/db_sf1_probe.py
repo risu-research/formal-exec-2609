@@ -34,6 +34,7 @@ def make_data():
  try:run(["docker","cp","s22_extract:/usr/bin/clickhouse",str(ROOT/"clickhouse")])
  finally:run(["docker","rm","-f","s22_extract"],check=False)
  os.chmod(ROOT/"clickhouse",0o755)
+ (ROOT/"official/prepare-data/data").mkdir(parents=True,exist_ok=True)
  env=dict(os.environ,CLICKHOUSE=str(ROOT/"clickhouse"),SSB_SCALE="1")
  proc=subprocess.run(["bash",str(ROOT/"official/prepare-data/ssb.sh")],env=env,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=1400)
  (ROOT/"data-prep.stderr.txt").write_bytes(proc.stderr)
