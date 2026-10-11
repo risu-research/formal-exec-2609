@@ -1,0 +1,85 @@
+name: ci-40
+on:
+  push:
+    branches: [stage39-independent-replication]
+    paths:
+      - .github/workflows/ci-40.yml
+  workflow_dispatch:
+permissions: {contents: read}
+jobs:
+  matched_sequence:
+    name: check-${{ matrix.order }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 48
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - order: ab
+            first: "37"
+            second: "38"
+          - order: ba
+            first: "38"
+            second: "37"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Record host identity and source
+        run: |
+          set -euo pipefail
+          mkdir -p c40
+          {
+            echo "pair=${{ matrix.order }}"
+            echo "commit=$GITHUB_SHA"
+            date -u '+utc=%FT%TZ'
+            uname -a
+            lscpu | grep -E '(Model name|CPU\(s\)|Hypervisor vendor)' || true
+            nproc
+            free -h
+            df -h .
+            sha256sum experiments/db_mixed_history_upgrade.py experiments/db_natural_merge_decision_lifetime.py
+          } | tee c40/host.txt
+          python3 -m py_compile experiments/db_mixed_history_upgrade.py experiments/db_natural_merge_decision_lifetime.py
+          if ! command -v zstd >/dev/null; then sudo apt-get update -qq && sudo apt-get install -y -qq zstd; fi
+      - name: Execute first unchanged program
+        env:
+          CASE: ${{ matrix.first }}
+        run: |
+          set -euo pipefail
+          echo "BEGIN $CASE $(date -u +%FT%TZ)" | tee -a c40/sequence.txt
+          PYTHONUNBUFFERED=1 python3 "experiments/db_$(if [ "$CASE" = 37 ]; then echo mixed_history_upgrade; else echo natural_merge_decision_lifetime; fi).py" 2>&1 | tee "c40/case_${CASE}_first.log"
+          echo "END $CASE $(date -u +%FT%TZ)" | tee -a c40/sequence.txt
+      - name: Execute second unchanged program
+        env:
+          CASE: ${{ matrix.second }}
+        run: |
+          set -euo pipefail
+          echo "BEGIN $CASE $(date -u +%FT%TZ)" | tee -a c40/sequence.txt
+          PYTHONUNBUFFERED=1 python3 "experiments/db_$(if [ "$CASE" = 37 ]; then echo mixed_history_upgrade; else echo natural_merge_decision_lifetime; fi).py" 2>&1 | tee "c40/case_${CASE}_second.log"
+          echo "END $CASE $(date -u +%FT%TZ)" | tee -a c40/sequence.txt
+      - name: Collect minimal audit receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: c40-pair-${{ matrix.order }}
+          if-no-files-found: warn
+          retention-days: 14
+          path: |
+            c40/
+            s37/SOURCE_IDENTITY.json
+            s37/FINAL_STATUS.json
+            s37/gate_matrix.csv
+            s37/all_medians.csv
+            s37/before/receipts.csv
+            s37/after/receipts.csv
+            s37/before/physical.json
+            s37/after/physical.json
+            s38/SOURCE_IDENTITY.json
+            s38/FINAL_STATUS.json
+            s38/decision_timeline.csv
+            s38/all_medians.csv
+            s38/before/receipts.csv
+            s38/after/receipts.csv
+            s38/mid/receipts.csv
+            s38/final/receipts.csv
+            s38/post_insert/physical.json
+            s38/terminal/physical.json
