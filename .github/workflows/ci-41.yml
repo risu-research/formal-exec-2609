@@ -1,0 +1,57 @@
+name: ci-41
+on:
+  push:
+    branches: [stage39-independent-replication]
+    paths:
+      - .github/workflows/ci-41.yml
+  workflow_dispatch:
+permissions: {contents: read}
+jobs:
+  c41:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - name: Identify runtime
+        run: |
+          set -euo pipefail
+          mkdir -p c41
+          {
+            echo "commit=$GITHUB_SHA"
+            date -u '+utc=%FT%TZ'
+            uname -a
+            lscpu | grep -E '(Model name|CPU\(s\)|Hypervisor vendor)' || true
+            nproc
+            free -h
+            df -h .
+            sha256sum experiments/db_c41.py
+          } > c41/host.txt
+          python3 -m py_compile experiments/db_c41.py
+          if ! command -v zstd >/dev/null; then sudo apt-get update -qq && sudo apt-get install -y -qq zstd; fi
+      - name: Execute paired comparison
+        run: |
+          set -euo pipefail
+          PYTHONUNBUFFERED=1 python3 experiments/db_c41.py 2>&1 | tee c41/trace.log
+      - name: Retain audited outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: c41-receipts
+          if-no-files-found: warn
+          retention-days: 14
+          path: |
+            c41/
+            s41/SOURCE_IDENTITY.json
+            s41/FINAL_STATUS.json
+            s41/settings.tsv
+            s41/merge_trace.json
+            s41/pre/physical.json
+            s41/pre/paired_results.json
+            s41/pre/receipts.csv
+            s41/pre/answers.json
+            s41/pre_after_measure/physical.json
+            s41/post/physical.json
+            s41/post/paired_results.json
+            s41/post/receipts.csv
+            s41/post/answers.json
+            s41/post_after_measure/physical.json
