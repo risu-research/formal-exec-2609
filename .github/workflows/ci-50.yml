@@ -2,7 +2,7 @@ name: ci-50
 on:
   push:
     branches: [ci48-neutral-run]
-    paths: [.github/workflows/ci-50.yml]
+    paths: [.github/workflows/ci-50.yml, experiments/db_c50.py]
   workflow_dispatch:
 permissions: {contents: read}
 jobs:
