@@ -44,7 +44,7 @@ def run_wave(wave,ver,native,sqls):
    if ready.returncode==0:break
    time.sleep(1)
   else:die("Server failed start "+ver)
-  output(ct,"CREATE DATABASE IF NOT EXISTS ssb")
+  base.run(["docker","exec",ct,"clickhouse-client","--query","CREATE DATABASE IF NOT EXISTS ssb"],timeout=80)
   columns=(ROOT/"official/create/schema/lineorder_flat.columns").read_text()
   ddl=(f"CREATE TABLE ssb.lineorder_flat ({columns}) ENGINE=MergeTree "
        "PARTITION BY toYYYYMM(LO_ORDERDATE) ORDER BY (LO_ORDERDATE, LO_ORDERKEY)")
