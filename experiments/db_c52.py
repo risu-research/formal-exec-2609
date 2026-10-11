@@ -76,8 +76,8 @@ SQL_CANDIDATES={
     FROM lineorder_flat
     WHERE LO_ORDERDATE >= toDate('1993-01-01')
       AND LO_ORDERDATE < toDate('1998-01-01')
-    GROUP BY C_CITY,S_CITY,P_BRAND1
-    ORDER BY C_CITY,S_CITY,P_BRAND1 LIMIT 300"""
+    GROUP BY C_CITY,S_CITY
+    ORDER BY C_CITY,S_CITY LIMIT 300"""
 }
 ARM_SETTINGS=(("cache_on",1,1),("cache_off",1,0),("stats_off",0,1))
 COMPARE=(("hist_vs_inherited","ref","hist"),
