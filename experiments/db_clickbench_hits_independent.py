@@ -46,6 +46,22 @@ def run_phase(tag,queries):
   w=csv.DictWriter(f,fieldnames=list(measurements[0]));w.writeheader();w.writerows(measurements)
  print("S33P_MEASURED",tag,len(measurements),flush=True)
  return measurements
+def attest(phase,sqls):
+ paths=sql("SELECT path FROM system.parts WHERE database='ssb' AND table='test' AND active ORDER BY name FORMAT TSV")
+ p=S.run(["docker","exec","-i",S.CT,"bash","-c",
+    'set -e; while IFS= read -r p; do sha256sum "${p%/}/checksums.txt"; done'],
+    inp=paths.encode(),timeout=140)
+ queries={}
+ for qi in INDEX:
+  # Offline logical result verification, not merely successful FORMAT Null execution.
+  result=sql(query(sqls[qi-1],"test",0,1)+" FORMAT TSV")
+  queries[str(qi)]=hashlib.sha256(result.encode()).hexdigest()
+ out={"parts":len(paths.splitlines()),"files_sha256":hashlib.sha256(p.stdout).hexdigest(),
+      "answers_sha256":queries,
+      "data_fp":sql("SELECT count(),sum(UserID),sum(WatchID),sum(CounterID) FROM ssb.test FORMAT TSV").strip()}
+ (R/(phase+"_attestation.json")).write_text(json.dumps(out,sort_keys=True,indent=2))
+ print("S33P_ATTEST",phase,out["parts"],out["files_sha256"],flush=True)
+ return out
 def main():
  R.mkdir(exist_ok=True)
  S.run(["docker","pull","clickhouse/clickhouse-server:"+S.NEW],timeout=480)
@@ -83,11 +99,14 @@ def main():
   n=sql("SELECT count(),sum(rows) FROM system.parts WHERE active AND database='ssb' AND table='test' FORMAT TSV").strip()
   print("S33P_PARTS",n,flush=True)
   if int(n.split()[0])<32:raise RuntimeError("Insufficient parts")
+  baseline=attest("fresh",sqls)
   a=run_phase("fresh",sqls)
   before=sql("SELECT name,rows,marks FROM system.parts WHERE active AND database='ssb' AND table='test' ORDER BY name FORMAT TSV")
   sql("DETACH TABLE ssb.test SYNC");sql("ATTACH TABLE ssb.test")
   after=sql("SELECT name,rows,marks FROM system.parts WHERE active AND database='ssb' AND table='test' ORDER BY name FORMAT TSV")
   if before!=after:raise RuntimeError("Physical parts changed")
+  afterattest=attest("attached",sqls)
+  if baseline!=afterattest:raise RuntimeError("Physical data or query answers changed on DETACH/ATTACH")
   b=run_phase("attached",sqls)
   with (R/"medians.csv").open("w",newline="") as f:
    w=csv.writer(f);w.writerow(["phase","q","policy","median_wall_ms","median_stats_load_ms"])
@@ -100,7 +119,7 @@ def main():
   (R/"FINAL_STATUS.json").write_text(json.dumps({"valid":True,"rows":int(n.split()[1]),
    "parts":int(n.split()[0]),"queries":len(INDEX),"query_indices":INDEX,
    "measured":len(a)+len(b),"official_shards":sources,
-   "control":"cache on/off and DETACH/ATTACH, same 26.8; nondefault materialized stats"},indent=2))
+   "same_answers_and_checksums":True,"control":"cache on/off and DETACH/ATTACH, same 26.8; nondefault materialized stats"},indent=2))
   print("S33P_SUCCESS",flush=True)
  finally:S.run(["docker","rm","-f",S.CT],check=False)
 if __name__=="__main__":main()
