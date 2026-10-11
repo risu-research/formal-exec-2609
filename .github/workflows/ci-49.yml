@@ -1,0 +1,35 @@
+name: ci-49
+on:
+  push:
+    branches: [ci48-neutral-run]
+    paths: [.github/workflows/ci-49.yml]
+  workflow_dispatch:
+permissions: {contents: read}
+jobs:
+  annual-control:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - name: Preflight
+        run: |
+          set -euo pipefail
+          mkdir -p audit49
+          sha256sum experiments/db_c49.py experiments/db_c42.py >audit49/SOURCE_SHA256.txt
+          python3 -m py_compile experiments/db_c49.py
+          if grep -iE '(moon.?hwan|northwestern|@hotmail|@risuinstitute|password=|bearer [a-z0-9_-]+)' experiments/db_c49.py; then exit 1; fi
+          python3 experiments/db_c49.py --preflight
+      - name: Run annual date-partition control
+        run: |
+          set -euo pipefail
+          PYTHONUNBUFFERED=1 python3 experiments/db_c49.py 2>&1 | tee audit49/progress.log
+      - name: Preserve verification receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: c49-annual-control
+          retention-days: 14
+          if-no-files-found: warn
+          path: |
+            audit49/
+            s49/
