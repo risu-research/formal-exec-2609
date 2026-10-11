@@ -1,0 +1,42 @@
+name: ci-43-diag
+on:
+  push:
+    branches: [stage39-independent-replication]
+    paths: [.github/workflows/ci-43-diag.yml]
+  workflow_dispatch:
+permissions: {contents: read}
+jobs:
+  settings:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify executable
+        run: |
+          python3 -m py_compile experiments/db_c43_diag.py
+          if ! command -v zstd >/dev/null; then sudo apt-get update -qq && sudo apt-get install -y -qq zstd; fi
+          sha256sum experiments/db_c43_diag.py
+          lscpu | grep -E '(Model name|CPU\(s\))' || true
+      - name: Compare settings and query behavior
+        run: |
+          set -euo pipefail
+          PYTHONUNBUFFERED=1 python3 experiments/db_c43_diag.py 2>&1 | tee c43d.log
+      - name: Retain original evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: c43-diag
+          retention-days: 14
+          if-no-files-found: warn
+          path: |
+            c43d.log
+            c43d/settings.tsv
+            c43d/SOURCE_IDENTITY.json
+            c43d/FINAL_STATUS.json
+            c43d/answers.json
+            c43d/plans.json
+            c43d/receipts.csv
+            c43d/medians.json
+            c43d/pre/physical.json
+            c43d/post/physical.json
+            c43d/after/physical.json
