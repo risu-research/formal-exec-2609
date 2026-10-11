@@ -1,0 +1,46 @@
+name: Stage27 SSB SF1 part-count counterfactual
+on:
+  push:
+    branches: [stage27-part-count]
+    paths:
+      - experiments/db_part_count_counterfactual.py
+      - .github/workflows/db-part-count-counterfactual.yml
+  workflow_dispatch:
+permissions: {contents: read}
+jobs:
+  part_count:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 32
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check resource limits
+        run: |
+          df -h .
+          free -h
+      - name: Prepare zstd only if needed
+        run: |
+          if ! command -v zstd >/dev/null; then sudo apt-get update -qq && sudo apt-get install -y -qq zstd; fi
+      - name: Run controlled single-release part-count experiment
+        run: |
+          set -o pipefail
+          PYTHONUNBUFFERED=1 python3 experiments/db_part_count_counterfactual.py 2>&1 | tee stage27-run.log
+      - name: Save raw query receipts, actual part counts and integrity checks
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage27-ssb-part-count
+          retention-days: 14
+          if-no-files-found: warn
+          path: |
+            stage27-run.log
+            s27/SOURCE_IDENTITY.json
+            s27/source_fingerprint.tsv
+            s27/version_settings.tsv
+            s27/answer_hashes.json
+            s27/FINAL_STATUS.json
+            s27/all_receipts.csv
+            s27/query_log.jsonl
+            s27/condition_medians.csv
+            s27/part_count_effects.csv
+            s27/pc_*/physical.json
+            s27/pc_*/q*.txt
