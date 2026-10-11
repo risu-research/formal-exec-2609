@@ -37,16 +37,21 @@ def snapshot(label):
    paths.append(key+"\t"+e[6])
   script=r'''set -euo pipefail
   while IFS="$(printf '\t')" read -r key directory; do
-    find "$directory" -maxdepth 1 -type f \( -name '*.bin' -o -name '*.cmrk2' -o -name '*.mrk2' -o -name '*.mrk3' -o -name '*.cidx' -o -name '*.idx' \) -print0 |
-    sort -z | while IFS= read -r -d '' file; do
-      h="$(sha256sum "$file" | cut -d' ' -f1)"
-      echo "$key|$(basename "$file")|$h"
-    done
-  done'''
+    find "$directory" -maxdepth 1 -type f \( -name '*.bin' -o -name '*.cmrk2' -o -name '*.mrk2' -o -name '*.mrk3' -o -name '*.cidx' -o -name '*.idx' \) -print0
+  done | sort -z | xargs -0 -r sha256sum'''
   proc=S.run(["docker","exec","-i",S.CT,"bash","-c",script],
             inp=("\n".join(paths)+"\n").encode(),timeout=320)
-  manifest=proc.stdout.decode()
-  if not manifest.strip():raise RuntimeError("Empty data-file manifest "+t)
+  loc={e[6].rstrip("/"):":".join(e[:6]) for e in pts}
+  entries=[]
+  for line in proc.stdout.decode().splitlines():
+   sha,full=line.split(None,1)
+   full=full.strip()
+   directory=str(pathlib.PurePosixPath(full).parent)
+   if directory not in loc:raise RuntimeError("Unexpected file path "+directory)
+   key=loc[directory]
+   entries.append(key+"|"+pathlib.PurePosixPath(full).name+"|"+sha)
+  manifest="\n".join(sorted(entries))+"\n"
+  if not entries:raise RuntimeError("Empty data-file manifest "+t)
   raw[t]={"parts":len(keys),"geometry":hashlib.sha256("\n".join(keys).encode()).hexdigest(),
           "data_manifest_sha256":hashlib.sha256(manifest.encode()).hexdigest(),
           "files":len(manifest.splitlines()),
