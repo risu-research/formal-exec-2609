@@ -77,8 +77,8 @@ def setup(sq,jq,defs,native):
  S.run(["docker","volume","rm",S.VOL],check=False)
  S.run(["docker","volume","create",S.VOL])
  S.start(S.OLD)
- sql("CREATE DATABASE IF NOT EXISTS ssb")
- sql("CREATE DATABASE IF NOT EXISTS tpch")
+ S.run(["docker","exec",S.CT,"clickhouse-client","--query","CREATE DATABASE IF NOT EXISTS ssb"])
+ S.run(["docker","exec",S.CT,"clickhouse-client","--query","CREATE DATABASE IF NOT EXISTS tpch"])
  cols=(R/"official/create/schema/lineorder_flat.columns").read_text()
  P.create("raw",cols)
  for layout,part in (("mo","toYYYYMM(LO_ORDERDATE)"),("yr","toYear(LO_ORDERDATE)")):
