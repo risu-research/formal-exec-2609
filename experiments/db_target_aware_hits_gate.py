@@ -52,16 +52,34 @@ def physical(phase,tables,prior=None):
  js(phase+"/physical.json",result)
  log("PHYSICAL",phase,json.dumps({t:v["parts"] for t,v in result.items()}))
  return result
+def correctness_sql(qi,base):
+ # Only audit query adds a deterministic tie-breaker.
+ # Original official SQL remains UNCHANGED in timed query executions.
+ tails={
+  38:("ORDER BY PageViews DESC LIMIT 10","ORDER BY PageViews DESC, Title ASC LIMIT 10"),
+  39:("ORDER BY PageViews DESC LIMIT 1000","ORDER BY PageViews DESC, URL ASC LIMIT 1000"),
+  40:("ORDER BY PageViews DESC LIMIT 1000","ORDER BY PageViews DESC, TraficSourceID ASC, SearchEngineID ASC, AdvEngineID ASC, Src ASC, Dst ASC LIMIT 1000")
+ }
+ if qi not in tails:return base
+ a,b=tails[qi]
+ if a not in base:raise RuntimeError("Cannot find expected official tie-sensitive query "+str(qi))
+ return base.replace(a,b)
+
 def measure(phase,tables,qs,answers):
+ signed={}
  for qi in H.INDEX:
   h=[]
+  base=correctness_sql(qi,qs[qi-1])
   for t in tables:
    for label,u,c in ARMS:
-    text=q(H.query(qs[qi-1],t,u,c)+" FORMAT TSV")
-    d=hashlib.sha256(text.encode()).hexdigest();h.append(d)
-    if qi in answers and answers[qi]!=d:raise RuntimeError("Answer changed q"+str(qi))
-  if len(set(h))!=1:raise RuntimeError("Result mismatch q"+str(qi))
+    text=q(H.query(base,t,u,c)+" FORMAT TSV")
+    d=hashlib.sha256(text.encode()).hexdigest()
+    h.append(d)
+    signed["q"+str(qi)+"_"+t+"_"+label]=d
+    if qi in answers and answers[qi]!=d:raise RuntimeError("Deterministic answer changed q"+str(qi))
+  if len(set(h))!=1:raise RuntimeError("Deterministic result mismatch q"+str(qi))
   answers[qi]=h[0]
+ js(phase+"/canonical_answer_hashes.json",{"tie_broken_for_validation_only":[38,39,40],"hashes":signed})
  rows=[]
  for rnd in range(-1,REPS):
   tasks=[(t,qi,lab,u,c) for t in tables for qi in H.INDEX for lab,u,c in ARMS]
