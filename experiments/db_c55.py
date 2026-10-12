@@ -113,6 +113,42 @@ def calculate(phase,rows,plan):
       "balanced_startup_order":True,"original_and_D4_outputs_equal":True,
       "part_manifests_unchanged":True}
 
+def persistently_freeze_background_merges(phase):
+    # Existing SYSTEM STOP MERGES is a transient process setting. It may not
+    # prevent a merge in the brief startup window after a process restart.
+    # A persistent per-table max_parts_to_merge_at_once=0 setting explicitly
+    # disables background MergeTree merge selection until this checkpoint ends.
+    # This is applied only AFTER natural ingestion and idle maintenance.
+    raw=B.sql("SELECT value FROM system.merge_tree_settings "
+              "WHERE name='max_parts_to_merge_at_once' FORMAT TSV").strip()
+    if not raw.isdigit():raise RuntimeError("MERGETREE_FREEZE_DEFAULT_UNKNOWN "+raw)
+    previous=int(raw)
+    if previous<=0:raise RuntimeError("MERGETREE_UNEXPECTED_DEFAULT "+raw)
+    before=F.physical()
+    for table in B.TABLES:
+        B.sql("ALTER TABLE ssb."+table+
+              " MODIFY SETTING max_parts_to_merge_at_once=0")
+    # No manual OPTIMIZE and no changes to data content or part inventory.
+    after=F.physical()
+    if before!=after:raise RuntimeError("MERGETREE_SETTING_ALTERED_PHYSICAL_PARTS")
+    count=int(B.sql("SELECT count() FROM system.merges "
+               "WHERE database='ssb' AND table IN ('ref','hist','legacy','fresh') "
+               "FORMAT TSV").strip())
+    if count:raise RuntimeError("ACTIVE_MERGE_AT_CHECKPOINT "+str(count))
+    metadata={'phase':phase,'merge_tree_setting':'max_parts_to_merge_at_once',
+        'checkpoint_value':0,'default_prior_value':previous,
+        'frozen_parts':after['parts'],'baseline_checksum':after['hash'],
+        'note':'persistent setting applied only during evaluation checkpoint'}
+    B.log("C55_MERGE_FREEZE",metadata)
+    return metadata
+
+def restore_background_merges(metadata):
+    old=metadata['default_prior_value']
+    for table in B.TABLES:
+        B.sql("ALTER TABLE ssb."+table+
+              " MODIFY SETTING max_parts_to_merge_at_once="+str(old))
+    B.log("C55_MERGE_RESTORED",old)
+
 def measure(phase,tables,qs,reps):
     if phase=="old_engine":
         B.dump(phase+"/skipped.json",{"purpose":"pre-upgrade table established"})
@@ -123,6 +159,7 @@ def measure(phase,tables,qs,reps):
     plan=schedule(phase)
     B.dump(phase+"/order_schedule.json",[
       {"cycle":i,"prime_arm":a,"table_order":list(p)} for i,(a,p) in enumerate(plan)])
+    freeze_meta=persistently_freeze_background_merges(phase)
     baseline=F.physical()
     B.dump(phase+"/physical_baseline.json",baseline)
     rows=[]
@@ -158,8 +195,10 @@ def measure(phase,tables,qs,reps):
         w.writeheader();w.writerows(rows)
     evidence=calculate(phase,rows,plan)
     if F.physical()!=baseline:raise RuntimeError("PHYSICAL_CHANGED_AFTER_MEASUREMENT")
+    evidence["persistent_merge_freeze"]=freeze_meta
     B.dump(phase+"/validation.json",evidence)
     B.log("C55_CHECKPOINT_PASSED",phase,json.dumps(evidence,sort_keys=True))
+    restore_background_merges(freeze_meta)
     return []
 
 B.measure=measure
@@ -174,6 +213,8 @@ if __name__=="__main__":
       "balance":"3 prime policies x six all table orders; followup cyclic order",
       "selection":"fixed before observing this study",
       "integrity":"official 13 SQL+new D4 answer hashes and active part checksums",
+      "frozen_checkpoint":"max_parts_to_merge_at_once=0 persisted as table setting during measurements, restored before next natural-aging stage",
+      "intervention_check":"active part inventory and checksums unchanged when table setting toggles",
       "control":"cache_off bypass and stats_off primes for general first-query cost",
       "exploratory_materiality":"absolute 30ms plus relative 10% unchanged",
       "limits":["server restart resets multiple caches, not statistics alone",
