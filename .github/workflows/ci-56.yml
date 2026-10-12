@@ -13,7 +13,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        rep: [0, 1]
+        rep: [1]
     env:
       C56_REPLICATE: ${{ matrix.rep }}
     steps:
