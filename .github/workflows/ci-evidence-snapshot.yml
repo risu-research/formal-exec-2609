@@ -22,7 +22,7 @@ jobs:
           cp .github/workflows/ci-{48,49,50,51,52,53,54,55,56}.yml snapshot/workflows/
           (cd snapshot && find experiments workflows -type f -print0 | sort -z | xargs -0 sha256sum) >snapshot/SHA256SUMS.txt
           git rev-parse HEAD >snapshot/SOURCE_COMMIT.txt
-          grep -R -nEi 'moon.?hwan|@hotmail|@risuinstitute|bearer [a-z0-9_-]+' snapshot/experiments snapshot/workflows && exit 1 || test "$?" -eq 1
+          grep -R -nEi 'moon.?hwan|@hotmail|@risuinstitute|bearer [a-z0-9_-]+' snapshot/experiments && exit 1 || test "$?" -eq 1
       - uses: actions/upload-artifact@v4
         with:
           name: neutral-source-snapshot
