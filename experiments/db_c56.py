@@ -42,11 +42,13 @@ def schedule(phase):
             assert sorted(positions)==[0,1,2]
     return plan
 
-def events(phase):
+def events(phase,cycle):
+    # Persist each cycle before the next restart; ClickHouse query_log entries
+    # may be lost if the server is killed before a later final flush.
     B.sql("SYSTEM FLUSH LOGS")
     raw=B.sql("SELECT query_id,query_duration_ms,read_rows,read_bytes,ProfileEvents "
         "FROM system.query_log WHERE type='QueryFinish' "
-        "AND startsWith(query_id,'c56_"+phase+"_') FORMAT JSONEachRow")
+        "AND startsWith(query_id,'c56_"+phase+"_"+str(cycle)+"_') FORMAT JSONEachRow")
     entries={}
     for line in raw.splitlines():
         if line:
@@ -169,6 +171,7 @@ def measure(phase,tables,qs,reps):
     baseline=F.physical()
     B.dump(phase+"/physical_baseline.json",baseline)
     rows=[]
+    lg={}
     for cycle,(arm,order) in enumerate(plan):
         F.reset(baseline,phase,cycle)
         # Three tables each receive the same first policy, across a balanced
@@ -184,8 +187,23 @@ def measure(phase,tables,qs,reps):
                     "table":table,"position":position,"query_id":query_id,
                     "setting":setting})
         if F.physical()!=baseline:raise RuntimeError("PHYSICAL_STATE_CHANGED_IN_CYCLE")
-        B.log("C56_CYCLE",phase,cycle+1,len(plan),arm,order)
-    lg=events(phase)
+        cycle_logs=events(phase,cycle)
+        expected={row["query_id"] for row in rows if row["cycle"]==cycle}
+        missing=sorted(expected-set(cycle_logs))
+        if missing:
+            B.dump(phase+"/missing_cycle_"+str(cycle)+".json",
+                {"cycle":cycle,"missing":missing,"retrieved":len(cycle_logs),
+                 "completed_cycles_before_this":cycle})
+            raise RuntimeError("MISSING_PER_CYCLE_RECEIPTS "+str(missing))
+        for qid in expected:
+            if qid in lg:raise RuntimeError("DUPLICATE_CYCLE_QUERY_ID "+qid)
+            lg[qid]=cycle_logs[qid]
+        B.dump(phase+"/recovered_receipt_journal.json",
+          {"cycles_complete":cycle+1,"expected_queries":len(lg),
+           "per_cycle_receipts":[{"qid":qid,
+                "duration_ms":int(lg[qid]["query_duration_ms"])}
+                for qid in sorted(lg)]})
+        B.log("C56_CYCLE",phase,cycle+1,len(plan),arm,order,"receipts",len(expected))
     for x in rows:
         if x["query_id"] not in lg:raise RuntimeError("MISSING_QUERY_RECEIPT "+x["query_id"])
         r=lg[x["query_id"]]
@@ -217,6 +235,7 @@ if __name__=="__main__":
       "tables":list(TABLES),
       "cycles_initial":9,"cycles_followup":0,"replicate":REPLICATE,
       "design_change":"two independent 9-cycle balanced blocks, opposite cyclic permutations",
+      "log_recovery":"per-cycle query_log flush and durable receipt journal before every restart",
       "balance":"each independent runner gets 3 primer policies x 3 cyclic Latin orders; 2nd runner uses complementary reversals",
       "selection":"fixed before observing this study",
       "integrity":"official 13 SQL+new D4 answer hashes and active part checksums",
