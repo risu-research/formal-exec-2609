@@ -106,10 +106,31 @@ done | sort -z | xargs -0 -r sha256sum"""
             "logical_fp":P.fp(t)}
 
 def stats_mutation(command,label):
-    C.sql(command)
-    pending=int(C.sql("SELECT count() FROM system.mutations WHERE database='ssb' "
-                      "AND table='fresh' AND is_done=0 FORMAT TSV").strip())
-    if pending:raise RuntimeError("Unfinished statistics mutation "+label)
+    # MergeTree mutations must be allowed to run. The preceding query phase
+    # is frozen by SYSTEM STOP MERGES; reopen only the treated table here.
+    # Its table-level max_bytes_to_merge_at_max_space_in_pool remains zero,
+    # preventing ordinary background coalescing during this intervention.
+    print("C59_INTERVENTION_UNFREEZE",label,flush=True)
+    C.resume(["fresh"])
+    try:
+        submitted=time.monotonic()
+        print("C59_INTERVENTION_BEGIN",label,flush=True)
+        C.sql(command)
+        print("C59_INTERVENTION_RETURNED",label,round(time.monotonic()-submitted,2),flush=True)
+        deadline=time.monotonic()+180
+        while True:
+            raw=C.sql("SELECT count(), countIf(latest_fail_reason != '') "
+                      "FROM system.mutations WHERE database='ssb' "
+                      "AND table='fresh' AND is_done=0 FORMAT TSV").strip()
+            pending,errors=map(int,raw.split("\\t"))
+            print("C59_INTERVENTION_PROGRESS",label,"pending",pending,"errors",errors,flush=True)
+            if errors:raise RuntimeError("Background mutation reported an error "+label)
+            if pending==0:break
+            if time.monotonic()>deadline:raise RuntimeError("Statistics mutation did not drain "+label)
+            time.sleep(5)
+    finally:
+        C.stop(["fresh"])
+        print("C59_INTERVENTION_REFROZEN",label,flush=True)
 
 def confirm_data_identity(reference,phase):
     current=data_file_identity("fresh")
