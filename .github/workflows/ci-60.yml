@@ -1,0 +1,49 @@
+name: ci-60
+on:
+  push:
+    branches: [ci60-isolated-run]
+    paths: [experiments/db_c60.py, .github/workflows/ci-60.yml]
+  workflow_dispatch:
+permissions: {contents: read}
+jobs:
+  reset-comparison:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 58
+    strategy:
+      fail-fast: false
+      matrix:
+        block: [a, b]
+    env:
+      RUN_GROUP: ${{ matrix.block }}
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Preflight
+        run: |
+          set -euo pipefail
+          python3 -m py_compile experiments/db_c42.py experiments/db_c60.py
+          if grep -iE '(moon.?hwan|northwestern|@hotmail|@risuinstitute|sigmod|risu institute|submission)' experiments/db_c60.py; then exit 1; fi
+          sha256sum experiments/db_c42.py experiments/db_c60.py > SOURCE_SHA256.txt
+      - name: Execute controlled series
+        run: |
+          set -o pipefail
+          python3 experiments/db_c60.py 2>&1 | tee progress.log
+      - name: Retain verification receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci60-${{ matrix.block }}
+          retention-days: 14
+          if-no-files-found: warn
+          path: |
+            SOURCE_SHA256.txt
+            progress.log
+            c60/PRESPECIFICATION.json
+            c60/DECISIONS.json
+            c60/REVERSAL_GATES.json
+            c60/FINAL_STATUS.json
+            c60/identity/
+            c60/*/snapshot.json
+            c60/*/state.json
+            c60/*/answers.json
+            c60/*/receipts.csv
