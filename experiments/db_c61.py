@@ -232,7 +232,7 @@ def extract():
               "FROM system.query_log WHERE type='QueryFinish' AND startsWith(query_id,'c61_target_') "
               "FORMAT JSONEachRow")
     (R/"target_query_log.jsonl").write_text(raw)
-    combined=oldraw.rstrip("\\n")+"\\n"+raw
+    combined=oldraw.rstrip("\n")+"\n"+raw
     (R/"query_log.jsonl").write_text(combined)
     events={}
     for line in combined.splitlines():

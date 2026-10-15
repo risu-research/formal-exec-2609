@@ -43,6 +43,8 @@ jobs:
             c61/FINAL_STATUS.json
             c61/receipts.csv
             c61/query_log.jsonl
+            c61/old_query_log.jsonl
+            c61/target_query_log.jsonl
             c61/ANSWER_HASHES.json
             c61/schedule/
             c61/old_before/
