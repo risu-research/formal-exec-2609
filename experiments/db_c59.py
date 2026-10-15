@@ -122,7 +122,7 @@ def stats_mutation(command,label):
             raw=C.sql("SELECT count(), countIf(latest_fail_reason != '') "
                       "FROM system.mutations WHERE database='ssb' "
                       "AND table='fresh' AND is_done=0 FORMAT TSV").strip()
-            pending,errors=map(int,raw.split("\\t"))
+            pending,errors=map(int,raw.split(chr(9)))
             print("C59_INTERVENTION_PROGRESS",label,"pending",pending,"errors",errors,flush=True)
             if errors:raise RuntimeError("Background mutation reported an error "+label)
             if pending==0:break
