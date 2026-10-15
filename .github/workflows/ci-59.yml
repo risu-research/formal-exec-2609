@@ -1,0 +1,50 @@
+name: ci-59
+on:
+  push:
+    branches: [ci59-neutral-run]
+    paths: [.github/workflows/ci-59.yml, experiments/db_c59.py]
+  workflow_dispatch:
+permissions: {contents: read}
+jobs:
+  controlled-state-replay:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 58
+    strategy:
+      fail-fast: false
+      matrix:
+        run_group: [a, b]
+    env:
+      RUN_GROUP: ${{ matrix.run_group }}
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate controlled treatment source
+        run: |
+          set -euo pipefail
+          python3 -m py_compile experiments/db_c42.py experiments/db_c59.py
+          if grep -iE '(moon.?hwan|northwestern|@hotmail|@risuinstitute|sigmod|risu institute|patent bar|submission)' experiments/db_c59.py; then exit 1; fi
+          sha256sum experiments/db_c42.py experiments/db_c59.py > SOURCE_SHA256.txt
+      - name: Run state intervention
+        run: |
+          set -o pipefail
+          python3 experiments/db_c59.py 2>&1 | tee progress.log
+      - name: Archive raw evidence without source data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci59-${{ matrix.run_group }}
+          retention-days: 14
+          if-no-files-found: warn
+          path: |
+            SOURCE_SHA256.txt
+            progress.log
+            c59/PRESPECIFICATION.json
+            c59/DECISIONS.json
+            c59/REVERSAL_GATES.json
+            c59/FINAL_STATUS.json
+            c59/identity/
+            c59/*/snapshot.json
+            c59/*/state.json
+            c59/*/answers.json
+            c59/*/receipts.csv
+            c59/*/query_log.jsonl
