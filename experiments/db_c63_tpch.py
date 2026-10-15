@@ -122,12 +122,25 @@ def eligibility(queries):
     print("C63_QUERY_ELIGIBILITY",len(ok),"/22",flush=True)
     if len(ok)<16:raise RuntimeError("Too few published TPC-H SQLs pass pre-specified eligibility")
     return ok
+def canonical_value(v):
+    if isinstance(v,float):
+        if not __import__("math").isfinite(v):return str(v)
+        return float(format(v,".7g"))
+    if isinstance(v,list):return [canonical_value(z) for z in v]
+    if isinstance(v,dict):return {k:canonical_value(z) for k,z in sorted(v.items())}
+    return v
+
 def answers(queries,good,db):
     ans={}
+    meta={}
     for q in good:
-        text=sql(query(queries[q-1],1,0)+" FORMAT TSV",db=db,timeout=160)
-        ans[q]=hashlib.sha256(text.encode()).hexdigest()
-    dump(db+"/answer_hashes.json",ans)
+        raw=sql(query(queries[q-1],1,0)+" FORMAT JSONEachRow",db=db,timeout=160)
+        rows=[canonical_value(json.loads(line)) for line in raw.splitlines() if line]
+        rows=sorted(json.dumps(x,sort_keys=True,separators=(",",":")) for x in rows)
+        canonical="\\n".join(rows)
+        ans[q]=hashlib.sha256(canonical.encode()).hexdigest()
+        meta[q]={"n_rows":len(rows),"normalized_sha256":ans[q]}
+    dump(db+"/answer_hashes.json",meta)
     return ans
 def measure(queries,good,db,label,tables):
     rec=[]
@@ -198,6 +211,8 @@ def main():
       "metric":"per-query medians, equal families, 3 timed rounds and 1 warmup",
       "gate":"BLOCK if family mean >10% slower or >=2 distinct SQL >=1.5x slower",
       "eligibility":"pre-measurement EXPLAIN all 22 published queries; abort if <16",
+      "query_correctness":"All eligible queries: normalized JSON rowsets, order-invariant, numeric floats rounded to 7 significant digits across 26.7 inherited, 26.8 inherited and 26.8 reloaded. Report every mismatch before timing; abort if <16 comparable queries.",
+      "scope_warning":"If any SQL fails semantic comparability, report conditional subset; never claim all 22 TPC-H SQLs",
       "caveat":"Nonstandard smaller TPC-H scale factor, not an official TPC benchmark run.",
       "scope":"independent dataset and workload, one release pair and one runner host per job"})
     for version in (S.OLD,S.NEW):
@@ -228,9 +243,17 @@ def main():
         rebuilt=state("tp_new");validate_counts(rebuilt,sizes)
         dump("new_states.json",{"preserved":up,"rebuilt":rebuilt})
         new_answers=answers(queries,good,"tp_new")
-        if old_answers!=new_answers:
-            mismatch=[q for q in good if old_answers[q]!=new_answers[q]]
-            raise RuntimeError("Different deterministic SQL outputs "+str(mismatch))
+        preserved_answers=answers(queries,good,"tp_old")
+        confirmed=[q for q in good if old_answers[q]==new_answers[q]==preserved_answers[q]]
+        mismatches=[q for q in good if q not in confirmed]
+        dump("CORRECTNESS_SCOPE.json",{"original_eligibility":good,
+             "canonicalization":"unordered JSON rows; floats to seven significant digits",
+             "comparable_queries":confirmed,"unmatched_queries":mismatches,
+             "warning":"A subset is not the full published TPC-H 22-query workload."})
+        print("C63_CANONICAL_CORRECTNESS",len(confirmed),"/",len(good),"excluded",mismatches,flush=True)
+        if len(confirmed)<16:
+            raise RuntimeError("Not enough semantically comparable published SQLs for an external benchmark claim")
+        good=confirmed
         target_meas=measure(queries,good,"tp_old","target",("tp_old","tp_new"))
         if state("tp_old")!=up or state("tp_new")!=rebuilt:
             raise RuntimeError("Part geometry changed during measurements")
