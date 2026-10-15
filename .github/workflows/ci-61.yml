@@ -1,0 +1,53 @@
+name: ci-61
+on:
+  push:
+    branches: [ci61-access-probe]
+    paths: [experiments/db_c61.py, .github/workflows/ci-61.yml]
+  workflow_dispatch:
+permissions: {contents: read}
+jobs:
+  sql-first-warm:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 95
+    strategy:
+      fail-fast: false
+      matrix:
+        block: [a, b]
+    env:
+      RUN_GROUP: ${{ matrix.block }}
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Preflight
+        run: |
+          set -euo pipefail
+          python3 -m py_compile experiments/db_c42.py experiments/db_c61.py
+          sha256sum experiments/db_c42.py experiments/db_c61.py > SOURCE_SHA256.txt
+      - name: Execute isolated access sequence
+        run: |
+          set -o pipefail
+          python3 experiments/db_c61.py 2>&1 | tee progress.log
+      - name: Store raw receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci61-${{ matrix.block }}
+          retention-days: 14
+          if-no-files-found: warn
+          path: |
+            SOURCE_SHA256.txt
+            progress.log
+            c61/PREREGISTRATION.json
+            c61/DECISIONS.json
+            c61/PER_QUERY.json
+            c61/FINAL_STATUS.json
+            c61/receipts.csv
+            c61/query_log.jsonl
+            c61/ANSWER_HASHES.json
+            c61/schedule/
+            c61/old_before/
+            c61/old_after/
+            c61/before_rebuild/
+            c61/target_before/
+            c61/target_after/
+            c61/SOURCE_IDENTITY.json
