@@ -203,14 +203,39 @@ def sample_phase(phase,version,tables,queries,policy,blocks):
             "warm_sampling":"second-later and third-later invocation"})
         print("C61_BLOCK",phase,policy,block,len(schedule),flush=True)
 
-def extract():
+def capture_old_log():
+    """Durably collect all 26.7 query receipts BEFORE the 26.8 upgrade."""
     C.sql("SYSTEM FLUSH LOGS")
     raw=C.sql("SELECT query_id,query_duration_ms,read_rows,read_bytes,ProfileEvents "
-              "FROM system.query_log WHERE type='QueryFinish' AND startsWith(query_id,'c61_') "
+              "FROM system.query_log WHERE type='QueryFinish' AND startsWith(query_id,'c61_old_') "
               "FORMAT JSONEachRow")
-    (R/"query_log.jsonl").write_text(raw)
+    records=[json.loads(line) for line in raw.splitlines() if line]
+    expected=sum(1 for z in PROBES if z["phase"]=="old")
+    ids=[z["query_id"] for z in records]
+    if len(records)!=expected or len(set(ids))!=expected:
+        raise RuntimeError(f"Old-version receipts incomplete before upgrade: {len(records)}/{expected}")
+    if any(not qid.startswith("c61_old_") for qid in ids):
+        raise RuntimeError("Old receipt phase collision")
+    (R/"old_query_log.jsonl").write_text(raw)
+    print("C61_OLD_LOG_SAVED",len(records),flush=True)
+
+def extract():
+    if not (R/"old_query_log.jsonl").exists():
+        raise RuntimeError("Old-phase receipts missing; abort without verdict")
+    oldraw=(R/"old_query_log.jsonl").read_text()
+    oldlines=[json.loads(x) for x in oldraw.splitlines() if x]
+    expected_old=sum(1 for r in PROBES if r["phase"]=="old")
+    if len(oldlines)!=expected_old:
+        raise RuntimeError("Old query receipts corrupt")
+    C.sql("SYSTEM FLUSH LOGS")
+    raw=C.sql("SELECT query_id,query_duration_ms,read_rows,read_bytes,ProfileEvents "
+              "FROM system.query_log WHERE type='QueryFinish' AND startsWith(query_id,'c61_target_') "
+              "FORMAT JSONEachRow")
+    (R/"target_query_log.jsonl").write_text(raw)
+    combined=oldraw.rstrip("\\n")+"\\n"+raw
+    (R/"query_log.jsonl").write_text(combined)
     events={}
-    for line in raw.splitlines():
+    for line in combined.splitlines():
         if line:
             x=json.loads(line)
             if x["query_id"] in events:raise RuntimeError("Duplicate query ID")
@@ -314,6 +339,8 @@ def main():
         "gating":"family-weighted mean >10% slowdown OR >=2 SQL with >=1.5x slowdown",
         "randomization":"fixed shuffled query order per block; target data path order alternates",
         "exclusions":"no posthoc query, threshold or settings changes",
+        "receipt_capture":"26.7 logs flushed and saved before version change; 26.8 logs after target measurement",
+        "analysis_preserved":"same SQL permutations, restarts, repetitions and gates as initial C61",
         "limitations":["OS page cache not flushed","metadata queries and dataset building may warm OS cache",
           "warm queries necessarily executed after first","first includes restart and plan-init effects",
           "replicates within a single hosted runner are not independent machines"]})
@@ -344,6 +371,7 @@ def main():
             C.sql(f"ALTER TABLE ssb.{table} MODIFY SETTING max_bytes_to_merge_at_max_space_in_pool=0")
         old_before=snapshot("old_before",cutoff,["ref"])
         sample_phase("old",S.OLD,("ref",),qs,"stats_on",BLOCKS)
+        capture_old_log()
         old_after=snapshot("old_after",cutoff,["ref"])
         if old_before["parts"]["ref"]!=old_after["parts"]["ref"] or old_before["part_checksums"]!=old_after["part_checksums"]:
             raise RuntimeError("Old physical inventory drift")
