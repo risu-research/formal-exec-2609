@@ -2,7 +2,7 @@ name: ci-70-matched-parts
 on:
   push:
     branches: [ci70-part-normalization]
-    paths: [experiments/db_c70_matched.py, .github/workflows/ci-69-geometry.yml]
+    paths: [experiments/db_c70_matched.py, .github/workflows/ci-70-matched.yml]
   workflow_dispatch:
 permissions: {contents: read}
 jobs:
