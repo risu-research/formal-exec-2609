@@ -16,6 +16,8 @@ jobs:
         group: [a, b, c]
     env:
       C69_RESTART: ${{ matrix.restart }}
+      C68_RESTART: ${{ matrix.restart }}
+      C68_REPS: "4"
       RUN_GROUP: ${{ matrix.group }}
       PYTHONUNBUFFERED: "1"
     steps:
