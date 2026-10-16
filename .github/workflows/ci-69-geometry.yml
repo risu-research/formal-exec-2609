@@ -1,0 +1,55 @@
+name: ci-69-geometry-control
+on:
+  push:
+    branches: [ci69-geometry-matched-batch]
+    paths: [experiments/db_c69_geometry.py, .github/workflows/ci-69-geometry.yml]
+  workflow_dispatch:
+permissions: {contents: read}
+jobs:
+  batched-controls:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 110
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [a, b, c]
+    env:
+      C69_RESTART: "0"
+      C68_RESTART: "0"
+      C68_REPS: "4"
+      RUN_GROUP: ${{ matrix.group }}
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check source and record hashes
+        run: |
+          set -euo pipefail
+          python3 -m py_compile experiments/db_c69_geometry.py experiments/db_c68_http_client.py experiments/db_c42.py experiments/db_mixed_history_upgrade.py
+          sha256sum experiments/db_c69_geometry.py experiments/db_c68_http_client.py experiments/db_c42.py > SOURCE_SHA256.txt
+      - name: Execute batch geometry control
+        run: |
+          set -o pipefail
+          python3 experiments/db_c69_geometry.py 2>&1 | tee progress.log
+      - name: Archive raw evidence on success or failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: c69g-${{ matrix.group }}
+          retention-days: 14
+          if-no-files-found: warn
+          path: |
+            SOURCE_SHA256.txt
+            progress.log
+            c69geometry/PRESPECIFICATION.json
+            c69geometry/SOURCE_IDENTITY.json
+            c69geometry/month_plan.json
+            c69geometry/decision_matrix.csv
+            c69geometry/FINAL_STATUS.json
+            c69geometry/before_version_restart/
+            c69geometry/old_sham_before/
+            c69geometry/old_sham/
+            c69geometry/old_sham_after/
+            c69geometry/target_before_rebuild/
+            c69geometry/target_before_measure/
+            c69geometry/target/
+            c69geometry/target_after_measure/
