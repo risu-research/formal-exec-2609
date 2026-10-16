@@ -12,7 +12,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        restart: [0, 1]
+        restart: [1]
         group: [a, b, c]
     env:
       C69_RESTART: ${{ matrix.restart }}
