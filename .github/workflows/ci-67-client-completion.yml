@@ -1,0 +1,58 @@
+name: ci-67-client-completion
+on:
+  push:
+    branches: [ci67-client-completion-contrast]
+    paths: [experiments/db_c67_client_completion.py, .github/workflows/ci-67-client-completion.yml]
+  workflow_dispatch:
+permissions: {contents: read}
+jobs:
+  client-completion:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        restart: [0, 1]
+        group: [a, b]
+    env:
+      C67_RESTART: ${{ matrix.restart }}
+      C67_REPS: "6"
+      RUN_GROUP: ${{ matrix.group }}
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check source syntax
+        run: |
+          set -euo pipefail
+          python3 -m py_compile experiments/db_c67_client_completion.py experiments/db_c42.py experiments/db_sf1_probe.py
+          sha256sum experiments/db_c67_client_completion.py experiments/db_c42.py experiments/db_sf1_probe.py > SOURCE_SHA256.txt
+      - name: Run paired full-return and Null experiments
+        run: |
+          set -o pipefail
+          python3 experiments/db_c67_client_completion.py 2>&1 | tee progress.log
+      - name: Archive controls and query receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: c67-r${{ matrix.restart }}-${{ matrix.group }}
+          retention-days: 14
+          if-no-files-found: warn
+          path: |
+            SOURCE_SHA256.txt
+            progress.log
+            c67/PRESPECIFICATION.json
+            c67/CLIENT_COMPARISONS.json
+            c67/FINAL_STATUS.json
+            c67/SOURCE_IDENTITY.json
+            c67/calendar.json
+            c67/old_initial/
+            c67/old_initial_after_measure/
+            c67/old_sham/
+            c67/old_sham_before/
+            c67/old_sham_after/
+            c67/target_before_rebuild/
+            c67/target_before_measure/
+            c67/target/
+            c67/target_after_measure/
+            c67/identity/
+            c67/official/queries/ssb.sql
