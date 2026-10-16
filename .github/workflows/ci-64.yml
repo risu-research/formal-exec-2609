@@ -1,0 +1,58 @@
+name: ci-64
+on:
+  push:
+    branches: [ci64-prechange-control]
+    paths: [experiments/db_c64.py, .github/workflows/ci-64.yml]
+  workflow_dispatch:
+permissions: {contents: read}
+jobs:
+  release-boundary-control:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix:
+        run_group: [a, b, c]
+    env:
+      RUN_GROUP: ${{ matrix.run_group }}
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Preflight
+        run: |
+          set -euo pipefail
+          python3 -m py_compile experiments/db_c42.py experiments/db_c64.py
+          docker manifest inspect clickhouse/clickhouse-server:26.6.1.1193 > /dev/null
+          docker manifest inspect clickhouse/clickhouse-server:26.7.1.1315 > /dev/null
+          sha256sum experiments/db_c42.py experiments/db_c58.py experiments/db_c64.py > SOURCE_SHA256.txt
+      - name: Run fixed release transition control
+        run: |
+          set -o pipefail
+          python3 experiments/db_c64.py 2>&1 | tee progress.log
+      - name: Preserve raw evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci64-${{ matrix.run_group }}
+          retention-days: 14
+          if-no-files-found: warn
+          path: |
+            SOURCE_SHA256.txt
+            progress.log
+            c64/PRESPECIFICATION.json
+            c64/DECISIONS.json
+            c64/FINAL_STATUS.json
+            c64/old_settings.json
+            c64/target_settings.json
+            c64/old_initial/
+            c64/old_initial_after_measure/
+            c64/old_sham/
+            c64/old_sham_before/
+            c64/old_sham_after/
+            c64/target_before_rebuild/
+            c64/target_before_measure/
+            c64/target/
+            c64/target_after_measure/
+            c64/calendar.json
+            c64/SOURCE_IDENTITY.json
+            c64/official/queries/ssb.sql
