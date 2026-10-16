@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""C69 prespecified mixed-age deployment-path evaluation.
+"""C69 prespecified mixed-age deployment-path evaluation, primary five paths.
 
 All datasets hold the exact same SF1 logical rows. Four monthly partition
 fractions are replaced after the 26.7 -> 26.8 upgrade; a fifth condition
-keeps only preserved parts. The 50% prior-version replacement control
-separates reconstruction from the engine used for reconstruction.
+keeps only preserved parts. A planned 26.7 partial-rebuild control was
+excluded before timing because its physical part state changed on restart.
 Full HTTP TSV completion is primary, server QueryFinish is diagnostic.
 This is controlled scenario evidence, not production prevalence.
 """
@@ -39,7 +39,7 @@ if E.RESTART_FLAG not in ("0","1"):
 E.RESTART_PHASES=E.RESTART_FLAG=="1"
 GROUP=os.environ.get("RUN_GROUP","unknown")
 T=(("retained",0),("age25",25),("age50",50),("age75",75),
-   ("rebuilt",100),("age50_old",50))
+   ("rebuilt",100))
 NAMES=tuple(t for t,_ in T)
 ARMS=("cache_on","cache_off","stats_off")
 FAMILIES=(range(1,4),range(4,7),range(7,11),range(11,14))
@@ -269,7 +269,7 @@ def run():
         "sql_population":"all 13 SSB SQL, no outcome-driven query selection",
         "versions":[S.OLD,S.NEW],
         "states":[{"name":n,"planned_pct":p} for n,p in T],
-        "old_rebuild_control":"age50_old, replaced at 26.7; same months as age50",
+        "old_rebuild_control":"deferred to separate validation; unstable across sham server restart",
         "monthly_selector":"SHA-256 seed c69-fixed-month-order, nearest row fraction",
         "primary":"complete HTTP TSV response, use_statistics_cache=1",
         "other_receipts":["server query_duration_ms","Null result","cache bypass","statistics off"],
@@ -304,9 +304,6 @@ def run():
         raw.unlink()
         month_rows,selected=months_and_cutoffs()
         create_data_tables(cols)
-        # Before upgrade, only the old-version 50% reconstruction control is
-        # replaced, while future new-version treatments remain old-built.
-        replace_months("age50_old",selected[50],0)
         baseline=census("before_version_restart",selected)
         E.shutdown()
         S.start(S.OLD)
