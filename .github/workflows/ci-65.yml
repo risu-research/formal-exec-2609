@@ -1,0 +1,56 @@
+name: ci-65
+on:
+  push:
+    branches: [ci65-same-version-placebo]
+    paths: [experiments/db_c65.py, .github/workflows/ci-65.yml]
+  workflow_dispatch:
+permissions: {contents: read}
+jobs:
+  placebo-construction:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 85
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [a, b]
+    env:
+      RUN_GROUP: ${{ matrix.group }}
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Preflight
+        run: |
+          set -euo pipefail
+          python3 -m py_compile experiments/db_c65.py experiments/db_c42.py
+          sha256sum experiments/db_c65.py experiments/db_c42.py > SOURCE_SHA256.txt
+      - name: Execute same-version placebo and upgrade
+        run: |
+          set -o pipefail
+          python3 experiments/db_c65.py 2>&1 | tee progress.log
+      - name: Save all records
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci65-${{ matrix.group }}
+          retention-days: 14
+          if-no-files-found: warn
+          path: |
+            SOURCE_SHA256.txt
+            progress.log
+            c65/PRESPECIFICATION.json
+            c65/CONTROL_CONTRASTS.json
+            c65/DECISIONS.json
+            c65/FINAL_STATUS.json
+            c65/old_replica_balance.json
+            c65/old_initial/
+            c65/old_initial_after_measure/
+            c65/old_sham/
+            c65/old_sham_before/
+            c65/old_sham_after/
+            c65/target_before_rebuild/
+            c65/target_before_measure/
+            c65/target/
+            c65/target_after_measure/
+            c65/calendar.json
+            c65/SOURCE_IDENTITY.json
+            c65/official/queries/ssb.sql
