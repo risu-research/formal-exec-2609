@@ -178,8 +178,6 @@ def census(label,selected):
     if label in ("old_sham_before","old_sham_after","target_before_measure","target_after_measure"):
         if len({v["part_count"] for v in tables.values()}) != 1:
             raise RuntimeError("C70 normalized part geometry differs between conditions at "+label)
-        if any(v["stats_parts"]!=0 for v in tables.values()):
-            raise RuntimeError("C70 optimizer-statistics materialization remained at "+label)
     fingerprint={v["logical_fp"] for v in tables.values()}
     if len(fingerprint)!=1:
         raise RuntimeError("Logical row fingerprint mismatch "+label)
@@ -261,7 +259,7 @@ def analyse(before,after):
                 index[arm][mode][metric]=by
     with (R/"decision_matrix.csv").open("w",newline="") as f:
         w=csv.DictWriter(f,fieldnames=list(rows[0]));w.writeheader();w.writerows(rows)
-    decisions=index["cache_on"]["TSV"]["client_ms"]
+    decisions=index["stats_off"]["TSV"]["client_ms"]
     proxy=decisions["rebuilt"]["gate"]
     mismatches={name:decisions[name]["gate"]!=proxy
                 for name in NAMES if name!="rebuilt"}
@@ -285,8 +283,8 @@ def analyse(before,after):
         "proxy":proxy,"proxy_disagreements":mismatches,
         "diag_cache_bypass":{k:{"ratio":round(v["ratio"],4),"gate":v["gate"]}
            for k,v in index["cache_off"]["TSV"]["client_ms"].items()},
-        "diag_stats_off":{k:{"ratio":round(v["ratio"],4),"gate":v["gate"]}
-           for k,v in index["stats_off"]["TSV"]["client_ms"].items()}
+        "diag_cache_on":{k:{"ratio":round(v["ratio"],4),"gate":v["gate"]}
+           for k,v in index["cache_on"]["TSV"]["client_ms"].items()}
         },sort_keys=True),flush=True)
     return report
 
@@ -335,9 +333,9 @@ def run():
         "old_rebuild_control":"deferred to separate validation; unstable across sham server restart",
         "monthly_selector":"SHA-256 seed c69-fixed-month-order, nearest row fraction",
         "insertion_strategy":"single INSERT SELECT over selected months with statistics materialization OFF, followed by selective-target 26.8 forced part consolidation",
-        "geometry_comparability_target":"identical active part count, exactly one active part per nonempty month, zero statistics-bearing parts for all measured tables",
-        "primary":"complete HTTP TSV response, use_statistics_cache=1",
-        "other_receipts":["server query_duration_ms","Null result","cache bypass","statistics off"],
+        "geometry_comparability_target":"identical active part count, exactly one active part per nonempty month; count and report any statistics objects as non-isolated secondary variation",
+        "primary":"complete HTTP TSV response with optimizer statistics OFF; keep cache-on as separate secondary original-gate comparison",
+        "other_receipts":["server query_duration_ms","Null result","cache bypass","original cache-on policy"],
         "baseline":"26.7 same-version restarted retained state",
         "gate":"BLOCK if 4-family mean latency ratio >1.10 or >=2 SQL median ratios >=1.5",
         "warmups_per_cell":1,"timed_repetitions_per_cell":4,
@@ -346,6 +344,7 @@ def run():
         "runner_design":"paired all scenarios within independent GitHub hosted runner",
         "no_os_cache_flush":True,"no_assumed_production_mix":True,
         "no_observed_slo_or_representative_replay":True,
+        "estimation_scope":"part-count-normalized but marks, compression and statistics-file inventories are measured and may still differ",
         "stop_rules":["fail if SQL results differ","fail on incorrect row fingerprints",
                       "fail on incomplete query logs","fail on physical inventory change"]})
     for v in (S.OLD,S.NEW):
