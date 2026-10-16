@@ -322,7 +322,12 @@ def run():
             if t not in ("retained","age50_old"):
                 replace_months(t,selected[frac],1)
         if E.RESTART_PHASES:
-            E.reset_engine_cache("mixed_age")
+            # The imported C68 reset helper freezes C68-only table names.
+            # C69 must freeze all five actual tables after every process restart.
+            E.shutdown()
+            S.start(S.NEW)
+            C.stop(NAMES)
+            print("C69_RESTART_REFROZEN",list(NAMES),flush=True)
         before=census("target_before_measure",selected)
         E.client_measure("target",NAMES,qs,4)
         after=census("target_after_measure",selected)
