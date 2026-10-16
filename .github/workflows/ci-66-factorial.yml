@@ -1,0 +1,46 @@
+name: ci-66-factorial
+on:
+  push:
+    branches: [ci66-preparation-factorial]
+    paths:
+      - experiments/db_c66_factorial.py
+      - .github/workflows/ci-66-factorial.yml
+  workflow_dispatch:
+permissions: {contents: read}
+jobs:
+  preparation-factorial:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        restart: [0, 1]
+        repetitions: [4, 6]
+        group: [a, b]
+    env:
+      C66_RESTART: ${{ matrix.restart }}
+      C66_TARGET_REPS: ${{ matrix.repetitions }}
+      RUN_GROUP: ${{ matrix.group }}
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate frozen source and design
+        run: |
+          set -euo pipefail
+          python3 -m py_compile experiments/db_c66_factorial.py experiments/db_c42.py experiments/db_c60.py
+          sha256sum experiments/db_c66_factorial.py experiments/db_c42.py experiments/db_c60.py > SOURCE_SHA256.txt
+      - name: Execute factorial condition
+        run: |
+          set -o pipefail
+          python3 experiments/db_c66_factorial.py 2>&1 | tee progress.log
+      - name: Archive evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: c66-r${{ matrix.restart }}-n${{ matrix.repetitions }}-${{ matrix.group }}
+          retention-days: 14
+          if-no-files-found: warn
+          path: |
+            SOURCE_SHA256.txt
+            progress.log
+            c66/
