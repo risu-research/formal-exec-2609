@@ -262,6 +262,40 @@ def analyse(before,after):
         },sort_keys=True),flush=True)
     return report
 
+def wait_restarted_cleanup():
+    """Wait for transient post-restart active-part entries to disappear.
+
+    In prior invalidated C69 restart runs, the fully replaced table temporarily
+    showed about one additional part per pre-upgrade part, each without a
+    statistics.packed marker. Counts returned to the rebuilt statistics-part
+    count after several minutes. Require an observed clean state, then an
+    additional stability window. Never alter or discard a measured outcome.
+    """
+    start=time.monotonic()
+    stable=0
+    previous=None
+    iteration=0
+    while time.monotonic()-start<1200:
+        iteration+=1
+        C.stop(NAMES)
+        state=C.partmap("restarted_cleanup_"+str(iteration),("rebuilt",),202001)["rebuilt"]
+        n,stat,rows=state["parts"],state["stats_parts"],state["rows"]
+        ok=(n==stat and rows==ROW_TARGET and n>=100)
+        if ok and previous==n:
+            stable+=1
+        else:
+            stable=0
+        print("C69_RESTART_CLEANUP_WAIT",json.dumps({"seconds":round(time.monotonic()-start,1),
+              "parts":n,"statistics_parts":stat,"rows":rows,"equal":ok,
+              "stable_intervals":stable},sort_keys=True),flush=True)
+        if stable>=2:
+            C.stop(NAMES)
+            print("C69_RESTART_CLEANUP_CONFIRMED",n,flush=True)
+            return
+        previous=n if ok else None
+        time.sleep(45)
+    raise RuntimeError("C69 post-restart cleanup did not stabilize in 20 min")
+
 def run():
     dump("PRESPECIFICATION.json",{
         "study":"C69 fixed-logical-data mixed-age deployment-path audit",
@@ -328,6 +362,7 @@ def run():
             S.start(S.NEW)
             C.stop(NAMES)
             print("C69_RESTART_REFROZEN",list(NAMES),flush=True)
+            wait_restarted_cleanup()
         before=census("target_before_measure",selected)
         E.client_measure("target",NAMES,qs,4)
         after=census("target_after_measure",selected)
