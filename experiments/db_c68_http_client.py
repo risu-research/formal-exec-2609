@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-"""C67 full-response client wall compared with server timings.
+"""C68 full-response HTTP client wall compared with server timings.
 
 Full TSV response verified bytewise against expected answer; two workers per
-restart condition, 6 repetitions per SQL and output mode. The client is
-executed via Docker on the runner, not over a production network.
+restart condition, 6 repetitions per SQL and output mode. HTTP uses a restricted read-only account on Docker bridge, not a WAN path.
 """
-import csv, hashlib, json, pathlib, statistics, sys, time, os, random, urllib.request, urllib.error
+import csv, hashlib, json, pathlib, statistics, sys, time, os, random, urllib.request, urllib.error, secrets
 import db_c42 as C
 
 S=C.S
@@ -175,6 +174,8 @@ def prepare_target(label):
         print("C68_RESET_SKIPPED",label,flush=True)
 
 
+HTTP_BENCH_KEY=None
+
 def client_measure(phase,tables,queries,nreps):
     """Server query durations and runner-side complete-response wall times."""
     expected={};digest={}
@@ -191,18 +192,32 @@ def client_measure(phase,tables,queries,nreps):
     save(phase+"/answer_sizes.json",{
         f"{q}/{t}/{a}":{"sha256":hashlib.sha256(b).hexdigest(),"bytes":len(b)}
         for (q,t,a),b in expected.items()})
+    # No externally exposed host port. Use an ephemeral SQL-only user with a
+    # process-local random password and make all HTTP requests on Docker bridge.
+    global HTTP_BENCH_KEY
+    if HTTP_BENCH_KEY is None:
+        HTTP_BENCH_KEY=secrets.token_urlsafe(21)
+    C.sql("CREATE USER IF NOT EXISTS c68_http_read "
+          "IDENTIFIED WITH sha256_password BY '"+HTTP_BENCH_KEY+"'")
+    C.sql("GRANT SELECT ON ssb.* TO c68_http_read")
     bridge_ip=S.run(["docker","inspect","-f",
               "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}",
               S.CT],timeout=40).stdout.decode().strip()
     if not bridge_ip or ":" in bridge_ip:raise RuntimeError("No IPv4 Docker bridge address")
     root_url=f"http://{bridge_ip}:8123/"
+    opener=urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    request_headers={"X-ClickHouse-User":"c68_http_read",
+                     "X-ClickHouse-Key":HTTP_BENCH_KEY}
     try:
         ping=urllib.request.Request(root_url+"?database=ssb",
-             data=b"SELECT 1 FORMAT TSV",method="POST")
-        with urllib.request.urlopen(ping,timeout=20) as response:
+             data=b"SELECT 1 FORMAT TSV",headers=request_headers,method="POST")
+        with opener.open(ping,timeout=20) as response:
             if response.read()!=b"1\n":raise RuntimeError("HTTP endpoint incorrect")
+    except urllib.error.HTTPError as e:
+        raise RuntimeError("HTTP access check failed: "+str(e.code)+": "+
+                           e.read()[-180:].decode(errors="replace")) from e
     except Exception as e:
-        raise RuntimeError("ClickHouse HTTP endpoint not accessible via Docker bridge") from e
+        raise RuntimeError("ClickHouse HTTP endpoint not reachable via Docker bridge") from e
     print("C68_HTTP_TRANSPORT_OK",phase,flush=True)
     rows=[]
     for rnd in range(-1,nreps):
@@ -220,10 +235,10 @@ def client_measure(phase,tables,queries,nreps):
                         sql=P.qstr(queries[qi-1],t,u,cache)
                         body=(sql+" FORMAT "+mode).encode()
                         req=urllib.request.Request(root_url+"?database=ssb&query_id="+qid,
-                                                   data=body,method="POST")
+                                                   data=body,headers=request_headers,method="POST")
                         start=time.monotonic_ns()
                         try:
-                            with urllib.request.urlopen(req,timeout=500) as response:
+                            with opener.open(req,timeout=500) as response:
                                 data=response.read()
                         except urllib.error.HTTPError as err:
                             raise RuntimeError(f"HTTP SQL failed {phase} {qid}: "
