@@ -277,7 +277,7 @@ def compact_after_measure(t):
     query(f"ALTER TABLE ssb.{t} MODIFY SETTING max_bytes_to_merge_at_max_space_in_pool=0")
     raw=query("SELECT partition,count() FROM system.parts WHERE active AND database='ssb' "
               f"AND table='{t}' GROUP BY partition ORDER BY partition FORMAT TSV")
-    groups=[(a,int(b)) for line in raw.splitlines() for a,b in [line.split("\\t")]]
+    groups=[(a,int(b)) for line in raw.splitlines() for a,b in [line.split("\t")]]
     if len(groups)!=80 or any(n!=1 for _,n in groups):
         raise RuntimeError("C71 normalization failed "+t+" "+repr(groups))
     print("C71_NORMALIZED",t,len(groups),flush=True)
