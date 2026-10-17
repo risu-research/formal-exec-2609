@@ -19,6 +19,8 @@ jobs:
           cp experiments/db_c69_mixed_age.py experiments/db_c69_geometry.py experiments/db_c71_paired.py experiments/db_c68_http_client.py experiments/db_c42.py experiments/db_mixed_history_upgrade.py experiments/db_inplace_upgrade_replay.py experiments/db_sf1_probe.py export/
           git fetch -q --no-tags origin a5783ac9d5ed40859fb3a7a4c2c32f354e0c9ac7
           git show a5783ac9d5ed40859fb3a7a4c2c32f354e0c9ac7:experiments/db_c70_matched.py > export/db_c70_matched.py
+          git fetch -q --no-tags origin 86971b1c9f5a7b61eaf28abb0cd36fc26e333cfb
+          git show 86971b1c9f5a7b61eaf28abb0cd36fc26e333cfb:experiments/db_c69_mixed_age.py > export/db_c69_mixed_age_early.py
           python3 -m compileall -q export/
           python3 - <<'PY'
           import hashlib,pathlib,json
