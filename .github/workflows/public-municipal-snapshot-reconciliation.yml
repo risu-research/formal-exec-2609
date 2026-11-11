@@ -1,0 +1,203 @@
+name: Public municipal snapshot reconciliation
+on:
+  push:
+    paths:
+      - '.github/workflows/public-municipal-snapshot-reconciliation.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --disable-pip-version-check pdfplumber==0.11.7
+      - name: Reconcile official dated listings and public register fields
+        shell: bash
+        run: |
+          python - <<'PY'
+          import collections, csv, datetime, hashlib, io, json, pathlib, re, urllib.error, urllib.parse, urllib.request, zipfile
+          import pdfplumber
+          
+          OUT=pathlib.Path("out/civic_snapshot_qa")
+          OUT.mkdir(parents=True,exist_ok=True)
+          BASE="https://data.cityofnewyork.us/resource/"
+          UA={"User-Agent":"CivicPublicDataHistoricalReconciliation/1.0"}
+          def fetch(url, timeout=50, method="GET", cap=100_000_000):
+              req=urllib.request.Request(url,headers=UA,method=method)
+              with urllib.request.urlopen(req,timeout=timeout) as r:
+                  if method=="HEAD":return b"",dict(r.headers)
+                  b=r.read(cap+1)
+                  if len(b)>cap:raise RuntimeError("download cap reached")
+                  return b,dict(r.headers)
+          def api(ds,params):
+              u=BASE+ds+".json?"+urllib.parse.urlencode(params)
+              raw,_=fetch(u)
+              return json.loads(raw)
+          def norm(s):
+              s=re.sub(r"[^A-Z0-9-]+"," ",str(s).upper()).strip()
+              for a,b in [("STREET","ST"),("AVENUE","AVE"),("BOULEVARD","BLVD")]:
+                  s=re.sub(r"\b"+a+r"\b",b,s)
+              return re.sub(r"\s+"," ",s).strip()
+          borough={"BROOKLYN":"BK","BRONX":"BX","MANHATTAN":"MN","QUEENS":"QN","STATEN ISLAND":"SI"}
+          hsp=api("h4mf-f24e",{"$limit":500})
+          selected={y:[r for r in hsp if str(r.get("program_start_date","")).startswith(str(y))] for y in [2024,2025]}
+          res={"checked_utc":datetime.datetime.now(datetime.timezone.utc).isoformat(),
+               "source_dataset_ids":["h4mf-f24e","64uk-42ks","wvxf-dwi5","kj4p-ruqc"],
+               "selected_cohort_rows":{str(y):len(selected[y]) for y in selected},
+               "official_pdfs":{},"archives":{},"case_date_test":{},"limitations":[]}
+          match={}
+          for y in [2024,2025]:
+              url=f"https://www.nyc.gov/assets/hpd/downloads/pdfs/services/heat-sensor-program-building-list-{y}.pdf"
+              raw,_=fetch(url)
+              path=OUT/f"selection_{y}.pdf"
+              path.write_bytes(raw)
+              listed=[]
+              with pdfplumber.open(path) as d:
+                  for p in d.pages:
+                      for tab in p.extract_tables() or []:
+                          for row in tab:
+                              x=[" ".join(str(v or "").split()) for v in row]
+                              if x and x[0] in ("BK","BX","MN","QN","SI") and len(x)>=6:
+                                  try: listed.append({"borough":x[0],"number":x[1],"street":x[2],"units":int(x[5])})
+                                  except ValueError:pass
+              published={(r["borough"],norm(r["number"]),norm(r["street"])):r for r in listed}
+              current={(borough.get(str(r.get("borough","")).upper(),r.get("borough","")),norm(r.get("number","")),norm(r.get("street",""))):r for r in selected[y]}
+              shared=set(published)&set(current)
+              issues=[]
+              for k in sorted(shared):
+                  a=published[k]["units"];b=int(current[k].get("total_units") or -1)
+                  if a!=b:issues.append({"address_key":k,"official_units":a,"current_HSP_units":b,"bbl":current[k].get("bbl"),"bin":current[k].get("bin")})
+              res["official_pdfs"][str(y)]={"sha256":hashlib.sha256(raw).hexdigest(),"rows":len(listed),
+                  "address_matches":len(shared),"current_HSP_unit_mismatches":issues,
+                  "official_unmatched":list(sorted(set(published)-set(current))),
+                  "api_unmatched":list(sorted(set(current)-set(published)))}
+              match[y]=(published,current,shared)
+          
+          # Current PLUTO uses TAX LOT units, NOT individual building or time-frozen dwelling units.
+          # Request up to 100 tax-lot records in batches with a fixed whitelist of BBLs.
+          bbllist=sorted({str(r["bbl"]) for y in selected for r in selected[y] if r.get("bbl")})
+          pluto={}
+          for start in range(0,len(bbllist),20):
+              sub=bbllist[start:start+20]
+              vals=",".join("'"+a+"'" for a in sub)
+              try:
+                  rows=api("64uk-42ks",{"$select":"bbl,unitsres,unitstotal,numbldgs,address","$where":"bbl in ("+vals+")","$limit":200})
+                  for r in rows:pluto[str(r["bbl"])]=r
+              except Exception as exc:
+                  res["limitations"].append("CURRENT_PLUTO_QUERY:"+str(type(exc).__name__)+":"+str(exc)[:110])
+                  break
+          res["current_PLUTO_taxlots"]={"requested_distinct_BBLs":len(bbllist),"matched_current_PLUTO_BBLs":len(pluto),
+             "comparison_level":"BBL/tax lot; cannot substitute for legal building denominator"}
+          for y in [2024,2025]:
+              items=[]
+              for row in selected[y]:
+                  bbl=str(row.get("bbl",""))
+                  if bbl in pluto:
+                      p=pluto[bbl]
+                      try:hu=int(row.get("total_units",""));pu=int(p.get("unitsres",""))
+                      except ValueError:continue
+                      if hu!=pu:items.append({"bbl":bbl,"HSP_units":hu,"PLUTO_unitsres_taxlot":pu,
+                                              "pluto_numbldgs":p.get("numbldgs"),"pluto_address":p.get("address")})
+              res["current_PLUTO_taxlots"][str(y)+"_mismatches"]=items[:100]
+          
+          # Historical DCP archive URL discovery only; no claims until a real CSV ZIP is parsed.
+          # Known prior DCP hosting pattern, with distinct version strings. A missing endpoint != no archived data exists.
+          versions={"2024":["24v2","24v1.1"],"2025":["25v2","25v1"]}
+          bases=["https://www.nyc.gov/assets/planning/download/zip/data-maps/open-data/",
+                 "https://s-media.nyc.gov/agencies/dcp/assets/files/zip/data-tools/bytes/"]
+          for y in [2024,2025]:
+              attempts=[]
+              found=None
+              for ver in versions[str(y)]:
+                  for prefix in bases:
+                      url=prefix+"nyc_pluto_"+ver+"_csv.zip"
+                      try:
+                          _,hdr=fetch(url,method="HEAD",timeout=12)
+                          size=int(hdr.get("Content-Length","0") or "0")
+                          attempts.append({"version":ver,"url":url,"http_status":200,"content_length":size})
+                          if size and size>100_000_000:continue
+                          raw,_=fetch(url,timeout=100)
+                          if not zipfile.is_zipfile(io.BytesIO(raw)):continue
+                          with zipfile.ZipFile(io.BytesIO(raw)) as z:
+                              names=[n for n in z.namelist() if n.lower().endswith(".csv") and "pluto" in n.lower()]
+                              for n in names:
+                                  with z.open(n) as f:
+                                      inp=io.TextIOWrapper(f,encoding="utf-8-sig",errors="replace")
+                                      reader=csv.DictReader(inp)
+                                      header={k.lower():k for k in (reader.fieldnames or [])}
+                                      if "bbl" not in header or "unitsres" not in header:continue
+                                      archive={}
+                                      for line in reader:
+                                          b=str(line.get(header["bbl"],"")).replace(".0","")
+                                          if b in bbllist:archive[b]=line.get(header["unitsres"])
+                                      found={"version":ver,"url":url,"sha256":hashlib.sha256(raw).hexdigest(),
+                                          "csv_entry":n,"cohort_BBLs_matched":len(archive),"units_by_bbl":archive}
+                                      break
+                          if found:break
+                      except Exception as exc:
+                          attempts.append({"version":ver,"url":url,"error":type(exc).__name__+":"+str(exc)[:90]})
+                  if found:break
+              payload={"attempts":attempts,"extracted_archive":None}
+              if found:
+                  payload["extracted_archive"]={k:v for k,v in found.items() if k!="units_by_bbl"}
+                  mismatch=[]
+                  for r in selected[y]:
+                      b=str(r.get("bbl",""))
+                      if b not in found["units_by_bbl"]:continue
+                      try:
+                          h=int(r.get("total_units",0));p=int(float(found["units_by_bbl"][b]))
+                          if h!=p:mismatch.append({"bbl":b,"HSP_units_current":h,"historical_PLUTO_taxlot_units":p})
+                      except Exception:pass
+                  payload["HSP_vs_historical_PLUTO_taxlot_discrepancies"]=mismatch
+                  payload["note"]="Even historical tax-lot UnitsRes is NOT the building-specific selection denominator."
+              res["archives"][str(y)]=payload
+          
+          # Frozen pseudonymous holdout ID, never disclose raw building ID or address in logs.
+          alias=lambda b:hashlib.sha256(("rank-2024:"+str(b)).encode()).hexdigest()[:10]
+          hits=[r for r in selected[2025] if alias(r.get("building_id"))=="4928681573"]
+          if len(hits)==1:
+              bid=hits[0]["building_id"]
+              where=f"buildingid={bid} AND novissueddate >= '2023-10-01T00:00:00' AND novissueddate < '2025-06-01T00:00:00'"
+              rows=api("wvxf-dwi5",{"$select":"violationid,novdescription,novissueddate,approveddate,inspectiondate,novtype",
+                                    "$where":where,"$limit":1000})
+              if len(rows)>=1000:raise RuntimeError("violation query truncated")
+              seasons=[("2023","2023-10-01","2024-06-01"),("2024","2024-10-01","2025-06-01")]
+              event_counts={}; temporal_switches=[]
+              legal=lambda r:("27-2029" in str(r.get("novdescription","")) or "27-2028" in str(r.get("novdescription","")))
+              for year,lo,hi in seasons:
+                  event_counts[year]={col:len({r.get("violationid") for r in rows if legal(r) and lo<=str(r.get(col,""))[:10]<hi}) for col in ("novissueddate","approveddate","inspectiondate")}
+              for r in rows:
+                  if not legal(r):continue
+                  dates={k:str(r.get(k,""))[:10] for k in ("novissueddate","approveddate","inspectiondate")}
+                  buckets={k:next((y for y,lo,hi in seasons if lo<=d<hi),"outside_or_missing") for k,d in dates.items()}
+                  if len(set(buckets.values()))>1:
+                      temporal_switches.append({"date_buckets":buckets,"date_values":dates})
+              res["case_date_test"]={"case_alias":"4928681573","records_in_issue_date_window":len(rows),
+                  "qualifying_legal_code_proxy_total":sum(legal(r) for r in rows),
+                  "counts_by_heating_season_and_field":event_counts,"cross_season_or_missing_date_cases":temporal_switches[:30],
+                  "cross_season_case_count":len(temporal_switches),"assessment":"Do not shift rule's event date to fit selected outcome"}
+          else:res["case_date_test"]={"case_alias":"4928681573","matches":len(hits),"status":"cannot identify uniquely"}
+          res["limitations"]+=["PLUTO UnitsRes is tax-lot total, never the building-specific registered Class A legal dwelling-unit denominator.",
+            "Current HSP and PLUTO snapshots are not 2024 or 2025 scoring snapshots.",
+            "Historical DCP ZIP endpoint discovery is a limited probe, not proof of archive absence.",
+            "A 2025 regulation based on criteria including but not limited to observed counts does not guarantee exact deterministic match."]
+          (OUT/"audit.json").write_text(json.dumps(res,indent=2,ensure_ascii=False)+"\n")
+          print("AUDIT_RESULT_BEGIN")
+          print(json.dumps({k:v for k,v in res.items() if k!="archives"},indent=2,ensure_ascii=False)[:22000])
+          print("ARCHIVE_SUMMARY",json.dumps({y:{"found":bool(v["extracted_archive"]),"attempts":v["attempts"][:10],
+             "retrieval":v["extracted_archive"]} for y,v in res["archives"].items()},ensure_ascii=False)[:6000])
+          print("AUDIT_RESULT_END")
+          
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: municipal-snapshot-reconciliation
+          path: out/civic_snapshot_qa/
+          if-no-files-found: warn
+          retention-days: 30
