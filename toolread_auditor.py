@@ -119,7 +119,7 @@ def main():
         group['clean']+=int(clean)
         group['clean_work_preserved']+=int(clean and stored_good)
         group['unresolved']+=int(dv=='UNRESOLVED')
-        group['unbound_output_write']+=int(saved and not stored_good)
+        group['unbound_output_write']+=int(bool(saved) and not stored_good)
         group['untraced_bypass_violation']+=int(unauth and bool(case['untracked']))
         group['released_source_effect']+=int(bool(saved) and 'R' in case['sources'] and not active)
         rows.append({'id':flow,'order':case['order'],'scenario':name,'seed':case['seed'],
