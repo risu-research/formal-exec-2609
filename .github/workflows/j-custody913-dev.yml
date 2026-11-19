@@ -42,6 +42,7 @@ jobs:
       - name: Independent read-only audit
         run: |
           set -euo pipefail
+          sudo chown -R "$(id -u):$(id -g)" _custody_dev
           python3 experiments/custody/independent_auditor.py \
             --db _custody_dev/ledger.sqlite \
             --oracle _custody_dev/oracle.json \
