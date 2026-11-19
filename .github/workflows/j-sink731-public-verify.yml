@@ -27,6 +27,7 @@ jobs:
       - name: Audit must reject corrupted stored effect
         run: |
           set -euo pipefail
+          sudo chown -R "$(id -u):$(id -g)" public/experiments/external_effects/_runs
           cd public/experiments/external_effects/_runs/dev
           cp effects.sqlite corrupted.sqlite
           python3 - <<'PY'
