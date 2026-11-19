@@ -1,0 +1,60 @@
+name: j-sink731-independent-effects-dev
+on:
+  push:
+    branches: [exec/j-sink731]
+    paths:
+      - external_effect_sink.py
+      - external_effect_runner.py
+      - external_effect_auditor.py
+      - .github/workflows/j-sink731-dev.yml
+permissions:
+  contents: read
+jobs:
+  effect-dev:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fix protocol and source provenance
+        run: |
+          set -euo pipefail
+          python3 external_effect_runner.py --partition plan | tee plan.log || true
+          git rev-parse HEAD > source_commit.txt
+          sha256sum external_effect_sink.py external_effect_runner.py external_effect_auditor.py > source-sha256.txt
+      - name: Execute external service and LangGraph replay
+        run: |
+          set -euo pipefail
+          rm -f effect-dev.sqlite*
+          python3 external_effect_sink.py --db "$PWD/effect-dev.sqlite" --port 8765 >service.log 2>&1 &
+          SINK_PID=$!
+          trap 'kill $SINK_PID 2>/dev/null || true' EXIT
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8765/health > /dev/null; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8765/health
+          docker run --rm --network host -v "$PWD:/work" -w /work ghcr.io/astral-sh/uv:python3.12-bookworm-slim \
+            uv run --with 'langgraph==1.2.12' python external_effect_runner.py --partition dev 2>&1 | tee dev-run.log
+          kill $SINK_PID
+          wait $SINK_PID || true
+          trap - EXIT
+          python3 external_effect_auditor.py --db effect-dev.sqlite \
+            --oracle external_effect_dev_oracle.json --acks external_effect_dev_acks.json \
+            --out external_effect_dev_audit.json 2>&1 | tee dev-audit.log
+          sha256sum external_effect_dev_audit.json >> source-sha256.txt
+      - name: Save complete independent evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j-sink731-dev
+          path: |
+            plan.log
+            source_commit.txt
+            source-sha256.txt
+            service.log
+            dev-run.log
+            dev-audit.log
+            external_effect_dev_oracle.json
+            external_effect_dev_acks.json
+            external_effect_dev_audit.json
+            effect-dev.sqlite
