@@ -1,0 +1,86 @@
+name: j-trace824-public-and-archived-audit
+on:
+  push:
+    branches: [exec/j-trace824]
+    paths:
+      - .github/workflows/j-trace824-public-audit.yml
+permissions:
+  contents: read
+  actions: read
+jobs:
+  independent-public:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Checkout exact public artifact version
+        run: |
+          set -euo pipefail
+          git clone --quiet https://github.com/risu-research/revocation-closure.git public
+          git -C public checkout --quiet ea426228f4f37ca04981318d6ec2e72c699b1d12
+          git -C public rev-parse HEAD > published_commit.txt
+          bash -n public/experiments/observed_tool_reads/run.sh
+      - name: Reproduce development analysis from published scripts
+        run: |
+          set -euo pipefail
+          docker run --rm --network host -v "$PWD/public:/work" -w /work ghcr.io/astral-sh/uv:python3.12-bookworm-slim \
+            uv run --with 'langgraph==1.2.12' bash experiments/observed_tool_reads/run.sh dev 2>&1 | tee published_replay.log
+      - name: Verify observer rejects a modified physical effect
+        run: |
+          set -euo pipefail
+          sudo chown -R "$(id -u):$(id -g)" public/experiments/observed_tool_reads/_runs
+          cd public/experiments/observed_tool_reads/_runs/dev
+          cp evidence.sqlite corrupted.sqlite
+          python3 - <<'PY'
+          import sqlite3
+          with sqlite3.connect('corrupted.sqlite') as c:
+              c.execute("UPDATE effects SET output='CORRUPTED_RESULT' WHERE id=(SELECT MIN(id) FROM effects)")
+          PY
+          set +e
+          python3 ../../toolread_auditor.py --db corrupted.sqlite \
+            --oracle tool_read_dev_oracle.json --acks tool_read_dev_acks.json \
+            --out should_not_exist.json > negative_control.log 2>&1
+          rc=$?
+          set -e
+          test "$rc" -ne 0
+          grep -q 'AssertionError' negative_control.log
+          test ! -f should_not_exist.json
+          echo "NEGATIVE_CONTROL_PASS: observer rejects a physically tampered effect"
+      - name: Download original held-out run data
+        uses: actions/download-artifact@v4
+        with:
+          name: j-trace824-heldout-evidence
+          run-id: 44460302186
+          repository: risu-research/formal-exec-2609
+          github-token: ${{ github.token }}
+          path: recorded
+      - name: Independent check of archived held-out SQL and nonces
+        run: |
+          set -euo pipefail
+          python3 public/experiments/observed_tool_reads/toolread_auditor.py \
+            --db recorded/_runs/holdout/evidence.sqlite \
+            --oracle recorded/_runs/holdout/tool_read_holdout_oracle.json \
+            --acks recorded/_runs/holdout/tool_read_holdout_acks.json \
+            --out recomputed_heldout.json | tee recheck.log
+          python3 - <<'PY'
+          import json
+          rec=json.load(open('recomputed_heldout.json'))
+          pub=json.load(open('public/results/tool_read_nondeterminism_summary.json'))['splits']['heldout']
+          assert rec['passed'] and rec['cases']==pub['cases']==540
+          assert rec['guards']==pub['guards']
+          assert rec['physical_writes']==pub['writes']==360
+          assert rec['nondeterministic_clean_pairs']==pub['nondet_pairs']==36
+          print('PUBLIC_HELDOUT_AUDIT_PASS')
+          PY
+      - name: Preserve public-verification record
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j-trace824-public-check
+          path: |
+            published_commit.txt
+            published_replay.log
+            public/experiments/observed_tool_reads/_runs/dev/audit.log
+            public/experiments/observed_tool_reads/_runs/dev/negative_control.log
+            recheck.log
+            recomputed_heldout.json
