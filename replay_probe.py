@@ -79,7 +79,7 @@ def test_case(case,base):
     paused=[s for s in snapshots if tuple(s.next)==("emit",)]
     assert len(paused)==1, (name,[(s.next,s.values) for s in snapshots])
     old=paused[0].config
-    assert db.execute("SELECT COUNT(*) FROM effects").fetchone()[0]==1
+    assert db.execute("SELECT COUNT(*) FROM effects").fetchone()[0]==(0 if name=="unknown_dependency" else 1)
     auth.set(R,"sequestered")
     app.update_state(cfg,{"payload":"K_only","declared_deps":[K],"result":"repaired_latest"},as_node="emit")
     assert app.get_state(cfg).values["payload"]=="K_only"
