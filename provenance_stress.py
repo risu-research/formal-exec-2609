@@ -96,6 +96,11 @@ def make_spec(order: str, seed: int, template: tuple) -> dict:
 
 def check_structural_spec():
     assert len(CASES) == len(EXPECTED) == 18
+    # The two controls share the same policy-facing artifact key.
+    def visible_artifact(spec, guard):
+        return (f"collision/{spec['order']}/{spec['seed']}/{guard}"
+                if spec["template"].startswith("indistinguishable_")
+                else spec["id"] + "/" + guard)
     assert set(x[0] for x in CASES) == set(EXPECTED)
     assert all(len(EXPECTED[x[0]]) == len(GUARDS) for x in CASES)
     for order in POLICY_ORDERS:
@@ -107,6 +112,8 @@ def check_structural_spec():
             assert pair[0]["receipt"] == pair[1]["receipt"]
             assert pair[0]["phase"] == pair[1]["phase"]
             assert pair[0]["oracle_truth"] != pair[1]["oracle_truth"]
+            for guard in GUARDS:
+                assert visible_artifact(pair[0],guard)==visible_artifact(pair[1],guard)
     return True
 
 
@@ -129,11 +136,24 @@ def evaluate_case(spec: dict, guard: str, conn: sqlite3.Connection) -> dict:
     from langgraph.graph import StateGraph, START, END
     from langgraph.checkpoint.memory import InMemorySaver
 
-    artifact_id = spec["id"] + "/" + guard
+    # Collision controls share the exact identifier and all observable fields.
+    # They differ solely in the auditor's withheld oracle lineage.
+    artifact_id = (
+        f"collision/{spec['order']}/{spec['seed']}/{guard}"
+        if spec["template"].startswith("indistinguishable_")
+        else spec["id"] + "/" + guard
+    )
     payload = spec["payload"]
-    conn.execute("INSERT INTO source_receipts(artifact_id,receipt_json) VALUES(?,?)",
-                 (artifact_id, json.dumps(spec["receipt"], sort_keys=True)))
-    conn.commit()
+    encoded_receipt = json.dumps(spec["receipt"], sort_keys=True)
+    previous_receipt = conn.execute(
+        "SELECT receipt_json FROM source_receipts WHERE artifact_id=?", (artifact_id,)
+    ).fetchone()
+    if previous_receipt:
+        assert previous_receipt[0] == encoded_receipt, ("collision receipt differs", artifact_id)
+    else:
+        conn.execute("INSERT INTO source_receipts(artifact_id,receipt_json) VALUES(?,?)",
+                     (artifact_id, encoded_receipt))
+        conn.commit()
     phase = {"active": False}
     actions: list[str] = []
 
