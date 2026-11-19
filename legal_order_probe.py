@@ -13,7 +13,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 SOURCE_ORDERS = {
   "acosta": {"docket":"1:25-cv-01119","doc":39,"court":"S.D.N.Y.",
       "pdf":"https://cases.justia.com/federal/district-courts/new-york/nysdce/1%3A2025cv01119/636556/39/0.pdf",
-      "clauses":["15(c)(ii), p.15","15(d), p.15"],"disposition_window":"10 days"},
+      "clauses":["14(c)(ii), p.15","14(d), p.15"],"disposition_window":"10 days"},
   "necec": {"docket":"1:25-cv-05351","doc":58,"court":"S.D.N.Y.",
       "pdf":"https://cases.justia.com/federal/district-courts/new-york/nysdce/1%3A2025cv05351/644926/58/0.pdf",
       "clauses":["IV.1(b), pp.17-18"],"disposition_window":"2 business days"},
@@ -45,7 +45,7 @@ def evaluate(order, action, phase="ordinary", dep="revoked", tool=None,
         if not affected:
             return "BLOCK"
         if order == "necec":
-            return "ALLOW" if phase in {"no_challenge","claim_upheld"} else "HOLD"
+            return "ALLOW" if phase in {"no_challenge","claim_upheld"} else ("UNRESOLVED" if phase=="claim_withdrawn" else "HOLD")
         return "UNRESOLVED"
     if action == "extract_review_db":
         return "ALLOW" if order == "acosta" and affected and phase in HALT else "UNRESOLVED"
@@ -90,7 +90,7 @@ FIXTURES = [
  ("NE3","necec","destroy_derivative","challenge_pending","revoked",None,None,None,"HOLD"),
  ("NE4","necec","destroy_derivative","no_challenge","revoked",None,None,None,"ALLOW"),
  ("NE5","necec","destroy_derivative","claim_upheld","revoked",None,None,None,"ALLOW"),
- ("NE6","necec","destroy_derivative","claim_withdrawn","revoked",None,None,None,"HOLD"),
+ ("NE6","necec","destroy_derivative","claim_withdrawn","revoked",None,None,None,"UNRESOLVED"),
  ("NE7","necec","certify_if_requested","noticed","revoked",None,None,None,"ALLOW"),
  ("NE8","necec","destroy_derivative","no_challenge","clean",None,None,None,"BLOCK"),
  ("BR1","broadway","ai_submit","ordinary","revoked","public",None,None,"BLOCK"),
