@@ -1,0 +1,100 @@
+name: j-ownerpolicy945-public-reproduction
+on:
+  push:
+    branches: [exec/j-ownerpolicy945]
+    paths: [.github/workflows/j-ownerpolicy945-public.yml]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  public-recipient-reproduction:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Checkout frozen public code and verify exact source identity
+        run: |
+          set -euo pipefail
+          git clone --quiet https://github.com/risu-research/revocation-closure.git ./public
+          git -C public checkout --quiet 1d65e72d95cfdf50e81de95943615438eed7261d
+          git -C public rev-parse HEAD > public_commit.txt
+          for p in recipient_service.py owner_relay.py agent_worker.py run_evaluation.py independent_auditor.py; do
+            python3 -m py_compile "public/experiments/independent_recipient/$p"
+          done
+          bash -n public/experiments/independent_recipient/run.sh
+      - name: Reproduce Linux-UID recipient and real checkpoint experiment from public scripts
+        run: |
+          set -euo pipefail
+          cd public
+          bash experiments/independent_recipient/run.sh dev | tee ../public_reproduction.log
+      - name: Verify archived database and independent auditor tamper detection
+        run: |
+          set -euo pipefail
+          sudo chown -R "$(id -u):$(id -g)" public/_recipient_runs
+          python3 - <<'PY'
+          import json,sqlite3
+          p=json.load(open('public/_recipient_runs/dev/audit.json'))
+          assert p['passed'] and p['total_cases']==192 and p['physical_effects']==132
+          assert p['by_mode']['owner_live']['direct_denials']==48
+          assert p['by_mode']['owner_live']['revoked_source_writes_after_owner_notice']==8
+          assert p['by_mode']['owner_live']['forged_issuer_unsafe_writes']==4
+          assert p['by_mode']['owner_live']['undelivered_notice_unsafe_writes']==4
+          with sqlite3.connect('public/_recipient_runs/dev/recipient.sqlite') as c:
+            assert c.execute('PRAGMA integrity_check').fetchone()[0]=='ok'
+            assert c.execute('SELECT count(*) FROM effects').fetchone()[0]==132
+          print('PUBLIC_INDEPENDENT_RECIPIENT_REPRODUCTION_PASS')
+          PY
+          cp public/_recipient_runs/dev/recipient.sqlite altered.sqlite
+          python3 - <<'PY'
+          import sqlite3
+          with sqlite3.connect('altered.sqlite') as c:
+            c.execute("UPDATE effects SET body='INVALID' WHERE id=(SELECT MIN(id) FROM effects)")
+          PY
+          set +e
+          python3 public/experiments/independent_recipient/independent_auditor.py \
+            --db altered.sqlite \
+            --oracle public/_recipient_runs/dev/oracle.json \
+            --responses public/_recipient_runs/dev/responses.json \
+            --out should_not_exist.json > altered_audit.log 2>&1
+          rc=$?
+          set -e
+          test "$rc" -ne 0
+          grep -q AssertionError altered_audit.log
+          test ! -f should_not_exist.json
+          echo "PUBLIC_RECIPIENT_TAMPER_DETECTION_PASS"
+      - name: Verify original held-out evidence with public auditor
+        uses: actions/download-artifact@v4
+        with:
+          name: j-ownerpolicy945-heldout
+          repository: risu-research/formal-exec-2609
+          run-id: 44467406356
+          github-token: ${{ github.token }}
+          path: recorded
+      - name: Independent original held-out re-audit
+        run: |
+          set -euo pipefail
+          python3 public/experiments/independent_recipient/independent_auditor.py \
+            --db recorded/_recipient_holdout/recipient.sqlite \
+            --oracle recorded/_recipient_holdout/oracle.json \
+            --responses recorded/_recipient_holdout/responses.json \
+            --out independently_recomputed_holdout.json | tee recheck_heldout.log
+          python3 - <<'PY'
+          import json
+          computed=json.load(open('independently_recomputed_holdout.json'))
+          original=json.load(open('recorded/_recipient_holdout/audit.json'))
+          assert computed==original and computed['passed']
+          assert computed['total_cases']==576 and computed['physical_effects']==396
+          print('PUBLIC_HELDOUT_INDEPENDENT_AUDIT_PASS')
+          PY
+      - name: Preserve public verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j-ownerpolicy945-public-repro
+          path: |
+            public_commit.txt
+            public_reproduction.log
+            altered_audit.log
+            recheck_heldout.log
+            independently_recomputed_holdout.json
+            public/_recipient_runs/dev/audit.json
