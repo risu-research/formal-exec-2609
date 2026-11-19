@@ -1,0 +1,73 @@
+name: j-ownerpolicy945-development
+on:
+  push:
+    branches: [exec/j-ownerpolicy945]
+    paths:
+      - recipient_bundle/part*.txt
+      - .github/workflows/j-ownerpolicy945-dev.yml
+permissions:
+  contents: write
+jobs:
+  independent-recipient-development:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Decode and freeze experiment sources
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import pathlib,json,base64,zlib,hashlib
+          s=''.join(pathlib.Path(f'recipient_bundle/part{i}.txt').read_text().strip() for i in range(1,6))
+          data=zlib.decompress(base64.b64decode(s,validate=True))
+          expected='85386c07c434bdda03e76d9127af1c2e4aef60865a75c40ee52e9ab6bcbc5850'
+          assert hashlib.sha256(data).hexdigest()==expected,'SOURCE_BUNDLE_HASH_MISMATCH'
+          files=json.loads(data)
+          assert set(files)=={'recipient_service.py','owner_relay.py','agent_worker.py','run_evaluation.py','independent_auditor.py'}
+          p=pathlib.Path('experiments/independent_recipient');p.mkdir(parents=True,exist_ok=True)
+          for name,content in files.items():
+            assert isinstance(content,str)
+            (p/name).write_text(content)
+          print('BUNDLE_SHA256',expected,'FILES',len(files))
+          PY
+          python3 -m py_compile experiments/independent_recipient/*.py
+          python3 experiments/independent_recipient/run_evaluation.py --partition plan | tee protocol.log
+          sha256sum experiments/independent_recipient/*.py > source_sha256.txt
+      - name: Reproduce against independent recipient and Linux-UID-separated worker
+        run: |
+          set -euo pipefail
+          docker run --rm --network host -v "$PWD:/work" -w /work ghcr.io/astral-sh/uv:python3.12-bookworm-slim \
+            sh -c 'set -eu; uv venv /tmp/recipient-venv --python python3.12; uv pip install --python /tmp/recipient-venv/bin/python "langgraph==1.2.12"; chmod -R a+rX /tmp/recipient-venv; /tmp/recipient-venv/bin/python experiments/independent_recipient/run_evaluation.py --partition dev --isolated-uids --out /work/_recipient_dev || { cat /work/_recipient_dev/agent.stderr /work/_recipient_dev/relay.log /work/_recipient_dev/sink.log 2>/dev/null || true; exit 1; }' | tee development_execution.log
+      - name: Audit physical SQL effects independently
+        run: |
+          set -euo pipefail
+          sudo chown -R "$(id -u):$(id -g)" _recipient_dev
+          python3 experiments/independent_recipient/independent_auditor.py \
+            --db _recipient_dev/recipient.sqlite \
+            --oracle _recipient_dev/oracle.json \
+            --responses _recipient_dev/responses.json \
+            --out _recipient_dev/audit.json | tee development_audit.log
+          sha256sum _recipient_dev/recipient.sqlite _recipient_dev/audit.json > result_sha256.txt
+      - name: Preserve tested code on isolated compute branch
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add experiments/independent_recipient/*.py
+          git diff --cached --quiet || git commit -m "Materialize independently audited recipient authorization experiment"
+          git push origin HEAD:exec/j-ownerpolicy945
+      - name: Retain development evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j-ownerpolicy945-development
+          path: |
+            source_sha256.txt
+            result_sha256.txt
+            protocol.log
+            development_execution.log
+            development_audit.log
+            _recipient_dev/recipient.sqlite
+            _recipient_dev/oracle.json
+            _recipient_dev/responses.json
+            _recipient_dev/audit.json
