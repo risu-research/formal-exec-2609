@@ -16,6 +16,9 @@ jobs:
           set -euo pipefail
           docker run --rm -v "$PWD:/work" -w /work ghcr.io/astral-sh/uv:python3.12-bookworm-slim \
             uv run --with 'langgraph==1.2.12' python legal_order_probe.py 2>&1 | tee court-policy.log
+      - name: Export exact JSON to audit log
+        run: |
+          python3 -c 'import json; print("EVIDENCE_JSON "+json.dumps(json.load(open("legal_order_result.json")),sort_keys=True,separators=(",",":")))'
       - name: Record evidence
         if: always()
         run: |
