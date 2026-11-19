@@ -1,0 +1,73 @@
+name: j-custody913-public-repro-validation
+on:
+  push:
+    branches: [exec/j-custody913]
+    paths: [.github/workflows/j-custody913-public.yml]
+permissions:
+  contents: read
+jobs:
+  public-reproduction:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Checkout frozen public artifact
+        run: |
+          set -euo pipefail
+          git clone --quiet https://github.com/risu-research/revocation-closure.git ./public-artifact
+          git -C public-artifact checkout --quiet 6766696e89c4a851228360022d3f38cfe11e2142
+          git -C public-artifact rev-parse HEAD > artifact_commit.txt
+          bash -n public-artifact/experiments/trusted_custody/run.sh
+          test "$(git -C public-artifact hash-object experiments/trusted_custody/trusted_broker.py)" = "7c47d692e99d8d79c9557c8e2d11409b685a78a5"
+          test "$(git -C public-artifact hash-object experiments/trusted_custody/agent_worker.py)" = "95e0a3f45aee6b149f5bd79723f3a0c50a94fdf8"
+          test "$(git -C public-artifact hash-object experiments/trusted_custody/integrated_driver.py)" = "0291f3fc37c233af547668e424256a477ff7763c"
+          test "$(git -C public-artifact hash-object experiments/trusted_custody/independent_auditor.py)" = "2a33aa996bae26026216b184fb43278ea4a65883"
+      - name: Reproduce with only the published public scripts
+        run: |
+          set -euo pipefail
+          cd public-artifact
+          bash experiments/trusted_custody/run.sh dev | tee ../public_replay.log
+      - name: Inspect independently saved physical effects
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          a=json.loads(Path("public-artifact/_custody_runs/dev/audit.json").read_text())
+          summary=json.loads(Path("public-artifact/results/trusted_custody_summary.json").read_text())
+          assert a['passed'] and a['totals']['cases']==summary['development']['cases']==56
+          assert a['totals']['effects']==summary['development']['physical_effects']==20
+          assert a['security']['vault']=='ACCESS_DENIED'
+          assert a['security']['signing_key']=='ACCESS_DENIED'
+          assert a['scenario_counts']['revoked_historical']['commits']==0
+          assert a['scenario_counts']['independent_clean']['commits']==4
+          print("PUBLIC_REPRO_PASS")
+          PY
+          cp public-artifact/_custody_runs/dev/ledger.sqlite altered.sqlite
+          python3 - <<'PY'
+          import sqlite3
+          with sqlite3.connect("altered.sqlite") as c:
+              c.execute("UPDATE effects SET sources='[\"R\"]' WHERE id=(SELECT min(id) FROM effects)")
+          PY
+          set +e
+          python3 public-artifact/experiments/trusted_custody/independent_auditor.py \
+            --db altered.sqlite \
+            --oracle public-artifact/_custody_runs/dev/oracle.json \
+            --snapshots public-artifact/_custody_runs/dev/sealed_candidate_snapshots.json \
+            --out should_not_exist.json > tamper.log 2>&1
+          rc=$?
+          set -e
+          test "$rc" -ne 0
+          grep -q AssertionError tamper.log
+          test ! -f should_not_exist.json
+          echo "AUDITOR_TAMPER_NEGATIVE_PASS"
+      - name: Preserve public verification
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j-custody913-public-repro
+          path: |
+            artifact_commit.txt
+            public_replay.log
+            tamper.log
+            public-artifact/_custody_runs/dev/audit.json
