@@ -38,8 +38,7 @@ jobs:
         run: |
           set -euo pipefail
           docker run --rm --network host -v "$PWD:/work" -w /work ghcr.io/astral-sh/uv:python3.12-bookworm-slim \
-            uv run --with 'langgraph==1.2.12' python experiments/custody/integrated_driver.py \
-              --partition dev --out /work/_custody_dev | tee dev_execution.log
+            sh -c 'set -eu; uv venv /tmp/shared-langgraph --python python3.12; uv pip install --python /tmp/shared-langgraph/bin/python "langgraph==1.2.12"; chmod -R a+rX /tmp/shared-langgraph; /tmp/shared-langgraph/bin/python experiments/custody/integrated_driver.py --partition dev --out /work/_custody_dev || { for d in /tmp/rv-custody-*/; do echo "PRIVATE_TEST_LOG $d"; cat "$d/agent.stderr" "$d/broker.log" 2>/dev/null || true; done; exit 1; }' | tee dev_execution.log
       - name: Independent read-only audit
         run: |
           set -euo pipefail
