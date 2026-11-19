@@ -1,0 +1,52 @@
+name: j-pv631a-provenance-heldout
+on:
+  push:
+    branches:
+      - exec/j-pv631a
+    paths:
+      - .github/workflows/j-pv631a-heldout.yml
+permissions:
+  contents: read
+jobs:
+  provenance-heldout:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assert fixed protocol and source identity
+        run: |
+          set -euo pipefail
+          test "$(git hash-object provenance_stress.py)" = "d2f9bcf594c68b83405c9d8a66c0b20bc5070329"
+          python3 provenance_stress.py --partition plan | tee protocol.log
+          git rev-parse HEAD > commit.txt
+          sha256sum provenance_stress.py > sha256sums.txt
+      - name: Execute independent seeded evaluation with real checkpoint replay
+        run: |
+          set -euo pipefail
+          docker run --rm -v "$PWD:/work" -w /work ghcr.io/astral-sh/uv:python3.12-bookworm-slim \
+            uv run --with 'langgraph==1.2.12' python provenance_stress.py --partition holdout 2>&1 | tee heldout.log
+      - name: Seal complete evidence
+        if: always()
+        run: |
+          if test -f provenance_holdout_result.json; then
+            sha256sum provenance_holdout_result.json >> sha256sums.txt
+            python3 - <<'PY'
+          import json
+          from pathlib import Path
+          data=json.loads(Path('provenance_holdout_result.json').read_text())
+          summary={k:v for k,v in data.items() if k not in ('records',)}
+          Path('heldout_summary.json').write_text(json.dumps(summary,indent=2,sort_keys=True)+'\n')
+          PY
+          fi
+      - name: Upload holdout evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j-pv631a-heldout-evidence
+          path: |
+            protocol.log
+            heldout.log
+            commit.txt
+            sha256sums.txt
+            provenance_holdout_result.json
+            heldout_summary.json
