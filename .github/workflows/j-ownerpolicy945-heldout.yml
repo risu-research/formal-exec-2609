@@ -1,0 +1,74 @@
+name: j-ownerpolicy945-heldout
+on:
+  push:
+    branches: [exec/j-ownerpolicy945]
+    paths: [.github/workflows/j-ownerpolicy945-heldout.yml]
+permissions:
+  contents: read
+jobs:
+  independent-recipient-heldout:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assert frozen development source and protocol
+        run: |
+          set -euo pipefail
+          test "$(git hash-object experiments/independent_recipient/recipient_service.py)" = "bff0dbbfce5f3b98da3eee53796fb7926803e64a"
+          test "$(git hash-object experiments/independent_recipient/owner_relay.py)" = "ebb75cb3ed9e86766ea4384a5e332e930a09aef2"
+          test "$(git hash-object experiments/independent_recipient/agent_worker.py)" = "2a192d3fe53fc5d88a7c29127c7707ba3aa0e488"
+          test "$(git hash-object experiments/independent_recipient/run_evaluation.py)" = "a99a261b49c23d7cb812124822e5639e304c8c51"
+          test "$(git hash-object experiments/independent_recipient/independent_auditor.py)" = "aaeabbea60c589e30db2c60bbbed6b19bab29644"
+          python3 experiments/independent_recipient/run_evaluation.py --partition plan | tee protocol.log
+          git rev-parse HEAD > source_commit.txt
+          sha256sum experiments/independent_recipient/*.py > source_sha256.txt
+      - name: Execute frozen independent recipient evaluation on held-out seeds
+        run: |
+          set -euo pipefail
+          docker run --rm --network host -v "$PWD:/work" -w /work ghcr.io/astral-sh/uv:python3.12-bookworm-slim \
+            sh -c 'set -eu; uv venv /tmp/recipient-venv --python python3.12; uv pip install --python /tmp/recipient-venv/bin/python "langgraph==1.2.12"; chmod -R a+rX /tmp/recipient-venv; /tmp/recipient-venv/bin/python experiments/independent_recipient/run_evaluation.py --partition holdout --isolated-uids --out /work/_recipient_holdout || { cat /work/_recipient_holdout/agent.stderr /work/_recipient_holdout/relay.log /work/_recipient_holdout/sink.log 2>/dev/null || true; exit 1; }' | tee heldout_execution.log
+      - name: Independent read-only SQL audit and negative control
+        run: |
+          set -euo pipefail
+          sudo chown -R "$(id -u):$(id -g)" _recipient_holdout
+          python3 experiments/independent_recipient/independent_auditor.py \
+            --db _recipient_holdout/recipient.sqlite \
+            --oracle _recipient_holdout/oracle.json \
+            --responses _recipient_holdout/responses.json \
+            --out _recipient_holdout/audit.json | tee heldout_audit.log
+          cp _recipient_holdout/recipient.sqlite _recipient_holdout/tampered.sqlite
+          python3 - <<'PY'
+          import sqlite3
+          with sqlite3.connect('_recipient_holdout/tampered.sqlite') as c:
+            c.execute("UPDATE effects SET body='ALTERED_EFFECT' WHERE id=(SELECT MIN(id) FROM effects)")
+          PY
+          set +e
+          python3 experiments/independent_recipient/independent_auditor.py \
+            --db _recipient_holdout/tampered.sqlite \
+            --oracle _recipient_holdout/oracle.json \
+            --responses _recipient_holdout/responses.json \
+            --out _recipient_holdout/must_not_exist.json > tamper.log 2>&1
+          status=$?
+          set -e
+          test "$status" -ne 0
+          grep -q 'AssertionError' tamper.log
+          test ! -f _recipient_holdout/must_not_exist.json
+          echo "NEGATIVE_CONTROL_PASS: independently checked persisted effect tampering"
+          sha256sum _recipient_holdout/recipient.sqlite _recipient_holdout/audit.json > result_sha256.txt
+      - name: Archive original held-out evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j-ownerpolicy945-heldout
+          path: |
+            protocol.log
+            source_commit.txt
+            source_sha256.txt
+            result_sha256.txt
+            heldout_execution.log
+            heldout_audit.log
+            tamper.log
+            _recipient_holdout/recipient.sqlite
+            _recipient_holdout/oracle.json
+            _recipient_holdout/responses.json
+            _recipient_holdout/audit.json
