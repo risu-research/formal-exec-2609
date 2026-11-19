@@ -15,7 +15,7 @@ jobs:
       - name: Checkout pinned public artifact
         run: |
           git clone --quiet https://github.com/risu-research/revocation-closure.git ./public
-          git -C public checkout --quiet 512e44f0b11868f28e4fcbf22f71e9c2cf48c811
+          git -C public checkout --quiet a011a8b0c1de0ffa86d6d0601a99ac6d392a9fe9
           git -C public rev-parse HEAD | tee published_commit.txt
           bash -n public/experiments/external_effects/run.sh
           sha256sum public/experiments/external_effects/external_effect_*.py > public-source-sha256.txt
