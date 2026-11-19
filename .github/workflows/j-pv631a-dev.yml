@@ -1,0 +1,41 @@
+name: j-pv631a-provenance-development
+on:
+  push:
+    branches:
+      - exec/j-pv631a
+    paths:
+      - provenance_stress.py
+      - .github/workflows/j-pv631a-dev.yml
+permissions:
+  contents: read
+jobs:
+  provenance-dev:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Freeze protocol and prove paired observability check
+        run: |
+          python3 provenance_stress.py --partition plan | tee protocol.log
+          git rev-parse HEAD > commit.txt
+          sha256sum provenance_stress.py > source-hash.txt
+      - name: Run real LangGraph development matrix
+        run: |
+          set -euo pipefail
+          docker run --rm -v "$PWD:/work" -w /work ghcr.io/astral-sh/uv:python3.12-bookworm-slim \
+            uv run --with 'langgraph==1.2.12' python provenance_stress.py --partition dev 2>&1 | tee dev.log
+      - name: Seal outputs
+        if: always()
+        run: |
+          if test -f provenance_dev_result.json; then sha256sum provenance_dev_result.json >> source-hash.txt; fi
+      - name: Retain evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j-pv631a-dev-evidence
+          path: |
+            protocol.log
+            dev.log
+            source-hash.txt
+            commit.txt
+            provenance_dev_result.json
