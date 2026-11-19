@@ -41,16 +41,23 @@ def evaluate(order, action, phase="ordinary", dep="revoked", tool=None,
         if not affected:
             return "ALLOW"
         return "HOLD" if phase in HALT else "ALLOW"
+    # Obligations are separate from authorization decisions.
+    # A duty that has not yet matured does not imply that an act is forbidden.
     if action == "destroy_derivative":
         if not affected:
-            return "BLOCK"
+            return "OUT_OF_SCOPE"
         if order == "necec":
-            return "ALLOW" if phase in {"no_challenge","claim_upheld"} else ("UNRESOLVED" if phase=="claim_withdrawn" else "HOLD")
+            if phase in {"no_challenge","claim_upheld"}:
+                return "REQUIRED"
+            if phase in {"noticed","challenge_pending"}:
+                return "CONDITIONAL"
+            if phase == "claim_withdrawn":
+                return "NO_MANDATE"
         return "UNRESOLVED"
     if action == "extract_review_db":
-        return "ALLOW" if order == "acosta" and affected and phase in HALT else "UNRESOLVED"
+        return "REQUIRED" if order == "acosta" and affected and phase in HALT else "UNRESOLVED"
     if action == "certify_if_requested":
-        return "ALLOW" if order == "necec" and phase in HALT else "UNRESOLVED"
+        return "REQUIRED" if order == "necec" and phase in HALT else "UNRESOLVED"
     if action == "ai_submit":
         if order not in {"spheres","broadway"}:
             return "UNRESOLVED"
@@ -73,7 +80,7 @@ def evaluate(order, action, phase="ordinary", dep="revoked", tool=None,
     if action == "provider_deletion_verified":
         if order != "spheres":
             return "UNRESOLVED"
-        return "ALLOW" if deletion_evidence == "independently_verified" else "UNRESOLVED"
+        return "EVIDENCE_PRESENT" if deletion_evidence == "independently_verified" else "EVIDENCE_MISSING"
     raise ValueError(action)
 
 # Explicit independent oracle expectations, fixed before run.
@@ -81,18 +88,18 @@ FIXTURES = [
  ("AC1","acosta","replay_effect","noticed","revoked",None,None,None,"HOLD"),
  ("AC2","acosta","replay_effect","noticed","mixed",None,None,None,"HOLD"),
  ("AC3","acosta","replay_effect","noticed","clean",None,None,None,"ALLOW"),
- ("AC4","acosta","extract_review_db","noticed","revoked",None,None,None,"ALLOW"),
+ ("AC4","acosta","extract_review_db","noticed","revoked",None,None,None,"REQUIRED"),
  ("AC5","acosta","read_source","ordinary","revoked",None,None,None,"ALLOW"),
  ("AC6","acosta","read_source","challenge_pending","revoked",None,None,None,"HOLD"),
  ("AC7","acosta","replay_effect","noticed","unknown",None,None,None,"UNRESOLVED"),
  ("NE1","necec","replay_effect","noticed","revoked",None,None,None,"HOLD"),
  ("NE2","necec","replay_effect","challenge_pending","clean",None,None,None,"ALLOW"),
- ("NE3","necec","destroy_derivative","challenge_pending","revoked",None,None,None,"HOLD"),
- ("NE4","necec","destroy_derivative","no_challenge","revoked",None,None,None,"ALLOW"),
- ("NE5","necec","destroy_derivative","claim_upheld","revoked",None,None,None,"ALLOW"),
- ("NE6","necec","destroy_derivative","claim_withdrawn","revoked",None,None,None,"UNRESOLVED"),
- ("NE7","necec","certify_if_requested","noticed","revoked",None,None,None,"ALLOW"),
- ("NE8","necec","destroy_derivative","no_challenge","clean",None,None,None,"BLOCK"),
+ ("NE3","necec","destroy_derivative","challenge_pending","revoked",None,None,None,"CONDITIONAL"),
+ ("NE4","necec","destroy_derivative","no_challenge","revoked",None,None,None,"REQUIRED"),
+ ("NE5","necec","destroy_derivative","claim_upheld","revoked",None,None,None,"REQUIRED"),
+ ("NE6","necec","destroy_derivative","claim_withdrawn","revoked",None,None,None,"NO_MANDATE"),
+ ("NE7","necec","certify_if_requested","noticed","revoked",None,None,None,"REQUIRED"),
+ ("NE8","necec","destroy_derivative","no_challenge","clean",None,None,None,"OUT_OF_SCOPE"),
  ("BR1","broadway","ai_submit","ordinary","revoked","public",None,None,"BLOCK"),
  ("BR2","broadway","ai_submit","ordinary","revoked","closed",FULL_BROADWAY,None,"ALLOW"),
  ("BR3","broadway","ai_submit","ordinary","revoked","closed",{"no_training":True,"access_control":True},None,"UNRESOLVED"),
@@ -101,8 +108,8 @@ FIXTURES = [
  ("SP2","spheres","ai_submit","ordinary","revoked","closed",FULL_SPHERES,None,"ALLOW"),
  ("SP3","spheres","ai_submit","ordinary","revoked","closed",{k:v for k,v in FULL_SPHERES.items() if k!="safeguards"},None,"UNRESOLVED"),
  ("SP4","spheres","ai_submit","challenge_pending","revoked","closed",FULL_SPHERES,None,"BLOCK"),
- ("SP5","spheres","provider_deletion_verified","ordinary","revoked",None,None,"provider_claim","UNRESOLVED"),
- ("SP6","spheres","provider_deletion_verified","ordinary","revoked",None,None,"independently_verified","ALLOW"),
+ ("SP5","spheres","provider_deletion_verified","ordinary","revoked",None,None,"provider_claim","EVIDENCE_MISSING"),
+ ("SP6","spheres","provider_deletion_verified","ordinary","revoked",None,None,"independently_verified","EVIDENCE_PRESENT"),
 ]
 class S(TypedDict, total=False):
     payload: str
