@@ -1,0 +1,40 @@
+name: j-trace824-observed-read-heldout
+on:
+  push:
+    branches: [exec/j-trace824]
+    paths:
+      - .github/workflows/j-trace824-heldout.yml
+permissions:
+  contents: read
+jobs:
+  observed-tool-read-heldout:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Enforce unchanged development source
+        run: |
+          set -euo pipefail
+          test "$(git hash-object toolread_source_service.py)" = "4981b129a8f7f52be6dacc808007c347c6a14dad"
+          test "$(git hash-object toolread_runner.py)" = "a484dc6fef339f323025c23acad29b8f8038dc56"
+          test "$(git hash-object toolread_auditor.py)" = "0133a9e70f2d92d47f9534286b2f6c4d1dfe11eb"
+          test "$(git hash-object toolread_run.sh)" = "62e040f7c07413164119d05439dcd83354d29690"
+          python3 toolread_runner.py --partition plan | tee protocol.log
+          git rev-parse HEAD > commit.txt
+          sha256sum toolread_source_service.py toolread_runner.py toolread_auditor.py toolread_run.sh > source.sha256
+      - name: Run independent held-out tool-read and nondeterminism evaluation
+        run: |
+          set -euo pipefail
+          docker run --rm --network host -v "$PWD:/work" -w /work ghcr.io/astral-sh/uv:python3.12-bookworm-slim \
+            uv run --with 'langgraph==1.2.12' bash toolread_run.sh holdout 2>&1 | tee heldout.log
+      - name: Upload full recorded source, transform and effect evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j-trace824-heldout-evidence
+          path: |
+            protocol.log
+            commit.txt
+            source.sha256
+            heldout.log
+            _runs/holdout/
