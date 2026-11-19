@@ -1,0 +1,38 @@
+name: j-r42c7a9
+on:
+  push:
+    branches:
+      - exec/j-r42c7a9
+permissions:
+  contents: read
+jobs:
+  checkpoint-effect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Execute real LangGraph replay tests
+        run: |
+          set -euo pipefail
+          docker run --rm -v "$PWD:/work" -w /work ghcr.io/astral-sh/uv:python3.12-bookworm-slim             uv run --with 'langgraph==1.2.12' python replay_probe.py | tee run.log
+      - name: Record execution provenance
+        if: always()
+        run: |
+          git rev-parse HEAD > commit.txt
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib
+          for name in ('replay_probe.py','result.json','run.log'):
+              p=Path(name)
+              if p.exists():
+                  print(name,hashlib.sha256(p.read_bytes()).hexdigest())
+          PY
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j-r42c7a9-result
+          path: |
+            result.json
+            run.log
+            commit.txt
