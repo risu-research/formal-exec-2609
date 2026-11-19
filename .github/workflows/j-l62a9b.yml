@@ -1,0 +1,34 @@
+name: j-l62a9b-court-policy
+on:
+  push:
+    branches:
+      - exec/j-l62a9b
+permissions:
+  contents: read
+jobs:
+  court-policy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify entered-order fixtures and real LangGraph historical replay
+        run: |
+          set -euo pipefail
+          docker run --rm -v "$PWD:/work" -w /work ghcr.io/astral-sh/uv:python3.12-bookworm-slim \
+            uv run --with 'langgraph==1.2.12' python legal_order_probe.py 2>&1 | tee court-policy.log
+      - name: Record evidence
+        if: always()
+        run: |
+          git rev-parse HEAD > court-policy-commit.txt
+          sha256sum legal_order_probe.py > court-policy-hashes.txt
+          if test -f legal_order_result.json; then sha256sum legal_order_result.json >> court-policy-hashes.txt; fi
+      - name: Upload court-policy evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j-l62a9b-court-policy
+          path: |
+            court-policy.log
+            court-policy-commit.txt
+            court-policy-hashes.txt
+            legal_order_result.json
