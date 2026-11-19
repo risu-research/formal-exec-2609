@@ -1,0 +1,43 @@
+name: j-trace824-observed-read-development
+on:
+  push:
+    branches:
+      - exec/j-trace824
+    paths:
+      - toolread_source_service.py
+      - toolread_runner.py
+      - toolread_auditor.py
+      - toolread_run.sh
+      - .github/workflows/j-trace824-dev.yml
+permissions:
+  contents: read
+jobs:
+  observed-tool-read:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify fixed protocol and source hashes
+        run: |
+          set -euo pipefail
+          python3 toolread_runner.py --partition plan | tee protocol.log
+          python3 -m py_compile toolread_source_service.py toolread_runner.py toolread_auditor.py
+          bash -n toolread_run.sh
+          git rev-parse HEAD > source_commit.txt
+          sha256sum toolread_source_service.py toolread_runner.py toolread_auditor.py toolread_run.sh > sources.sha256
+      - name: Execute real LangChain tool reads and nondeterministic transformations
+        run: |
+          set -euo pipefail
+          docker run --rm --network host -v "$PWD:/work" -w /work ghcr.io/astral-sh/uv:python3.12-bookworm-slim \
+            uv run --with 'langgraph==1.2.12' bash toolread_run.sh dev 2>&1 | tee development.log
+      - name: Retain raw source events, transform nonces, output and SQL audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j-trace824-development
+          path: |
+            protocol.log
+            source_commit.txt
+            sources.sha256
+            development.log
+            _runs/dev/
