@@ -1,0 +1,71 @@
+name: j-custody913-linux-isolation-development
+on:
+  push:
+    branches: [exec/j-custody913]
+    paths:
+      - custody_bundle/part*.txt
+      - .github/workflows/j-custody913-dev.yml
+permissions:
+  contents: write
+jobs:
+  isolated-custody-dev:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Decode pinned source archive
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import base64, hashlib, json, pathlib, zlib
+          parts=[pathlib.Path(f'custody_bundle/part{i}.txt').read_text().strip() for i in range(1,5)]
+          raw=zlib.decompress(base64.b64decode(''.join(parts),validate=True))
+          digest=hashlib.sha256(raw).hexdigest()
+          assert digest=='748113b2622bddab3a23e7c1b7fcec32d7bb00bc188f475c515adb6a7f207da1',digest
+          files=json.loads(raw)
+          assert set(files)=={'trusted_broker.py','agent_worker.py','integrated_driver.py','independent_auditor.py'}
+          root=pathlib.Path('experiments/custody')
+          root.mkdir(parents=True,exist_ok=True)
+          for name,content in files.items():
+              assert isinstance(content,str) and '__pycache__' not in name
+              (root/name).write_text(content)
+          print('RESTORED_SOURCE',digest,len(files))
+          PY
+          python3 -m py_compile experiments/custody/*.py
+          git rev-parse HEAD > input_commit.txt
+          sha256sum experiments/custody/*.py > source_hashes.txt
+      - name: Execute separate Linux-UID broker and real LangGraph worker
+        run: |
+          set -euo pipefail
+          docker run --rm --network host -v "$PWD:/work" -w /work ghcr.io/astral-sh/uv:python3.12-bookworm-slim \
+            uv run --with 'langgraph==1.2.12' python experiments/custody/integrated_driver.py \
+              --partition dev --out /work/_custody_dev | tee dev_execution.log
+      - name: Independent read-only audit
+        run: |
+          set -euo pipefail
+          python3 experiments/custody/independent_auditor.py \
+            --db _custody_dev/ledger.sqlite \
+            --oracle _custody_dev/oracle.json \
+            --snapshots _custody_dev/sealed_candidate_snapshots.json \
+            --out _custody_dev/audit.json | tee dev_audit.log
+          sha256sum _custody_dev/ledger.sqlite _custody_dev/audit.json > artifact_hashes.txt
+      - name: Retain verified source on isolated compute branch
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add experiments/custody/*.py
+          git diff --cached --quiet || git commit -m "Materialize independently tested custody prototype sources"
+          git push origin HEAD:exec/j-custody913
+      - name: Save verifiable evidence and protocol
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j-custody913-dev
+          path: |
+            input_commit.txt
+            source_hashes.txt
+            dev_execution.log
+            dev_audit.log
+            artifact_hashes.txt
+            _custody_dev/
