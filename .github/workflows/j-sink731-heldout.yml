@@ -1,0 +1,60 @@
+name: j-sink731-independent-effects-heldout
+on:
+  push:
+    branches: [exec/j-sink731]
+    paths:
+      - .github/workflows/j-sink731-heldout.yml
+permissions:
+  contents: read
+jobs:
+  effect-heldout:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Enforce frozen development/evaluation implementation
+        run: |
+          set -euo pipefail
+          test "$(git hash-object external_effect_sink.py)" = "30f4d17d19550e8549cb974055279a0972341510"
+          test "$(git hash-object external_effect_runner.py)" = "c41adef808930ceccfbc00efcd1b5bc71446a255"
+          test "$(git hash-object external_effect_auditor.py)" = "7b4f75a4ad91bb74e47c294d02839b089f90e8b9"
+          python3 external_effect_runner.py --partition plan | tee plan.log
+          git rev-parse HEAD > source_commit.txt
+          sha256sum external_effect_sink.py external_effect_runner.py external_effect_auditor.py > source-sha256.txt
+      - name: Run separate effect receiver and held-out LangGraph replay
+        run: |
+          set -euo pipefail
+          rm -f effect-heldout.sqlite*
+          python3 external_effect_sink.py --db "$PWD/effect-heldout.sqlite" --port 8765 >service.log 2>&1 &
+          SINK_PID=$!
+          trap 'kill $SINK_PID 2>/dev/null || true' EXIT
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8765/health > /dev/null; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8765/health
+          docker run --rm --network host -v "$PWD:/work" -w /work ghcr.io/astral-sh/uv:python3.12-bookworm-slim \
+            uv run --with 'langgraph==1.2.12' python external_effect_runner.py --partition holdout 2>&1 | tee heldout-run.log
+          kill $SINK_PID
+          wait $SINK_PID || true
+          trap - EXIT
+          python3 external_effect_auditor.py --db effect-heldout.sqlite \
+            --oracle external_effect_holdout_oracle.json --acks external_effect_holdout_acks.json \
+            --out external_effect_holdout_audit.json 2>&1 | tee heldout-audit.log
+          sha256sum external_effect_holdout_audit.json effect-heldout.sqlite >> source-sha256.txt
+      - name: Preserve external effects and independent readback evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j-sink731-heldout
+          path: |
+            plan.log
+            source_commit.txt
+            source-sha256.txt
+            service.log
+            heldout-run.log
+            heldout-audit.log
+            external_effect_holdout_oracle.json
+            external_effect_holdout_acks.json
+            external_effect_holdout_audit.json
+            effect-heldout.sqlite
