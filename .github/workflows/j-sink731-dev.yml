@@ -18,7 +18,7 @@ jobs:
       - name: Fix protocol and source provenance
         run: |
           set -euo pipefail
-          python3 external_effect_runner.py --partition plan | tee plan.log || true
+          python3 external_effect_runner.py --partition plan | tee plan.log
           git rev-parse HEAD > source_commit.txt
           sha256sum external_effect_sink.py external_effect_runner.py external_effect_auditor.py > source-sha256.txt
       - name: Execute external service and LangGraph replay
