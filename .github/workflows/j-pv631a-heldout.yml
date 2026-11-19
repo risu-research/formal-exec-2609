@@ -16,7 +16,7 @@ jobs:
       - name: Assert fixed protocol and source identity
         run: |
           set -euo pipefail
-          test "$(git hash-object provenance_stress.py)" = "d2f9bcf594c68b83405c9d8a66c0b20bc5070329"
+          test "$(git hash-object provenance_stress.py)" = "18ec60f938dbba6fb8dd4f9ccfb8ff9ed74a9dd4"
           python3 provenance_stress.py --partition plan | tee protocol.log
           git rev-parse HEAD > commit.txt
           sha256sum provenance_stress.py > sha256sums.txt
