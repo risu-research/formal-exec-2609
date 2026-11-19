@@ -12,8 +12,6 @@ import random
 import urllib.request
 from pathlib import Path
 from typing import TypedDict
-from langgraph.graph import StateGraph, START, END
-from langgraph.checkpoint.memory import InMemorySaver
 
 ORDERS=("acosta_notice","necec_challenge")
 GUARDS=("cached","client_precheck","sink_atomic")
@@ -70,6 +68,8 @@ def make(order,seed,tpl,guard):
             "payload":payload,"receipt":receipt}
 
 def execute(spec,endpoint):
+    from langgraph.graph import StateGraph, START, END
+    from langgraph.checkpoint.memory import InMemorySaver
     cid=spec["case_id"]
     payload=spec["payload"]
     send(endpoint,"/setup",{"case_id":cid,"receipt":spec["receipt"]})
