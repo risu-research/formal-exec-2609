@@ -38,6 +38,18 @@ jobs:
           kill $SINK_PID
           wait $SINK_PID || true
           trap - EXIT
+          python3 - <<'PY'
+          import sqlite3
+          db="effect-heldout.sqlite"
+          with sqlite3.connect(db) as c:
+              state=c.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
+              assert state[0] == 0, state
+              mode=c.execute("PRAGMA journal_mode=DELETE").fetchone()[0]
+              assert mode.lower()=="delete", mode
+              assert c.execute("PRAGMA integrity_check").fetchone()[0]=="ok"
+              count=c.execute("SELECT COUNT(*) FROM writes").fetchone()[0]
+              print("ARCHIVE_CHECKPOINT",db,"committed_rows",count,"mode",mode)
+          PY
           python3 external_effect_auditor.py --db effect-heldout.sqlite \
             --oracle external_effect_holdout_oracle.json --acks external_effect_holdout_acks.json \
             --out external_effect_holdout_audit.json 2>&1 | tee heldout-audit.log
