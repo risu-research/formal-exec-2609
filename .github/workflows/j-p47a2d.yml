@@ -1,0 +1,35 @@
+name: j-p47a2d
+on:
+  push:
+    branches:
+      - exec/j-p47a2d
+permissions:
+  contents: read
+jobs:
+  postgres-replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start isolated PostgreSQL 16
+        run: |
+          docker run -d --rm --name jp47 -e POSTGRES_PASSWORD=localpass -p 5432:5432 postgres:16
+          for attempt in $(seq 1 60); do
+            if docker exec jp47 pg_isready -U postgres; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Replay persisted checkpoints into SQLite sink
+        run: |
+          set -euo pipefail
+          docker run --rm --network host -v "$PWD:/work" -w /work ghcr.io/astral-sh/uv:python3.12-bookworm-slim \
+            uv run --with 'langgraph==1.2.12' --with 'langgraph-checkpoint-postgres==3.1.2' \
+              --with 'psycopg[binary]' python pg_replay_probe.py 2>&1 | tee run.log
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j-p47a2d-result
+          path: |
+            run.log
+            result.json
