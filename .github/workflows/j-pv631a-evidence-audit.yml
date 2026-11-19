@@ -1,0 +1,51 @@
+name: j-pv631a-independent-evidence-audit
+on:
+  push:
+    branches:
+      - exec/j-pv631a
+    paths:
+      - .github/workflows/j-pv631a-evidence-audit.yml
+permissions:
+  contents: read
+  actions: read
+jobs:
+  independent-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch exact completed development evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: j-pv631a-dev-evidence
+          run-id: 44455269658
+          repository: risu-research/formal-exec-2609
+          github-token: ${{ github.token }}
+          path: artifacts/dev
+      - name: Fetch exact completed held-out evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: j-pv631a-heldout-evidence
+          run-id: 44455344566
+          repository: risu-research/formal-exec-2609
+          github-token: ${{ github.token }}
+          path: artifacts/heldout
+      - name: Audit against published independent verifier
+        run: |
+          set -euo pipefail
+          git clone --quiet https://github.com/risu-research/revocation-closure.git /tmp/revocation-closure
+          git -C /tmp/revocation-closure checkout --quiet 6829300ddef64dc7fe16e5a226fd706c05adc772
+          git -C /tmp/revocation-closure rev-parse HEAD | tee public-artifact-commit.txt
+          python /tmp/revocation-closure/tests/verify_provenance_evaluation.py artifacts/dev/provenance_dev_result.json --strict-hash | tee audit-dev.log
+          python /tmp/revocation-closure/tests/verify_provenance_evaluation.py artifacts/heldout/provenance_holdout_result.json --strict-hash | tee audit-heldout.log
+          sha256sum artifacts/heldout/provenance_holdout_result.json artifacts/dev/provenance_dev_result.json | tee evidence-sha256.txt
+      - name: Retain independent audit records
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j-pv631a-independent-audit
+          path: |
+            audit-dev.log
+            audit-heldout.log
+            public-artifact-commit.txt
+            evidence-sha256.txt
