@@ -1,0 +1,57 @@
+name: j-sink731-public-repro-and-auditor-negatives
+on:
+  push:
+    branches: [exec/j-sink731]
+    paths:
+      - .github/workflows/j-sink731-public-verify.yml
+permissions:
+  contents: read
+jobs:
+  public-repro:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Checkout pinned public artifact
+        run: |
+          git clone --quiet https://github.com/risu-research/revocation-closure.git ./public
+          git -C public checkout --quiet 512e44f0b11868f28e4fcbf22f71e9c2cf48c811
+          git -C public rev-parse HEAD | tee published_commit.txt
+          bash -n public/experiments/external_effects/run.sh
+          sha256sum public/experiments/external_effects/external_effect_*.py > public-source-sha256.txt
+      - name: Execute published rerun instructions
+        run: |
+          set -euo pipefail
+          docker run --rm --network host -v "$PWD/public:/work" -w /work ghcr.io/astral-sh/uv:python3.12-bookworm-slim \
+            uv run --with 'langgraph==1.2.12' bash experiments/external_effects/run.sh dev 2>&1 | tee public-rerun.log
+      - name: Audit must reject corrupted stored effect
+        run: |
+          set -euo pipefail
+          cd public/experiments/external_effects/_runs/dev
+          cp effects.sqlite corrupted.sqlite
+          python3 - <<'PY'
+          import sqlite3
+          with sqlite3.connect('corrupted.sqlite') as c:
+              c.execute("UPDATE writes SET payload='ALTERED_EFFECT' WHERE id=(SELECT min(id) FROM writes)")
+          PY
+          set +e
+          python3 ../../external_effect_auditor.py --db corrupted.sqlite \
+            --oracle external_effect_dev_oracle.json --acks external_effect_dev_acks.json \
+            --out should-not-exist.json > corruption.log 2>&1
+          rc=$?
+          set -e
+          test "$rc" -ne 0
+          grep -q 'AssertionError' corruption.log
+          test ! -f should-not-exist.json
+          echo "NEGATIVE_CONTROL_PASS: independent observer rejected a modified stored effect"
+      - name: Preserve public reproducibility verification
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j-sink731-public-repro
+          path: |
+            published_commit.txt
+            public-source-sha256.txt
+            public-rerun.log
+            public/experiments/external_effects/_runs/dev/audit.log
+            public/experiments/external_effects/_runs/dev/corruption.log
